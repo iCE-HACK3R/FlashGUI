@@ -9025,6 +9025,38 @@ class ToolsPage(PageBase):
         _open_datasheet_target(fp)
         self.log(f"Opened datasheet PDF: {fp}")
 
+    def _open_resolved_datasheet(self, chip: str, probe_ids: list[tuple[int, int]] | None) -> bool:
+        target, downloaded = _resolve_datasheet_target_for_open(chip, probe_ids)
+        if not target:
+            self.log("ERROR: No datasheet target could be resolved.")
+            return False
+        _open_datasheet_target(target)
+        if downloaded:
+            self.log(f"Downloaded datasheet PDF to local cache: {target}")
+        self.log(f"Opened datasheet target for {chip}: {target}")
+        return True
+
+    def _open_datasheet_candidates(self, candidates: list[str], probe_ids: list[tuple[int, int]] | None) -> None:
+        seen_candidates: set[str] = set()
+        seen_targets: set[str] = set()
+        opened = 0
+        for candidate in candidates:
+            key = _normalize_chip_key(candidate)
+            if not key or key in seen_candidates:
+                continue
+            seen_candidates.add(key)
+            target, downloaded = _resolve_datasheet_target_for_open(candidate, probe_ids)
+            if not target or target in seen_targets:
+                continue
+            seen_targets.add(target)
+            _open_datasheet_target(target)
+            if downloaded:
+                self.log(f"Downloaded datasheet PDF to local cache: {target}")
+            self.log(f"Opened datasheet target for {candidate}: {target}")
+            opened += 1
+        if not opened:
+            self.log("ERROR: No datasheet target could be resolved for any candidate.")
+
 
 class HelpAboutPage(PageBase):
     title = "Help & About"
