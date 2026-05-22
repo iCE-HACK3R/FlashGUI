@@ -42,3 +42,9 @@ def test_readme_mentions_python3_workflow() -> None:
     assert "python3 -m venv .venv" in readme
     assert "python3 -m pip install -r requirements.txt" in readme
     assert "python3 flashgui.py" in readme
+
+
+def test_datasheet_helpers_are_shared_once() -> None:
+    source = (ROOT / "flashgui.py").read_text(encoding="utf-8")
+    assert source.count("def _open_resolved_datasheet(") == 1
+    assert source.count("def _open_datasheet_candidates(") == 1

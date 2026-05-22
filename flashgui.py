@@ -6529,6 +6529,38 @@ class PageBase(QWidget):
         self.app.thread_pool.start(w)
         dlg.exec()
 
+    def _open_resolved_datasheet(self, chip: str, probe_ids: list[tuple[int, int]] | None) -> bool:
+        target, downloaded = _resolve_datasheet_target_for_open(chip, probe_ids)
+        if not target:
+            self.log("ERROR: No datasheet target could be resolved.")
+            return False
+        _open_datasheet_target(target)
+        if downloaded:
+            self.log(f"Downloaded datasheet PDF to local cache: {target}")
+        self.log(f"Opened datasheet target for {chip}: {target}")
+        return True
+
+    def _open_datasheet_candidates(self, candidates: list[str], probe_ids: list[tuple[int, int]] | None) -> None:
+        seen_candidates: set[str] = set()
+        seen_targets: set[str] = set()
+        opened = 0
+        for candidate in candidates:
+            key = _normalize_chip_key(candidate)
+            if not key or key in seen_candidates:
+                continue
+            seen_candidates.add(key)
+            target, downloaded = _resolve_datasheet_target_for_open(candidate, probe_ids)
+            if not target or target in seen_targets:
+                continue
+            seen_targets.add(target)
+            _open_datasheet_target(target)
+            if downloaded:
+                self.log(f"Downloaded datasheet PDF to local cache: {target}")
+            self.log(f"Opened datasheet target for {candidate}: {target}")
+            opened += 1
+        if not opened:
+            self.log("ERROR: No datasheet target could be resolved for any candidate.")
+
 
 class CollapsibleQGroupBox(QGroupBox):
     """Collapsible QGroupBox with ▶/▼ toggle button in the title."""
@@ -7450,38 +7482,6 @@ class InfoPage(OpPageBase, ChipMixin):
 
         self._open_resolved_datasheet(chip, probe_ids)
 
-    def _open_resolved_datasheet(self, chip: str, probe_ids: list[tuple[int, int]] | None) -> bool:
-        target, downloaded = _resolve_datasheet_target_for_open(chip, probe_ids)
-        if not target:
-            self.log("ERROR: No datasheet target could be resolved.")
-            return False
-        _open_datasheet_target(target)
-        if downloaded:
-            self.log(f"Downloaded datasheet PDF to local cache: {target}")
-        self.log(f"Opened datasheet target for {chip}: {target}")
-        return True
-
-    def _open_datasheet_candidates(self, candidates: list[str], probe_ids: list[tuple[int, int]] | None) -> None:
-        seen_candidates: set[str] = set()
-        seen_targets: set[str] = set()
-        opened = 0
-        for candidate in candidates:
-            key = _normalize_chip_key(candidate)
-            if not key or key in seen_candidates:
-                continue
-            seen_candidates.add(key)
-            target, downloaded = _resolve_datasheet_target_for_open(candidate, probe_ids)
-            if not target or target in seen_targets:
-                continue
-            seen_targets.add(target)
-            _open_datasheet_target(target)
-            if downloaded:
-                self.log(f"Downloaded datasheet PDF to local cache: {target}")
-            self.log(f"Opened datasheet target for {candidate}: {target}")
-            opened += 1
-        if not opened:
-            self.log("ERROR: No datasheet target could be resolved for any candidate.")
-
     def _read_info(self) -> None:
         chip = self.chip_combo.currentText().strip()
         if not chip:
@@ -8064,33 +8064,33 @@ class SettingsPage(PageBase):
             self.btn_download_font.setEnabled(True)
             if result["ok"]:
                 self._log(f"Downloaded font: {font_name}")
+                self.font_combo.setCurrentText(font_name)
+                self._apply_font_size()
                 self.info("Downloaded", f"{font_name} font downloaded.")
             else:
-                self.error("Download failed", str(result["err"]))
+                self.warn("Download failed", str(result["err"] or "unknown error"))
 
         self._run_background("font download", _worker, _done)
 
     def _apply_font_size(self) -> None:
-        try:
-            size = self.font_size_slider.value()
-            font_name = self.font_combo.currentText().strip()
-            self.state.font_size = size
-            if font_name:
-                self.state.preferred_font = font_name
-            f = self.app.font()
-            f.setPointSize(size)
-            if font_name:
-                f.setFamily(font_name)
-            self.app.setFont(f)
-            self._log(f"Font applied: {font_name or 'default'} {size}pt")
-        except Exception as exc:
-            self._log(f"Error applying font: {exc}")
+        selected_font = self.font_combo.currentText().strip()
+        size = max(8, min(24, self.font_size_slider.value()))
+        self.state.font_size = size
+        self.state.preferred_font = selected_font
+
+        f = self.app.font()
+        f.setPointSize(size)
+        if selected_font:
+            f.setFamily(selected_font)
+        self.app.setFont(f)
+        self._log(f"Font size applied: {size}pt")
 
     def _preview_theme(self) -> None:
         theme = self.theme_combo.currentText().strip()
-        if theme:
-            self.app.apply_theme(theme)
-            self._log(f"Theme preview: {theme} (not yet saved)")
+        if not theme:
+            return
+        self.app.apply_theme(theme)
+        self._log(f"Theme preview: {theme} (not yet saved)")
 
     def _revert_theme(self) -> None:
         self.theme_combo.setCurrentText(self.theme_original)
@@ -9024,38 +9024,6 @@ class ToolsPage(PageBase):
             return
         _open_datasheet_target(fp)
         self.log(f"Opened datasheet PDF: {fp}")
-
-    def _open_resolved_datasheet(self, chip: str, probe_ids: list[tuple[int, int]] | None) -> bool:
-        target, downloaded = _resolve_datasheet_target_for_open(chip, probe_ids)
-        if not target:
-            self.log("ERROR: No datasheet target could be resolved.")
-            return False
-        _open_datasheet_target(target)
-        if downloaded:
-            self.log(f"Downloaded datasheet PDF to local cache: {target}")
-        self.log(f"Opened datasheet target for {chip}: {target}")
-        return True
-
-    def _open_datasheet_candidates(self, candidates: list[str], probe_ids: list[tuple[int, int]] | None) -> None:
-        seen_candidates: set[str] = set()
-        seen_targets: set[str] = set()
-        opened = 0
-        for candidate in candidates:
-            key = _normalize_chip_key(candidate)
-            if not key or key in seen_candidates:
-                continue
-            seen_candidates.add(key)
-            target, downloaded = _resolve_datasheet_target_for_open(candidate, probe_ids)
-            if not target or target in seen_targets:
-                continue
-            seen_targets.add(target)
-            _open_datasheet_target(target)
-            if downloaded:
-                self.log(f"Downloaded datasheet PDF to local cache: {target}")
-            self.log(f"Opened datasheet target for {candidate}: {target}")
-            opened += 1
-        if not opened:
-            self.log("ERROR: No datasheet target could be resolved for any candidate.")
 
 
 class HelpAboutPage(PageBase):
