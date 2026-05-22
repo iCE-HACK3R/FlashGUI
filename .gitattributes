@@ -1,0 +1,2 @@
+# Ensure shell scripts keep LF endings for Linux shebang compatibility
+*.sh text eol=lf

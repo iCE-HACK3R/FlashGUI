@@ -1,0 +1,18 @@
+{
+  "tool": "flashrom",
+  "flashrom_bin": "",
+  "flashprog_bin": "",
+  "workspace_dir": "/home/user/GiT/flashgui",
+  "preferred_font": "MesloLGS NF",
+  "font_size": 10,
+  "window_geometry": "2558x1360",
+  "log_file_path": "/home/user/GiT/flashgui/flashgui.log",
+  "use_sudo": true,
+  "auto_detect_programmer": true,
+  "theme": "macosx-dark",
+  "beep_on_complete": true,
+  "layout_mode": "sidebar",
+  "verbose_level": 0,
+  "hsplitter_state": "000000ff0000000100000002000000fa000005d80100000008010000000100",
+  "vsplitter_state": "000000ff000000010000000200000355000001860100000008010000000200"
+}

@@ -1,0 +1,26 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Chip icon: integrated circuit -->
+  <defs>
+    <linearGradient id="chipGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#50C878;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2A8659;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Main chip -->
+  <rect x="8" y="8" width="16" height="16" rx="2" fill="url(#chipGrad)" />
+  <!-- Center square -->
+  <rect x="12" y="12" width="8" height="8" fill="#1A5C3A" opacity="0.7" />
+  <!-- Circuit lines -->
+  <line x1="12" y1="12" x2="20" y2="20" stroke="#1A5C3A" stroke-width="0.5" />
+  <line x1="20" y1="12" x2="12" y2="20" stroke="#1A5C3A" stroke-width="0.5" />
+  <!-- Pins/connection points -->
+  <circle cx="8" cy="12" r="1.5" fill="#888" />
+  <circle cx="24" cy="12" r="1.5" fill="#888" />
+  <circle cx="8" cy="20" r="1.5" fill="#888" />
+  <circle cx="24" cy="20" r="1.5" fill="#888" />
+  <!-- Connecting lines to pins -->
+  <line x1="8" y1="12" x2="8" y2="10" stroke="#888" stroke-width="1" />
+  <line x1="24" y1="12" x2="24" y2="10" stroke="#888" stroke-width="1" />
+  <line x1="8" y1="20" x2="8" y2="22" stroke="#888" stroke-width="1" />
+  <line x1="24" y1="20" x2="24" y2="22" stroke="#888" stroke-width="1" />
+</svg>

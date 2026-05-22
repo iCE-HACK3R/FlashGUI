@@ -1,0 +1,21 @@
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# PyInstaller outputs
+build/
+dist/
+*.spec
+
+# Logs and local runtime files
+*.log
+
+# OS/editor clutter
+.DS_Store
+Thumbs.db
+.vscode/

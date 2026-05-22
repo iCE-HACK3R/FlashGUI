@@ -1,0 +1,23 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Settings icon: gear -->
+  <defs>
+    <linearGradient id="settingsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34495E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2C3E50;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Main gear circle -->
+  <circle cx="16" cy="16" r="5" fill="url(#settingsGrad)" stroke="#1A252F" stroke-width="1" />
+  <!-- Center dot -->
+  <circle cx="16" cy="16" r="2" fill="#1A252F" />
+  <!-- Gear teeth -->
+  <rect x="15" y="2" width="2" height="4" fill="url(#settingsGrad)" stroke="#1A252F" stroke-width="0.5" />
+  <rect x="15" y="26" width="2" height="4" fill="url(#settingsGrad)" stroke="#1A252F" stroke-width="0.5" />
+  <rect x="2" y="15" width="4" height="2" fill="url(#settingsGrad)" stroke="#1A252F" stroke-width="0.5" />
+  <rect x="26" y="15" width="4" height="2" fill="url(#settingsGrad)" stroke="#1A252F" stroke-width="0.5" />
+  <!-- Angled teeth -->
+  <g transform="rotate(45 16 16)">
+    <rect x="15" y="2" width="2" height="4" fill="url(#settingsGrad)" stroke="#1A252F" stroke-width="0.5" />
+    <rect x="15" y="26" width="2" height="4" fill="url(#settingsGrad)" stroke="#1A252F" stroke-width="0.5" />
+  </g>
+</svg>

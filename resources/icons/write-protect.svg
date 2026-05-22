@@ -1,0 +1,16 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Write-Protect icon: lock -->
+  <defs>
+    <linearGradient id="lockGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#16A085;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#117A65;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Shackle (top part of lock) -->
+  <path d="M 10 16 Q 10 8 16 8 Q 22 8 22 16" fill="none" stroke="url(#lockGrad)" stroke-width="2" stroke-linecap="round" />
+  <!-- Lock body -->
+  <rect x="8" y="16" width="16" height="12" rx="2" fill="url(#lockGrad)" stroke="#0E6251" stroke-width="1" />
+  <!-- Keyhole -->
+  <circle cx="16" cy="20" r="1.5" fill="#0E6251" />
+  <rect x="15" y="22" width="2" height="4" fill="#0E6251" />
+</svg>

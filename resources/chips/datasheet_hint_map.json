@@ -1,0 +1,3121 @@
+{
+  "0:10": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P10",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P10%22+datasheet+site%3Amicron.com"
+  },
+  "0:11": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P20-old",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P20-old%22+datasheet+site%3Amicron.com"
+  },
+  "0:12": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P40-old",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P40-old%22+datasheet+site%3Amicron.com"
+  },
+  "0:5": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P05",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P05%22+datasheet+site%3Amicron.com"
+  },
+  "1:20": {
+    "vendor": "AMD",
+    "preferred_name": "Am29F010",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29F010%22+datasheet+site%3Aamd.com",
+    "aliases": [
+      "Am29F010A/B"
+    ]
+  },
+  "1:2018": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL127S-256kB",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL127S-256kB%22+datasheet+site%3Ainfineon.com",
+    "aliases": [
+      "S25FL127S-64kB",
+      "S25FL128P......0",
+      "S25FL128P......1",
+      "S25FL128S......0",
+      "S25FL128S......1",
+      "S25FL129P......0",
+      "S25FL129P......1"
+    ]
+  },
+  "1:212": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL004A",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL004A%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:213": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL008A",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL008A%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:214": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL016A",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL016A%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:215": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL032A/P",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL032A%2FP%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:216": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL064A/P",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL064A%2FP%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:219": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL256S......0",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL256S......0%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:220": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL512S",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL512S%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:34": {
+    "vendor": "AMD",
+    "preferred_name": "Am29F002(N)BB",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29F002%28N%29BB%22+datasheet+site%3Aamd.com",
+    "aliases": [
+      "TMS29F002RB"
+    ]
+  },
+  "1:37": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV008BB",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV008BB%22+datasheet+site%3Aamd.com"
+  },
+  "1:38": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV081B",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV081B%22+datasheet+site%3Aamd.com"
+  },
+  "1:3e": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV008BT",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV008BT%22+datasheet+site%3Aamd.com"
+  },
+  "1:40": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV002BT",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV002BT%22+datasheet+site%3Aamd.com"
+  },
+  "1:4013": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL204K",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL204K%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:4014": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL208K",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL208K%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:4015": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL116K/S25FL216K",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL116K%2FS25FL216K%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:4016": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL132K",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL132K%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:4017": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL164K",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL164K%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:4f": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV040B",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV040B%22+datasheet+site%3Aamd.com"
+  },
+  "1:6018": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL128L",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL128L%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:6019": {
+    "vendor": "Spansion",
+    "preferred_name": "S25FL256L",
+    "datasheet_url": "https://www.google.com/search?q=%22S25FL256L%22+datasheet+site%3Ainfineon.com"
+  },
+  "1:6d": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV001BB",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV001BB%22+datasheet+site%3Aamd.com"
+  },
+  "1:7e0c01": {
+    "vendor": "Winbond",
+    "preferred_name": "W29GL064CH/L",
+    "datasheet_url": "https://www.google.com/search?q=%22W29GL064CH%2FL%22+datasheet+site%3Awinbond.com"
+  },
+  "1:7e1000": {
+    "vendor": "Winbond",
+    "preferred_name": "W29GL064CB",
+    "datasheet_url": "https://www.google.com/search?q=%22W29GL064CB%22+datasheet+site%3Awinbond.com"
+  },
+  "1:7e1001": {
+    "vendor": "Winbond",
+    "preferred_name": "W29GL064CT",
+    "datasheet_url": "https://www.google.com/search?q=%22W29GL064CT%22+datasheet+site%3Awinbond.com"
+  },
+  "1:7e1a00": {
+    "vendor": "Winbond",
+    "preferred_name": "W29GL032CB",
+    "datasheet_url": "https://www.google.com/search?q=%22W29GL032CB%22+datasheet+site%3Awinbond.com"
+  },
+  "1:7e1a01": {
+    "vendor": "Winbond",
+    "preferred_name": "W29GL032CT",
+    "datasheet_url": "https://www.google.com/search?q=%22W29GL032CT%22+datasheet+site%3Awinbond.com"
+  },
+  "1:7e1d01": {
+    "vendor": "Winbond",
+    "preferred_name": "W29GL032CH/L",
+    "datasheet_url": "https://www.google.com/search?q=%22W29GL032CH%2FL%22+datasheet+site%3Awinbond.com"
+  },
+  "1:7e2101": {
+    "vendor": "Winbond",
+    "preferred_name": "W29GL128C",
+    "datasheet_url": "https://www.google.com/search?q=%22W29GL128C%22+datasheet+site%3Awinbond.com"
+  },
+  "1:a4": {
+    "vendor": "AMD",
+    "preferred_name": "Am29F040",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29F040%22+datasheet+site%3Aamd.com",
+    "aliases": [
+      "Am29F040B"
+    ]
+  },
+  "1:ad": {
+    "vendor": "AMD",
+    "preferred_name": "Am29F016D",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29F016D%22+datasheet+site%3Aamd.com"
+  },
+  "1:b0": {
+    "vendor": "AMD",
+    "preferred_name": "Am29F002(N)BT",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29F002%28N%29BT%22+datasheet+site%3Aamd.com",
+    "aliases": [
+      "TMS29F002RT"
+    ]
+  },
+  "1:b5": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV004BT",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV004BT%22+datasheet+site%3Aamd.com"
+  },
+  "1:b6": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV004BB",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV004BB%22+datasheet+site%3Aamd.com"
+  },
+  "1:c2": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV002BB",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV002BB%22+datasheet+site%3Aamd.com"
+  },
+  "1:d5": {
+    "vendor": "AMD",
+    "preferred_name": "Am29F080",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29F080%22+datasheet+site%3Aamd.com",
+    "aliases": [
+      "Am29F080B"
+    ]
+  },
+  "1:ed": {
+    "vendor": "AMD",
+    "preferred_name": "Am29LV001BT",
+    "datasheet_url": "https://www.google.com/search?q=%22Am29LV001BT%22+datasheet+site%3Aamd.com"
+  },
+  "1c:2010": {
+    "vendor": "Eon",
+    "preferred_name": "EN25B05",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25B05%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25B05T",
+      "EN25P05"
+    ]
+  },
+  "1c:2011": {
+    "vendor": "Eon",
+    "preferred_name": "EN25B10",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25B10%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25B10T",
+      "EN25P10"
+    ]
+  },
+  "1c:2012": {
+    "vendor": "Eon",
+    "preferred_name": "EN25B20",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25B20%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25B20T",
+      "EN25P20"
+    ]
+  },
+  "1c:2013": {
+    "vendor": "Eon",
+    "preferred_name": "EN25B40",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25B40%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25B40T",
+      "EN25P40"
+    ]
+  },
+  "1c:2014": {
+    "vendor": "Eon",
+    "preferred_name": "EN25B80",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25B80%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25B80T",
+      "EN25P80"
+    ]
+  },
+  "1c:2015": {
+    "vendor": "Eon",
+    "preferred_name": "EN25B16",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25B16%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25B16T",
+      "EN25P16"
+    ]
+  },
+  "1c:2016": {
+    "vendor": "Eon",
+    "preferred_name": "EN25B32",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25B32%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25B32T",
+      "EN25P32"
+    ]
+  },
+  "1c:2017": {
+    "vendor": "Eon",
+    "preferred_name": "EN25B64",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25B64%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25B64T",
+      "EN25P64"
+    ]
+  },
+  "1c:3013": {
+    "vendor": "Eon",
+    "preferred_name": "EN25Q40",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25Q40%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3014": {
+    "vendor": "Eon",
+    "preferred_name": "EN25Q80(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25Q80%28A%29%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3015": {
+    "vendor": "Eon",
+    "preferred_name": "EN25Q16",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25Q16%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3016": {
+    "vendor": "Eon",
+    "preferred_name": "EN25Q32(A/B)",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25Q32%28A%2FB%29%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3017": {
+    "vendor": "Eon",
+    "preferred_name": "EN25Q64",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25Q64%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3018": {
+    "vendor": "Eon",
+    "preferred_name": "EN25Q128",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25Q128%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3110": {
+    "vendor": "Eon",
+    "preferred_name": "EN25F05",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25F05%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3111": {
+    "vendor": "Eon",
+    "preferred_name": "EN25F10",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25F10%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3112": {
+    "vendor": "Eon",
+    "preferred_name": "EN25F20",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25F20%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3113": {
+    "vendor": "Eon",
+    "preferred_name": "EN25F40",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25F40%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3114": {
+    "vendor": "Eon",
+    "preferred_name": "EN25F80",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25F80%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3115": {
+    "vendor": "Eon",
+    "preferred_name": "EN25F16",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25F16%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3116": {
+    "vendor": "Eon",
+    "preferred_name": "EN25F32",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25F32%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3117": {
+    "vendor": "Eon",
+    "preferred_name": "EN25F64",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25F64%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3811": {
+    "vendor": "Eon",
+    "preferred_name": "EN25S10",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25S10%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3812": {
+    "vendor": "Eon",
+    "preferred_name": "EN25S20",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25S20%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3813": {
+    "vendor": "Eon",
+    "preferred_name": "EN25S40",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25S40%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3814": {
+    "vendor": "Eon",
+    "preferred_name": "EN25S80",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25S80%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3815": {
+    "vendor": "Eon",
+    "preferred_name": "EN25S16",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25S16%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3816": {
+    "vendor": "Eon",
+    "preferred_name": "EN25S32",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25S32%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:3817": {
+    "vendor": "Eon",
+    "preferred_name": "EN25S64",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25S64%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:7015": {
+    "vendor": "Eon",
+    "preferred_name": "EN25QH16",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25QH16%22+datasheet+site%3Aeonssi.com"
+  },
+  "1c:7016": {
+    "vendor": "Eon",
+    "preferred_name": "EN25QH32",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25QH32%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25QH32B"
+    ]
+  },
+  "1c:7017": {
+    "vendor": "Eon",
+    "preferred_name": "EN25QH64",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25QH64%22+datasheet+site%3Aeonssi.com",
+    "aliases": [
+      "EN25QH64A"
+    ]
+  },
+  "1c:7018": {
+    "vendor": "Eon",
+    "preferred_name": "EN25QH128",
+    "datasheet_url": "https://www.google.com/search?q=%22EN25QH128%22+datasheet+site%3Aeonssi.com"
+  },
+  "1f:13": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49F040",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49F040%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:17": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49(H)F010",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49%28H%29F010%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:2200": {
+    "vendor": "Atmel",
+    "preferred_name": "AT45DB011D",
+    "datasheet_url": "https://www.google.com/search?q=%22AT45DB011D%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:23": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49F080",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49F080%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:2300": {
+    "vendor": "Atmel",
+    "preferred_name": "AT45DB021D",
+    "datasheet_url": "https://www.google.com/search?q=%22AT45DB021D%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:2400": {
+    "vendor": "Atmel",
+    "preferred_name": "AT45DB041D",
+    "datasheet_url": "https://www.google.com/search?q=%22AT45DB041D%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:2500": {
+    "vendor": "Atmel",
+    "preferred_name": "AT45DB081D",
+    "datasheet_url": "https://www.google.com/search?q=%22AT45DB081D%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:2600": {
+    "vendor": "Atmel",
+    "preferred_name": "AT45DB161D",
+    "datasheet_url": "https://www.google.com/search?q=%22AT45DB161D%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:27": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49F080T",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49F080T%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:2700": {
+    "vendor": "Atmel",
+    "preferred_name": "AT45DB321C",
+    "datasheet_url": "https://www.google.com/search?q=%22AT45DB321C%22+datasheet+site%3Amicrochip.com",
+    "aliases": [
+      "AT45DB321E"
+    ]
+  },
+  "1f:2701": {
+    "vendor": "Atmel",
+    "preferred_name": "AT45DB321D",
+    "datasheet_url": "https://www.google.com/search?q=%22AT45DB321D%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:2800": {
+    "vendor": "Atmel",
+    "preferred_name": "AT45DB642D",
+    "datasheet_url": "https://www.google.com/search?q=%22AT45DB642D%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:2920": {
+    "vendor": "Atmel",
+    "preferred_name": "AT45CS1282",
+    "datasheet_url": "https://www.google.com/search?q=%22AT45CS1282%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:3": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49BV512",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49BV512%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:400": {
+    "vendor": "Atmel",
+    "preferred_name": "AT26F004",
+    "datasheet_url": "https://www.google.com/search?q=%22AT26F004%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4218": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25SL128A",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25SL128A%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4300": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DF021",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DF021%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4301": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DF021A",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DF021A%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4400": {
+    "vendor": "Atmel",
+    "preferred_name": "AT26DF041",
+    "datasheet_url": "https://www.google.com/search?q=%22AT26DF041%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4401": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DF041A",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DF041A%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4501": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DF081A",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DF081A%22+datasheet+site%3Amicrochip.com",
+    "aliases": [
+      "AT26DF081A"
+    ]
+  },
+  "1f:4502": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DF081",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DF081%22+datasheet+site%3Amicrochip.com",
+    "aliases": [
+      "AT25DL081"
+    ]
+  },
+  "1f:4600": {
+    "vendor": "Atmel",
+    "preferred_name": "AT26DF161",
+    "datasheet_url": "https://www.google.com/search?q=%22AT26DF161%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4601": {
+    "vendor": "Atmel",
+    "preferred_name": "AT26DF161A",
+    "datasheet_url": "https://www.google.com/search?q=%22AT26DF161A%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4602": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DF161",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DF161%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4603": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DL161",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DL161%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4700": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DF321",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DF321%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4701": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DF321A",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DF321A%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:4800": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DF641(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DF641%28A%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:5d": {
+    "vendor": "Atmel",
+    "preferred_name": "AT29C512",
+    "datasheet_url": "https://www.google.com/search?q=%22AT29C512%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:60": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25F1024(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25F1024%28A%29%22+datasheet+site%3Amicrochip.com",
+    "aliases": [
+      "AT25F512"
+    ]
+  },
+  "1f:63": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25F2048",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25F2048%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:64": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25F4096",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25F4096%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:65": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25F512A",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25F512A%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:6500": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25F512B",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25F512B%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:6601": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25FS010",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25FS010%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:6604": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25FS040",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25FS040%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:7": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49F002(N)",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49F002%28N%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:8": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49F002(N)T",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49F002%28N%29T%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:8401": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25SF041",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25SF041%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:8501": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25SF081",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25SF081%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:8600": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25DQ161",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25DQ161%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:8601": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25SF161",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25SF161%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:8701": {
+    "vendor": "Atmel",
+    "preferred_name": "AT25SF321",
+    "datasheet_url": "https://www.google.com/search?q=%22AT25SF321%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:a4": {
+    "vendor": "Atmel",
+    "preferred_name": "AT29C040A",
+    "datasheet_url": "https://www.google.com/search?q=%22AT29C040A%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:b": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49F020",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49F020%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:d5": {
+    "vendor": "Atmel",
+    "preferred_name": "AT29C010A",
+    "datasheet_url": "https://www.google.com/search?q=%22AT29C010A%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:da": {
+    "vendor": "Atmel",
+    "preferred_name": "AT29C020",
+    "datasheet_url": "https://www.google.com/search?q=%22AT29C020%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:e9": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49LH002",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49LH002%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:ed": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49LH00B4",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49LH00B4%22+datasheet+site%3Amicrochip.com"
+  },
+  "1f:ee": {
+    "vendor": "Atmel",
+    "preferred_name": "AT49LH004",
+    "datasheet_url": "https://www.google.com/search?q=%22AT49LH004%22+datasheet+site%3Amicrochip.com"
+  },
+  "20:12": {
+    "vendor": "ST",
+    "preferred_name": "M95M02",
+    "datasheet_url": "https://www.google.com/search?q=%22M95M02%22+datasheet+site%3Ast.com"
+  },
+  "20:2010": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P05-A",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P05-A%22+datasheet+site%3Amicron.com"
+  },
+  "20:2011": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P10-A",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P10-A%22+datasheet+site%3Amicron.com"
+  },
+  "20:2012": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P20",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P20%22+datasheet+site%3Amicron.com"
+  },
+  "20:2013": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P40",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P40%22+datasheet+site%3Amicron.com"
+  },
+  "20:2014": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P80",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P80%22+datasheet+site%3Amicron.com"
+  },
+  "20:2015": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P16",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P16%22+datasheet+site%3Amicron.com"
+  },
+  "20:2016": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P32",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P32%22+datasheet+site%3Amicron.com"
+  },
+  "20:2017": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P64",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P64%22+datasheet+site%3Amicron.com"
+  },
+  "20:2018": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25P128",
+    "datasheet_url": "https://www.google.com/search?q=%22M25P128%22+datasheet+site%3Amicron.com"
+  },
+  "20:23": {
+    "vendor": "ST",
+    "preferred_name": "M29W010B",
+    "datasheet_url": "https://www.google.com/search?q=%22M29W010B%22+datasheet+site%3Ast.com"
+  },
+  "20:27": {
+    "vendor": "ST",
+    "preferred_name": "M29W512B",
+    "datasheet_url": "https://www.google.com/search?q=%22M29W512B%22+datasheet+site%3Ast.com"
+  },
+  "20:28": {
+    "vendor": "ST",
+    "preferred_name": "M50FLW040B",
+    "datasheet_url": "https://www.google.com/search?q=%22M50FLW040B%22+datasheet+site%3Ast.com"
+  },
+  "20:29": {
+    "vendor": "ST",
+    "preferred_name": "M50FW002",
+    "datasheet_url": "https://www.google.com/search?q=%22M50FW002%22+datasheet+site%3Ast.com"
+  },
+  "20:2c": {
+    "vendor": "ST",
+    "preferred_name": "M50FW040",
+    "datasheet_url": "https://www.google.com/search?q=%22M50FW040%22+datasheet+site%3Ast.com"
+  },
+  "20:2d": {
+    "vendor": "ST",
+    "preferred_name": "M50FW080",
+    "datasheet_url": "https://www.google.com/search?q=%22M50FW080%22+datasheet+site%3Ast.com"
+  },
+  "20:2e": {
+    "vendor": "ST",
+    "preferred_name": "M50FW016",
+    "datasheet_url": "https://www.google.com/search?q=%22M50FW016%22+datasheet+site%3Ast.com"
+  },
+  "20:2f": {
+    "vendor": "ST",
+    "preferred_name": "M50LPW080",
+    "datasheet_url": "https://www.google.com/search?q=%22M50LPW080%22+datasheet+site%3Ast.com"
+  },
+  "20:30": {
+    "vendor": "ST",
+    "preferred_name": "M50LPW116",
+    "datasheet_url": "https://www.google.com/search?q=%22M50LPW116%22+datasheet+site%3Ast.com"
+  },
+  "20:34": {
+    "vendor": "ST",
+    "preferred_name": "M29F002B",
+    "datasheet_url": "https://www.google.com/search?q=%22M29F002B%22+datasheet+site%3Ast.com"
+  },
+  "20:4011": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M45PE10",
+    "datasheet_url": "https://www.google.com/search?q=%22M45PE10%22+datasheet+site%3Amicron.com"
+  },
+  "20:4012": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M45PE20",
+    "datasheet_url": "https://www.google.com/search?q=%22M45PE20%22+datasheet+site%3Amicron.com"
+  },
+  "20:4013": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M45PE40",
+    "datasheet_url": "https://www.google.com/search?q=%22M45PE40%22+datasheet+site%3Amicron.com"
+  },
+  "20:4014": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M45PE80",
+    "datasheet_url": "https://www.google.com/search?q=%22M45PE80%22+datasheet+site%3Amicron.com"
+  },
+  "20:4015": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M45PE16",
+    "datasheet_url": "https://www.google.com/search?q=%22M45PE16%22+datasheet+site%3Amicron.com"
+  },
+  "20:4017": {
+    "vendor": "XMC",
+    "preferred_name": "XM25QH64C",
+    "datasheet_url": "https://www.google.com/search?q=%22XM25QH64C%22+datasheet+site%3Axmcwh.com"
+  },
+  "20:4018": {
+    "vendor": "XMC",
+    "preferred_name": "XM25QH128C",
+    "datasheet_url": "https://www.google.com/search?q=%22XM25QH128C%22+datasheet+site%3Axmcwh.com"
+  },
+  "20:4019": {
+    "vendor": "XMC",
+    "preferred_name": "XM25QH256C",
+    "datasheet_url": "https://www.google.com/search?q=%22XM25QH256C%22+datasheet+site%3Axmcwh.com"
+  },
+  "20:4117": {
+    "vendor": "XMC",
+    "preferred_name": "XM25QU64C",
+    "datasheet_url": "https://www.google.com/search?q=%22XM25QU64C%22+datasheet+site%3Axmcwh.com"
+  },
+  "20:4118": {
+    "vendor": "XMC",
+    "preferred_name": "XM25QU128C",
+    "datasheet_url": "https://www.google.com/search?q=%22XM25QU128C%22+datasheet+site%3Axmcwh.com"
+  },
+  "20:4119": {
+    "vendor": "XMC",
+    "preferred_name": "XM25QU256C",
+    "datasheet_url": "https://www.google.com/search?q=%22XM25QU256C%22+datasheet+site%3Axmcwh.com"
+  },
+  "20:7114": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25PX80",
+    "datasheet_url": "https://www.google.com/search?q=%22M25PX80%22+datasheet+site%3Amicron.com"
+  },
+  "20:7115": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25PX16",
+    "datasheet_url": "https://www.google.com/search?q=%22M25PX16%22+datasheet+site%3Amicron.com"
+  },
+  "20:7116": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25PX32",
+    "datasheet_url": "https://www.google.com/search?q=%22M25PX32%22+datasheet+site%3Amicron.com"
+  },
+  "20:7117": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25PX64",
+    "datasheet_url": "https://www.google.com/search?q=%22M25PX64%22+datasheet+site%3Amicron.com"
+  },
+  "20:8": {
+    "vendor": "ST",
+    "preferred_name": "M50FLW040A",
+    "datasheet_url": "https://www.google.com/search?q=%22M50FLW040A%22+datasheet+site%3Ast.com"
+  },
+  "20:80": {
+    "vendor": "ST",
+    "preferred_name": "M50FLW080A",
+    "datasheet_url": "https://www.google.com/search?q=%22M50FLW080A%22+datasheet+site%3Ast.com"
+  },
+  "20:8011": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25PE10",
+    "datasheet_url": "https://www.google.com/search?q=%22M25PE10%22+datasheet+site%3Amicron.com"
+  },
+  "20:8012": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25PE20",
+    "datasheet_url": "https://www.google.com/search?q=%22M25PE20%22+datasheet+site%3Amicron.com"
+  },
+  "20:8013": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25PE40",
+    "datasheet_url": "https://www.google.com/search?q=%22M25PE40%22+datasheet+site%3Amicron.com"
+  },
+  "20:8014": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25PE80",
+    "datasheet_url": "https://www.google.com/search?q=%22M25PE80%22+datasheet+site%3Amicron.com"
+  },
+  "20:8015": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "M25PE16",
+    "datasheet_url": "https://www.google.com/search?q=%22M25PE16%22+datasheet+site%3Amicron.com"
+  },
+  "20:81": {
+    "vendor": "ST",
+    "preferred_name": "M50FLW080B",
+    "datasheet_url": "https://www.google.com/search?q=%22M50FLW080B%22+datasheet+site%3Ast.com"
+  },
+  "20:b0": {
+    "vendor": "ST",
+    "preferred_name": "M29F002T/NT",
+    "datasheet_url": "https://www.google.com/search?q=%22M29F002T%2FNT%22+datasheet+site%3Ast.com"
+  },
+  "20:ba16": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q032..3E",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q032..3E%22+datasheet+site%3Amicron.com"
+  },
+  "20:ba17": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q064..3E",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q064..3E%22+datasheet+site%3Amicron.com"
+  },
+  "20:ba18": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q128..3E",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q128..3E%22+datasheet+site%3Amicron.com",
+    "aliases": [
+      "MT25QL128"
+    ]
+  },
+  "20:ba19": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q256..3E",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q256..3E%22+datasheet+site%3Amicron.com",
+    "aliases": [
+      "MT25QL256"
+    ]
+  },
+  "20:ba20": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q512..3G",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q512..3G%22+datasheet+site%3Amicron.com",
+    "aliases": [
+      "MT25QL512"
+    ]
+  },
+  "20:ba21": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q00A..3G",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q00A..3G%22+datasheet+site%3Amicron.com",
+    "aliases": [
+      "MT25QL01G"
+    ]
+  },
+  "20:ba22": {
+    "vendor": "Micron",
+    "preferred_name": "MT25QL02G",
+    "datasheet_url": "https://www.google.com/search?q=%22MT25QL02G%22+datasheet+site%3Amicron.com"
+  },
+  "20:bb15": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q016",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q016%22+datasheet+site%3Amicron.com"
+  },
+  "20:bb16": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q032..1E",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q032..1E%22+datasheet+site%3Amicron.com"
+  },
+  "20:bb17": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q064..1E",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q064..1E%22+datasheet+site%3Amicron.com"
+  },
+  "20:bb18": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q128..1E",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q128..1E%22+datasheet+site%3Amicron.com",
+    "aliases": [
+      "MT25QU128"
+    ]
+  },
+  "20:bb19": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q256..1E",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q256..1E%22+datasheet+site%3Amicron.com",
+    "aliases": [
+      "MT25QU256"
+    ]
+  },
+  "20:bb20": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q512..1G",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q512..1G%22+datasheet+site%3Amicron.com",
+    "aliases": [
+      "MT25QU512"
+    ]
+  },
+  "20:bb21": {
+    "vendor": "Micron/Numonyx/ST",
+    "preferred_name": "N25Q00A..1G",
+    "datasheet_url": "https://www.google.com/search?q=%22N25Q00A..1G%22+datasheet+site%3Amicron.com",
+    "aliases": [
+      "MT25QU01G"
+    ]
+  },
+  "20:bb22": {
+    "vendor": "Micron",
+    "preferred_name": "MT25QU02G",
+    "datasheet_url": "https://www.google.com/search?q=%22MT25QU02G%22+datasheet+site%3Amicron.com"
+  },
+  "20:d5": {
+    "vendor": "ST",
+    "preferred_name": "M29F400BT",
+    "datasheet_url": "https://www.google.com/search?q=%22M29F400BT%22+datasheet+site%3Ast.com"
+  },
+  "20:d6": {
+    "vendor": "ST",
+    "preferred_name": "M29F400BB",
+    "datasheet_url": "https://www.google.com/search?q=%22M29F400BB%22+datasheet+site%3Ast.com"
+  },
+  "20:e2": {
+    "vendor": "ST",
+    "preferred_name": "M29F040B",
+    "datasheet_url": "https://www.google.com/search?q=%22M29F040B%22+datasheet+site%3Ast.com"
+  },
+  "20:e3": {
+    "vendor": "ST",
+    "preferred_name": "M29W040B",
+    "datasheet_url": "https://www.google.com/search?q=%22M29W040B%22+datasheet+site%3Ast.com"
+  },
+  "2c:5b1c": {
+    "vendor": "Micron",
+    "preferred_name": "MT35XU02G",
+    "datasheet_url": "https://www.google.com/search?q=MT35XU02G+datasheet+site%3Amicron.com"
+  },
+  "31:b8": {
+    "vendor": "Catalyst",
+    "preferred_name": "CAT28F512",
+    "datasheet_url": "https://www.google.com/search?q=%22CAT28F512%22+datasheet+site%3Aonsemi.com"
+  },
+  "37:3010": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L512",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L512%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:3011": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L010",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L010%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:3012": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L020",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L020%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:3013": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L040",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L040%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:3014": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L080",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L080%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:3015": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L016",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L016%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:3016": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L032",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L032%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:4015": {
+    "vendor": "AMIC",
+    "preferred_name": "A25LQ16",
+    "datasheet_url": "https://www.google.com/search?q=%22A25LQ16%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:4016": {
+    "vendor": "AMIC",
+    "preferred_name": "A25LQ032/A25LQ32A",
+    "datasheet_url": "https://www.google.com/search?q=%22A25LQ032%2FA25LQ32A%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:4017": {
+    "vendor": "AMIC",
+    "preferred_name": "A25LQ64",
+    "datasheet_url": "https://www.google.com/search?q=%22A25LQ64%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:86": {
+    "vendor": "AMIC",
+    "preferred_name": "A29040B",
+    "datasheet_url": "https://www.google.com/search?q=%22A29040B%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:8c": {
+    "vendor": "AMIC",
+    "preferred_name": "A29002T",
+    "datasheet_url": "https://www.google.com/search?q=%22A29002T%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:9d": {
+    "vendor": "AMIC",
+    "preferred_name": "A49LF040A",
+    "datasheet_url": "https://www.google.com/search?q=%22A49LF040A%22+datasheet+site%3Aamictechnology.com"
+  },
+  "37:d": {
+    "vendor": "AMIC",
+    "preferred_name": "A29002B",
+    "datasheet_url": "https://www.google.com/search?q=%22A29002B%22+datasheet+site%3Aamictechnology.com"
+  },
+  "40:0": {
+    "vendor": "MoselVitelic",
+    "preferred_name": "V29C51000T",
+    "datasheet_url": "https://www.google.com/search?q=%22V29C51000T%22+MoselVitelic+datasheet+pdf"
+  },
+  "40:1": {
+    "vendor": "SyncMOS/MoselVitelic",
+    "preferred_name": "{F",
+    "datasheet_url": "https://www.google.com/search?q=%22%7BF%22+SyncMOS%2FMoselVitelic+datasheet+pdf"
+  },
+  "40:13": {
+    "vendor": "MoselVitelic",
+    "preferred_name": "V29C51400T",
+    "datasheet_url": "https://www.google.com/search?q=%22V29C51400T%22+MoselVitelic+datasheet+pdf"
+  },
+  "40:2": {
+    "vendor": "SyncMOS/MoselVitelic",
+    "preferred_name": "{F",
+    "datasheet_url": "https://www.google.com/search?q=%22%7BF%22+SyncMOS%2FMoselVitelic+datasheet+pdf"
+  },
+  "40:20": {
+    "vendor": "MoselVitelic",
+    "preferred_name": "V29LC51000",
+    "datasheet_url": "https://www.google.com/search?q=%22V29LC51000%22+MoselVitelic+datasheet+pdf"
+  },
+  "40:3": {
+    "vendor": "SyncMOS/MoselVitelic",
+    "preferred_name": "{F",
+    "datasheet_url": "https://www.google.com/search?q=%22%7BF%22+SyncMOS%2FMoselVitelic+datasheet+pdf"
+  },
+  "40:60": {
+    "vendor": "MoselVitelic",
+    "preferred_name": "V29LC51001",
+    "datasheet_url": "https://www.google.com/search?q=%22V29LC51001%22+MoselVitelic+datasheet+pdf"
+  },
+  "40:63": {
+    "vendor": "SyncMOS/MoselVitelic",
+    "preferred_name": "{S",
+    "datasheet_url": "https://www.google.com/search?q=%22%7BS%22+SyncMOS%2FMoselVitelic+datasheet+pdf"
+  },
+  "40:73": {
+    "vendor": "SyncMOS/MoselVitelic",
+    "preferred_name": "{S",
+    "datasheet_url": "https://www.google.com/search?q=%22%7BS%22+SyncMOS%2FMoselVitelic+datasheet+pdf"
+  },
+  "40:82": {
+    "vendor": "MoselVitelic",
+    "preferred_name": "V29LC51002",
+    "datasheet_url": "https://www.google.com/search?q=%22V29LC51002%22+MoselVitelic+datasheet+pdf"
+  },
+  "40:a0": {
+    "vendor": "MoselVitelic",
+    "preferred_name": "V29C51000B",
+    "datasheet_url": "https://www.google.com/search?q=%22V29C51000B%22+MoselVitelic+datasheet+pdf"
+  },
+  "40:a1": {
+    "vendor": "SyncMOS/MoselVitelic",
+    "preferred_name": "{F",
+    "datasheet_url": "https://www.google.com/search?q=%22%7BF%22+SyncMOS%2FMoselVitelic+datasheet+pdf"
+  },
+  "40:a2": {
+    "vendor": "SyncMOS/MoselVitelic",
+    "preferred_name": "{F",
+    "datasheet_url": "https://www.google.com/search?q=%22%7BF%22+SyncMOS%2FMoselVitelic+datasheet+pdf"
+  },
+  "40:a3": {
+    "vendor": "SyncMOS/MoselVitelic",
+    "preferred_name": "{F",
+    "datasheet_url": "https://www.google.com/search?q=%22%7BF%22+SyncMOS%2FMoselVitelic+datasheet+pdf"
+  },
+  "40:b3": {
+    "vendor": "MoselVitelic",
+    "preferred_name": "V29C51400B",
+    "datasheet_url": "https://www.google.com/search?q=%22V29C51400B%22+MoselVitelic+datasheet+pdf"
+  },
+  "4:23": {
+    "vendor": "Fujitsu",
+    "preferred_name": "MBM29F400TC",
+    "datasheet_url": "https://www.google.com/search?q=%22MBM29F400TC%22+datasheet+site%3Ainfineon.com"
+  },
+  "4:49": {
+    "vendor": "Fujitsu",
+    "preferred_name": "MBM29LV160BE",
+    "datasheet_url": "https://www.google.com/search?q=%22MBM29LV160BE%22+datasheet+site%3Ainfineon.com"
+  },
+  "4:77": {
+    "vendor": "Fujitsu",
+    "preferred_name": "MBM29F004TC",
+    "datasheet_url": "https://www.google.com/search?q=%22MBM29F004TC%22+datasheet+site%3Ainfineon.com"
+  },
+  "4:7b": {
+    "vendor": "Fujitsu",
+    "preferred_name": "MBM29F004BC",
+    "datasheet_url": "https://www.google.com/search?q=%22MBM29F004BC%22+datasheet+site%3Ainfineon.com"
+  },
+  "4:ab": {
+    "vendor": "Fujitsu",
+    "preferred_name": "MBM29F400BC",
+    "datasheet_url": "https://www.google.com/search?q=%22MBM29F400BC%22+datasheet+site%3Ainfineon.com"
+  },
+  "4:c4": {
+    "vendor": "Fujitsu",
+    "preferred_name": "MBM29LV160TE",
+    "datasheet_url": "https://www.google.com/search?q=%22MBM29LV160TE%22+datasheet+site%3Ainfineon.com"
+  },
+  "4a:2013": {
+    "vendor": "ESI",
+    "preferred_name": "ES25P40",
+    "datasheet_url": "https://www.google.com/search?q=%22ES25P40%22+ESI+datasheet+pdf"
+  },
+  "4a:2014": {
+    "vendor": "ESI",
+    "preferred_name": "ES25P80",
+    "datasheet_url": "https://www.google.com/search?q=%22ES25P80%22+ESI+datasheet+pdf"
+  },
+  "4a:2015": {
+    "vendor": "ESI",
+    "preferred_name": "ES25P16",
+    "datasheet_url": "https://www.google.com/search?q=%22ES25P16%22+ESI+datasheet+pdf"
+  },
+  "62:10": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FW418A",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FW418A%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:1100": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FW403A",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FW403A%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:15": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FW106",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FW106%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:1600": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FW203A",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FW203A%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:1612": {
+    "vendor": "SST",
+    "preferred_name": "SST25WF020A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25WF020A%22+datasheet+site%3Amicrochip.com"
+  },
+  "62:1613": {
+    "vendor": "SST",
+    "preferred_name": "SST25WF040B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25WF040B%22+datasheet+site%3Amicrochip.com"
+  },
+  "62:1614": {
+    "vendor": "SST",
+    "preferred_name": "SST25WF080B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25WF080B%22+datasheet+site%3Amicrochip.com"
+  },
+  "62:1a": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FW406A",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FW406A%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:1d": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FU106B",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FU106B%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:1e": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FU406B",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FU406B%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:20": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FW808",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FW808%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:26": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FW806",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FW806%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:44": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FU206",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FU206%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:612": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FU206A",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FU206A%22+datasheet+site%3Aonsemi.com"
+  },
+  "62:613": {
+    "vendor": "Sanyo",
+    "preferred_name": "LE25FU406C/LE25U40CMC",
+    "datasheet_url": "https://www.google.com/search?q=%22LE25FU406C%2FLE25U40CMC%22+datasheet+site%3Aonsemi.com"
+  },
+  "68:4010": {
+    "vendor": "Boya/BoHong Microelectronics",
+    "preferred_name": "B.25D05AS",
+    "datasheet_url": "https://www.google.com/search?q=%22B.25D05AS%22+Boya%2FBoHong+Microelectronics+datasheet+pdf"
+  },
+  "68:4011": {
+    "vendor": "Boya/BoHong Microelectronics",
+    "preferred_name": "B.25D10AS",
+    "datasheet_url": "https://www.google.com/search?q=%22B.25D10AS%22+Boya%2FBoHong+Microelectronics+datasheet+pdf"
+  },
+  "68:4012": {
+    "vendor": "Boya/BoHong Microelectronics",
+    "preferred_name": "B.25D20AS",
+    "datasheet_url": "https://www.google.com/search?q=%22B.25D20AS%22+Boya%2FBoHong+Microelectronics+datasheet+pdf"
+  },
+  "68:4013": {
+    "vendor": "Boya/BoHong Microelectronics",
+    "preferred_name": "B.25D40AS/BY25D40ES",
+    "datasheet_url": "https://www.google.com/search?q=%22B.25D40AS%2FBY25D40ES%22+Boya%2FBoHong+Microelectronics+datasheet+pdf"
+  },
+  "68:4014": {
+    "vendor": "Boya/BoHong Microelectronics",
+    "preferred_name": "B.25D80AS/BY25Q80BS/BY25Q80ES",
+    "datasheet_url": "https://www.google.com/search?q=%22B.25D80AS%2FBY25Q80BS%2FBY25Q80ES%22+Boya%2FBoHong+Microelectronics+datasheet+pdf"
+  },
+  "68:4015": {
+    "vendor": "Boya/BoHong Microelectronics",
+    "preferred_name": "B.25D16AS/BY25Q16BS/BY25Q16ES",
+    "datasheet_url": "https://www.google.com/search?q=%22B.25D16AS%2FBY25Q16BS%2FBY25Q16ES%22+Boya%2FBoHong+Microelectronics+datasheet+pdf"
+  },
+  "68:4016": {
+    "vendor": "Boya/BoHong Microelectronics",
+    "preferred_name": "B.25Q32BS/BY25Q32CS/BY25Q32ES",
+    "datasheet_url": "https://www.google.com/search?q=%22B.25Q32BS%2FBY25Q32CS%2FBY25Q32ES%22+Boya%2FBoHong+Microelectronics+datasheet+pdf"
+  },
+  "68:4017": {
+    "vendor": "Boya/BoHong Microelectronics",
+    "preferred_name": "B.25Q64AS/BY25Q64ES",
+    "datasheet_url": "https://www.google.com/search?q=%22B.25Q64AS%2FBY25Q64ES%22+Boya%2FBoHong+Microelectronics+datasheet+pdf"
+  },
+  "68:4018": {
+    "vendor": "Boya/BoHong Microelectronics",
+    "preferred_name": "B.25Q128AS/BY25Q128ES",
+    "datasheet_url": "https://www.google.com/search?q=%22B.25Q128AS%2FBY25Q128ES%22+Boya%2FBoHong+Microelectronics+datasheet+pdf"
+  },
+  "68:4118": {
+    "vendor": "Boya Microelectronics",
+    "preferred_name": "BY25Q128FS",
+    "datasheet_url": "https://www.google.com/search?q=%22BY25Q128FS%22+datasheet+site%3Aboyamicro.com"
+  },
+  "7f1c:20": {
+    "vendor": "Eon",
+    "preferred_name": "EN29F010",
+    "datasheet_url": "https://www.google.com/search?q=%22EN29F010%22+datasheet+site%3Aeonssi.com"
+  },
+  "7f1c:4f": {
+    "vendor": "Eon",
+    "preferred_name": "EN29LV040(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22EN29LV040%28A%29%22+datasheet+site%3Aeonssi.com"
+  },
+  "7f1c:7e0c01": {
+    "vendor": "Eon",
+    "preferred_name": "EN29GL064H/L",
+    "datasheet_url": "https://www.google.com/search?q=%22EN29GL064H%2FL%22+datasheet+site%3Aeonssi.com"
+  },
+  "7f1c:7e1000": {
+    "vendor": "Eon",
+    "preferred_name": "EN29GL064(A)B",
+    "datasheet_url": "https://www.google.com/search?q=%22EN29GL064%28A%29B%22+datasheet+site%3Aeonssi.com"
+  },
+  "7f1c:7e1001": {
+    "vendor": "Eon",
+    "preferred_name": "EN29GL064(A)T",
+    "datasheet_url": "https://www.google.com/search?q=%22EN29GL064%28A%29T%22+datasheet+site%3Aeonssi.com"
+  },
+  "7f1c:7f2101": {
+    "vendor": "Eon",
+    "preferred_name": "EN29GL128",
+    "datasheet_url": "https://www.google.com/search?q=%22EN29GL128%22+datasheet+site%3Aeonssi.com"
+  },
+  "7f1c:7f92": {
+    "vendor": "Eon",
+    "preferred_name": "EN29F002(A)(N)T",
+    "datasheet_url": "https://www.google.com/search?q=%22EN29F002%28A%29%28N%29T%22+datasheet+site%3Aeonssi.com"
+  },
+  "7f1c:7f97": {
+    "vendor": "Eon",
+    "preferred_name": "EN29F002(A)(N)B",
+    "datasheet_url": "https://www.google.com/search?q=%22EN29F002%28A%29%28N%29B%22+datasheet+site%3Aeonssi.com"
+  },
+  "7f1c:cb": {
+    "vendor": "Eon",
+    "preferred_name": "EN29LV640B",
+    "datasheet_url": "https://www.google.com/search?q=%22EN29LV640B%22+datasheet+site%3Aeonssi.com"
+  },
+  "7f37:2010": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L05PU",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L05PU%22+datasheet+site%3Aamictechnology.com"
+  },
+  "7f37:2011": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L10PU",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L10PU%22+datasheet+site%3Aamictechnology.com"
+  },
+  "7f37:2012": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L20PU",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L20PU%22+datasheet+site%3Aamictechnology.com"
+  },
+  "7f37:2013": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L40PT",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L40PT%22+datasheet+site%3Aamictechnology.com",
+    "aliases": [
+      "A25L40PU"
+    ]
+  },
+  "7f37:2014": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L80P",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L80P%22+datasheet+site%3Aamictechnology.com"
+  },
+  "7f37:2015": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L16PU",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L16PU%22+datasheet+site%3Aamictechnology.com"
+  },
+  "7f37:2020": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L05PT",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L05PT%22+datasheet+site%3Aamictechnology.com"
+  },
+  "7f37:2021": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L10PT",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L10PT%22+datasheet+site%3Aamictechnology.com"
+  },
+  "7f37:2022": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L20PT",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L20PT%22+datasheet+site%3Aamictechnology.com"
+  },
+  "7f37:2025": {
+    "vendor": "AMIC",
+    "preferred_name": "A25L16PT",
+    "datasheet_url": "https://www.google.com/search?q=%22A25L16PT%22+datasheet+site%3Aamictechnology.com"
+  },
+  "7f9d:13": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LV080B",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LV080B%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:14": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LV016B",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LV016B%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:20": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LD512(C)",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LD512%28C%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:21": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LD010(C)",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LD010%28C%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:22": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LD020(C)",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LD020%28C%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:2f": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LD256C",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LD256C%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:42": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LQ020",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LQ020%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:43": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LQ040",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LQ040%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:44": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LQ080",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LQ080%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:45": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LQ016",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LQ016%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:46": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LQ032C",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LQ032C%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:7c": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LV010A",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LV010A%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:7d": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LV020",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LV020%22+datasheet+site%3Amicrochip.com"
+  },
+  "7f9d:7e": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LD040(C)",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LD040%28C%29%22+datasheet+site%3Amicrochip.com",
+    "aliases": [
+      "Pm25LV040"
+    ]
+  },
+  "85:2013": {
+    "vendor": "Puya",
+    "preferred_name": "PY25Q40HB",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25Q40HB%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:2014": {
+    "vendor": "Puya",
+    "preferred_name": "PY25Q80HB",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25Q80HB%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:2015": {
+    "vendor": "Puya",
+    "preferred_name": "PY25Q16HB",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25Q16HB%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:2016": {
+    "vendor": "Puya",
+    "preferred_name": "PY25Q32HB",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25Q32HB%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:2017": {
+    "vendor": "Puya",
+    "preferred_name": "PY25Q64HA",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25Q64HA%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:2018": {
+    "vendor": "Puya",
+    "preferred_name": "PY25Q128HA",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25Q128HA%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:2019": {
+    "vendor": "Puya",
+    "preferred_name": "PY25Q256HB",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25Q256HB%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:201a": {
+    "vendor": "Puya",
+    "preferred_name": "PY25Q512HB",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25Q512HB%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:201b": {
+    "vendor": "Puya",
+    "preferred_name": "PY25Q01GHB",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25Q01GHB%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:2317": {
+    "vendor": "Puya",
+    "preferred_name": "PY25F64HA",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25F64HA%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:2318": {
+    "vendor": "Puya",
+    "preferred_name": "PY25F128HA/PY25R128HA",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25F128HA%2FPY25R128HA%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:2319": {
+    "vendor": "Puya",
+    "preferred_name": "PY25F256HB",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25F256HB%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:231a": {
+    "vendor": "Puya",
+    "preferred_name": "PY25F512HB",
+    "datasheet_url": "https://www.google.com/search?q=%22PY25F512HB%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:4010": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q06H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q06H%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:4011": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q11H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q11H%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:4012": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q21H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q21H%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:6010": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q05H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q05H%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:6011": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q10H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q10H%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:6012": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q20H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q20H%22+datasheet+site%3Apuyasemi.com"
+  },
+  "85:6013": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q40H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q40H%22+datasheet+site%3Apuyasemi.com",
+    "aliases": [
+      "P25Q40SH"
+    ]
+  },
+  "85:6014": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q80H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q80H%22+datasheet+site%3Apuyasemi.com",
+    "aliases": [
+      "P25Q80SH"
+    ]
+  },
+  "85:6015": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q16H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q16H%22+datasheet+site%3Apuyasemi.com",
+    "aliases": [
+      "P25Q16SH"
+    ]
+  },
+  "85:6016": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q32H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q32H%22+datasheet+site%3Apuyasemi.com",
+    "aliases": [
+      "P25Q32SH"
+    ]
+  },
+  "85:6017": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q64H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q64H%22+datasheet+site%3Apuyasemi.com",
+    "aliases": [
+      "P25Q64SH"
+    ]
+  },
+  "85:6018": {
+    "vendor": "Puya",
+    "preferred_name": "P25Q128H",
+    "datasheet_url": "https://www.google.com/search?q=%22P25Q128H%22+datasheet+site%3Apuyasemi.com"
+  },
+  "89:70": {
+    "vendor": "Intel",
+    "preferred_name": "28F400BV/BX/CE/CV-T",
+    "datasheet_url": "https://www.google.com/search?q=%2228F400BV%2FBX%2FCE%2FCV-T%22+datasheet+site%3Aintel.com"
+  },
+  "89:71": {
+    "vendor": "Intel",
+    "preferred_name": "28F400BV/BX/CE/CV-B",
+    "datasheet_url": "https://www.google.com/search?q=%2228F400BV%2FBX%2FCE%2FCV-B%22+datasheet+site%3Aintel.com"
+  },
+  "89:78": {
+    "vendor": "Intel",
+    "preferred_name": "28F004B5/BE/BV/BX-T",
+    "datasheet_url": "https://www.google.com/search?q=%2228F004B5%2FBE%2FBV%2FBX-T%22+datasheet+site%3Aintel.com"
+  },
+  "89:79": {
+    "vendor": "Intel",
+    "preferred_name": "28F004B5/BE/BV/BX-B",
+    "datasheet_url": "https://www.google.com/search?q=%2228F004B5%2FBE%2FBV%2FBX-B%22+datasheet+site%3Aintel.com"
+  },
+  "89:7c": {
+    "vendor": "Intel",
+    "preferred_name": "28F002BC/BL/BV/BX-T",
+    "datasheet_url": "https://www.google.com/search?q=%2228F002BC%2FBL%2FBV%2FBX-T%22+datasheet+site%3Aintel.com"
+  },
+  "89:8911": {
+    "vendor": "Intel",
+    "preferred_name": "25F160S33B8",
+    "datasheet_url": "https://www.google.com/search?q=%2225F160S33B8%22+datasheet+site%3Aintel.com"
+  },
+  "89:8912": {
+    "vendor": "Intel",
+    "preferred_name": "25F320S33B8",
+    "datasheet_url": "https://www.google.com/search?q=%2225F320S33B8%22+datasheet+site%3Aintel.com"
+  },
+  "89:8913": {
+    "vendor": "Intel",
+    "preferred_name": "25F640S33B8",
+    "datasheet_url": "https://www.google.com/search?q=%2225F640S33B8%22+datasheet+site%3Aintel.com"
+  },
+  "89:8915": {
+    "vendor": "Intel",
+    "preferred_name": "25F160S33T8",
+    "datasheet_url": "https://www.google.com/search?q=%2225F160S33T8%22+datasheet+site%3Aintel.com"
+  },
+  "89:8916": {
+    "vendor": "Intel",
+    "preferred_name": "25F320S33T8",
+    "datasheet_url": "https://www.google.com/search?q=%2225F320S33T8%22+datasheet+site%3Aintel.com"
+  },
+  "89:8917": {
+    "vendor": "Intel",
+    "preferred_name": "25F640S33T8",
+    "datasheet_url": "https://www.google.com/search?q=%2225F640S33T8%22+datasheet+site%3Aintel.com"
+  },
+  "89:94": {
+    "vendor": "Intel",
+    "preferred_name": "28F001BN/BX-T",
+    "datasheet_url": "https://www.google.com/search?q=%2228F001BN%2FBX-T%22+datasheet+site%3Aintel.com"
+  },
+  "89:95": {
+    "vendor": "Intel",
+    "preferred_name": "28F001BN/BX-B",
+    "datasheet_url": "https://www.google.com/search?q=%2228F001BN%2FBX-B%22+datasheet+site%3Aintel.com"
+  },
+  "89:a7": {
+    "vendor": "Intel",
+    "preferred_name": "28F008S3/S5/SC",
+    "datasheet_url": "https://www.google.com/search?q=%2228F008S3%2FS5%2FSC%22+datasheet+site%3Aintel.com"
+  },
+  "89:ac": {
+    "vendor": "Intel",
+    "preferred_name": "82802AC",
+    "datasheet_url": "https://www.google.com/search?q=%2282802AC%22+datasheet+site%3Aintel.com"
+  },
+  "89:ad": {
+    "vendor": "Intel",
+    "preferred_name": "82802AB",
+    "datasheet_url": "https://www.google.com/search?q=%2282802AB%22+datasheet+site%3Aintel.com"
+  },
+  "8c:0": {
+    "vendor": "ESMT",
+    "preferred_name": "F49B002UA",
+    "datasheet_url": "https://www.google.com/search?q=%22F49B002UA%22+datasheet+site%3Aesmt.com.tw"
+  },
+  "8c:2014": {
+    "vendor": "ESMT",
+    "preferred_name": "F25L008A",
+    "datasheet_url": "https://www.google.com/search?q=%22F25L008A%22+datasheet+site%3Aesmt.com.tw"
+  },
+  "8c:2016": {
+    "vendor": "ESMT",
+    "preferred_name": "F25L32PA",
+    "datasheet_url": "https://www.google.com/search?q=%22F25L32PA%22+datasheet+site%3Aesmt.com.tw"
+  },
+  "9d:1b": {
+    "vendor": "PMC",
+    "preferred_name": "Pm39LV512",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm39LV512%22+datasheet+site%3Amicrochip.com"
+  },
+  "9d:1c": {
+    "vendor": "PMC",
+    "preferred_name": "Pm39LV010",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm39LV010%22+datasheet+site%3Amicrochip.com"
+  },
+  "9d:1d": {
+    "vendor": "PMC",
+    "preferred_name": "Pm29F002T",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm29F002T%22+datasheet+site%3Amicrochip.com"
+  },
+  "9d:2d": {
+    "vendor": "PMC",
+    "preferred_name": "Pm29F002B",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm29F002B%22+datasheet+site%3Amicrochip.com"
+  },
+  "9d:3d": {
+    "vendor": "PMC",
+    "preferred_name": "Pm39LV020",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm39LV020%22+datasheet+site%3Amicrochip.com"
+  },
+  "9d:3e": {
+    "vendor": "PMC",
+    "preferred_name": "Pm39LV040",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm39LV040%22+datasheet+site%3Amicrochip.com"
+  },
+  "9d:6015": {
+    "vendor": "ISSI",
+    "preferred_name": "IS25LP016",
+    "datasheet_url": "https://www.google.com/search?q=IS25LP016+datasheet+site%3Aissi.com"
+  },
+  "9d:6016": {
+    "vendor": "ISSI",
+    "preferred_name": "IS25LP032",
+    "datasheet_url": "https://www.google.com/search?q=IS25LP032+datasheet+site%3Aissi.com"
+  },
+  "9d:6017": {
+    "vendor": "ISSI",
+    "preferred_name": "IS25LP064",
+    "datasheet_url": "https://www.google.com/search?q=%22IS25LP064%22+datasheet+site%3Aissi.com"
+  },
+  "9d:6018": {
+    "vendor": "ISSI",
+    "preferred_name": "IS25LP128",
+    "datasheet_url": "https://www.google.com/search?q=%22IS25LP128%22+datasheet+site%3Aissi.com"
+  },
+  "9d:6019": {
+    "vendor": "ISSI",
+    "preferred_name": "IS25LP256",
+    "datasheet_url": "https://www.google.com/search?q=%22IS25LP256%22+datasheet+site%3Aissi.com"
+  },
+  "9d:6d": {
+    "vendor": "PMC",
+    "preferred_name": "Pm49FL002",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm49FL002%22+datasheet+site%3Amicrochip.com"
+  },
+  "9d:6e": {
+    "vendor": "PMC",
+    "preferred_name": "Pm49FL004",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm49FL004%22+datasheet+site%3Amicrochip.com"
+  },
+  "9d:7016": {
+    "vendor": "ISSI",
+    "preferred_name": "IS25WP032",
+    "datasheet_url": "https://www.google.com/search?q=%22IS25WP032%22+datasheet+site%3Aissi.com"
+  },
+  "9d:7017": {
+    "vendor": "ISSI",
+    "preferred_name": "IS25WP064",
+    "datasheet_url": "https://www.google.com/search?q=%22IS25WP064%22+datasheet+site%3Aissi.com"
+  },
+  "9d:7018": {
+    "vendor": "ISSI",
+    "preferred_name": "IS25WP128",
+    "datasheet_url": "https://www.google.com/search?q=%22IS25WP128%22+datasheet+site%3Aissi.com"
+  },
+  "9d:7019": {
+    "vendor": "ISSI",
+    "preferred_name": "IS25WP256",
+    "datasheet_url": "https://www.google.com/search?q=%22IS25WP256%22+datasheet+site%3Aissi.com"
+  },
+  "9d:7b": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LV512(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LV512%28A%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "9d:7c": {
+    "vendor": "PMC",
+    "preferred_name": "Pm25LV010",
+    "datasheet_url": "https://www.google.com/search?q=%22Pm25LV010%22+datasheet+site%3Amicrochip.com"
+  },
+  "a1:3110": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25F005",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25F005%22+datasheet+site%3Afmsh.com"
+  },
+  "a1:3111": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25F01",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25F01%22+datasheet+site%3Afmsh.com"
+  },
+  "a1:3112": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25F02(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25F02%28A%29%22+datasheet+site%3Afmsh.com"
+  },
+  "a1:3113": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25F04(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25F04%28A%29%22+datasheet+site%3Afmsh.com"
+  },
+  "a1:4012": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25Q02",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25Q02%22+datasheet+site%3Afmsh.com"
+  },
+  "a1:4013": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25Q04",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25Q04%22+datasheet+site%3Afmsh.com"
+  },
+  "a1:4014": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25Q08",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25Q08%22+datasheet+site%3Afmsh.com",
+    "aliases": [
+      "FM25Q08A"
+    ]
+  },
+  "a1:4015": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25Q16",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25Q16%22+datasheet+site%3Afmsh.com"
+  },
+  "a1:4016": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25Q32",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25Q32%22+datasheet+site%3Afmsh.com"
+  },
+  "a1:4017": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25Q64",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25Q64%22+datasheet+site%3Afmsh.com"
+  },
+  "a1:4018": {
+    "vendor": "Fudan",
+    "preferred_name": "FM25Q128",
+    "datasheet_url": "https://www.google.com/search?q=%22FM25Q128%22+datasheet+site%3Afmsh.com"
+  },
+  "ad:34": {
+    "vendor": "Hyundai",
+    "preferred_name": "HY29F002B",
+    "datasheet_url": "https://www.google.com/search?q=%22HY29F002B%22+Hyundai+datasheet+pdf"
+  },
+  "ad:40": {
+    "vendor": "Bright",
+    "preferred_name": "BM29F040",
+    "datasheet_url": "https://www.google.com/search?q=%22BM29F040%22+Bright+datasheet+pdf"
+  },
+  "ad:a4": {
+    "vendor": "Hyundai",
+    "preferred_name": "HY29F040A",
+    "datasheet_url": "https://www.google.com/search?q=%22HY29F040A%22+Hyundai+datasheet+pdf"
+  },
+  "ad:b0": {
+    "vendor": "Hyundai",
+    "preferred_name": "HY29F002T",
+    "datasheet_url": "https://www.google.com/search?q=%22HY29F002T%22+Hyundai+datasheet+pdf"
+  },
+  "b0:cf": {
+    "vendor": "Sharp",
+    "preferred_name": "LHF00L04",
+    "datasheet_url": "https://www.google.com/search?q=%22LHF00L04%22+Sharp+datasheet+pdf"
+  },
+  "b0:ed": {
+    "vendor": "Sharp",
+    "preferred_name": "LH28F008BJT-BTLZ1",
+    "datasheet_url": "https://www.google.com/search?q=%22LH28F008BJT-BTLZ1%22+Sharp+datasheet+pdf"
+  },
+  "b:4012": {
+    "vendor": "XTX Technology",
+    "preferred_name": "XT25F02E",
+    "datasheet_url": "https://www.google.com/search?q=%22XT25F02E%22+datasheet+site%3Axtxtech.com"
+  },
+  "b:4013": {
+    "vendor": "XTX Technology",
+    "preferred_name": "XT25F04D",
+    "datasheet_url": "https://www.google.com/search?q=%22XT25F04D%22+datasheet+site%3Axtxtech.com"
+  },
+  "b:4014": {
+    "vendor": "XTX Technology",
+    "preferred_name": "XT25F08B",
+    "datasheet_url": "https://www.google.com/search?q=%22XT25F08B%22+datasheet+site%3Axtxtech.com"
+  },
+  "b:4015": {
+    "vendor": "XTX Technology",
+    "preferred_name": "XT25F16B",
+    "datasheet_url": "https://www.google.com/search?q=%22XT25F16B%22+datasheet+site%3Axtxtech.com",
+    "aliases": [
+      "XT25F16F"
+    ]
+  },
+  "b:4016": {
+    "vendor": "XTX Technology",
+    "preferred_name": "XT25F32B",
+    "datasheet_url": "https://www.google.com/search?q=%22XT25F32B%22+datasheet+site%3Axtxtech.com",
+    "aliases": [
+      "XT25F32F"
+    ]
+  },
+  "b:4017": {
+    "vendor": "XTX Technology",
+    "preferred_name": "XT25F64B",
+    "datasheet_url": "https://www.google.com/search?q=%22XT25F64B%22+datasheet+site%3Axtxtech.com",
+    "aliases": [
+      "XT25F64F"
+    ]
+  },
+  "b:4018": {
+    "vendor": "XTX Technology",
+    "preferred_name": "XT25F128B",
+    "datasheet_url": "https://www.google.com/search?q=%22XT25F128B%22+datasheet+site%3Axtxtech.com",
+    "aliases": [
+      "XT25F128F/XT25BF128F"
+    ]
+  },
+  "ba:2012": {
+    "vendor": "Zetta Device",
+    "preferred_name": "ZD25D20",
+    "datasheet_url": "https://www.google.com/search?q=%22ZD25D20%22+datasheet+site%3Azettadevice.com"
+  },
+  "ba:2013": {
+    "vendor": "Zetta Device",
+    "preferred_name": "ZD25D40",
+    "datasheet_url": "https://www.google.com/search?q=%22ZD25D40%22+datasheet+site%3Azettadevice.com"
+  },
+  "ba:4218": {
+    "vendor": "Zetta Device",
+    "preferred_name": "ZD25LQ128",
+    "datasheet_url": "https://www.google.com/search?q=%22ZD25LQ128%22+datasheet+site%3Azettadevice.com"
+  },
+  "ba:4317": {
+    "vendor": "Zetta Device",
+    "preferred_name": "ZD25LQ64",
+    "datasheet_url": "https://www.google.com/search?q=%22ZD25LQ64%22+datasheet+site%3Azettadevice.com"
+  },
+  "bf:10": {
+    "vendor": "SST",
+    "preferred_name": "SST29EE020A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST29EE020A%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:12": {
+    "vendor": "SST",
+    "preferred_name": "SST29LE020",
+    "datasheet_url": "https://www.google.com/search?q=%22SST29LE020%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:1b": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF003A/B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF003A%2FB%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2501": {
+    "vendor": "SST",
+    "preferred_name": "SST25WF512",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25WF512%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2502": {
+    "vendor": "SST",
+    "preferred_name": "SST25WF010",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25WF010%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2503": {
+    "vendor": "SST",
+    "preferred_name": "SST25WF020",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25WF020%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2504": {
+    "vendor": "SST",
+    "preferred_name": "SST25WF040",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25WF040%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2505": {
+    "vendor": "SST",
+    "preferred_name": "SST25WF080",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25WF080%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2541": {
+    "vendor": "SST",
+    "preferred_name": "SST25VF016B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25VF016B%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:254a": {
+    "vendor": "SST",
+    "preferred_name": "SST25VF032B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25VF032B%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:254b": {
+    "vendor": "SST",
+    "preferred_name": "SST25VF064C",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25VF064C%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:258c": {
+    "vendor": "SST",
+    "preferred_name": "SST25VF020B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25VF020B%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:258d": {
+    "vendor": "SST",
+    "preferred_name": "SST25VF040B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25VF040B%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:258e": {
+    "vendor": "SST",
+    "preferred_name": "SST25VF080B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25VF080B%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2601": {
+    "vendor": "SST",
+    "preferred_name": "SST26VF016",
+    "datasheet_url": "https://www.google.com/search?q=%22SST26VF016%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2602": {
+    "vendor": "SST",
+    "preferred_name": "SST26VF032",
+    "datasheet_url": "https://www.google.com/search?q=%22SST26VF032%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2618": {
+    "vendor": "SST",
+    "preferred_name": "SST26VF080A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST26VF080A%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2641": {
+    "vendor": "SST",
+    "preferred_name": "SST26VF016B(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22SST26VF016B%28A%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2642": {
+    "vendor": "SST",
+    "preferred_name": "SST26VF032B(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22SST26VF032B%28A%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:2643": {
+    "vendor": "SST",
+    "preferred_name": "SST26VF064B(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22SST26VF064B%28A%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:4": {
+    "vendor": "SST",
+    "preferred_name": "SST28SF040A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST28SF040A%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:43": {
+    "vendor": "SST",
+    "preferred_name": "SST25LF020A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25LF020A%22+datasheet+site%3Amicrochip.com",
+    "aliases": [
+      "SST25VF020"
+    ]
+  },
+  "bf:44": {
+    "vendor": "SST",
+    "preferred_name": "SST25LF040A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25LF040A%22+datasheet+site%3Amicrochip.com",
+    "aliases": [
+      "SST25VF040"
+    ]
+  },
+  "bf:48": {
+    "vendor": "SST",
+    "preferred_name": "SST25VF512(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25VF512%28A%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:49": {
+    "vendor": "SST",
+    "preferred_name": "SST25VF010(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25VF010%28A%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:4c": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF160C",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF160C%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:50": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF040B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF040B%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:51": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF040",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF040%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:52": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF020A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF020A%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:54": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF004C",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF004C%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:57": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF002A/B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF002A%2FB%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:59": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF008C",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF008C%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:5a": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF008A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF008A%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:5b": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF080A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF080A%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:5c": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF016C",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF016C%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:60": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF004A/B",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF004A%2FB%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:61": {
+    "vendor": "SST",
+    "preferred_name": "SST49LF020",
+    "datasheet_url": "https://www.google.com/search?q=%22SST49LF020%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:7": {
+    "vendor": "SST",
+    "preferred_name": "SST29EE010",
+    "datasheet_url": "https://www.google.com/search?q=%22SST29EE010%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:8": {
+    "vendor": "SST",
+    "preferred_name": "SST29LE010",
+    "datasheet_url": "https://www.google.com/search?q=%22SST29LE010%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:80": {
+    "vendor": "SST",
+    "preferred_name": "SST25LF080(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25LF080%28A%29%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:8d": {
+    "vendor": "SST",
+    "preferred_name": "SST25VF040B.REMS",
+    "datasheet_url": "https://www.google.com/search?q=%22SST25VF040B.REMS%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:b4": {
+    "vendor": "SST",
+    "preferred_name": "SST39SF512",
+    "datasheet_url": "https://www.google.com/search?q=%22SST39SF512%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:b5": {
+    "vendor": "SST",
+    "preferred_name": "SST39SF010A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST39SF010A%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:b6": {
+    "vendor": "SST",
+    "preferred_name": "SST39SF020A",
+    "datasheet_url": "https://www.google.com/search?q=%22SST39SF020A%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:b7": {
+    "vendor": "SST",
+    "preferred_name": "SST39SF040",
+    "datasheet_url": "https://www.google.com/search?q=%22SST39SF040%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:d4": {
+    "vendor": "SST",
+    "preferred_name": "SST39VF512",
+    "datasheet_url": "https://www.google.com/search?q=%22SST39VF512%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:d5": {
+    "vendor": "SST",
+    "preferred_name": "SST39VF010",
+    "datasheet_url": "https://www.google.com/search?q=%22SST39VF010%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:d6": {
+    "vendor": "SST",
+    "preferred_name": "SST39VF020",
+    "datasheet_url": "https://www.google.com/search?q=%22SST39VF020%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:d7": {
+    "vendor": "SST",
+    "preferred_name": "SST39VF040",
+    "datasheet_url": "https://www.google.com/search?q=%22SST39VF040%22+datasheet+site%3Amicrochip.com"
+  },
+  "bf:d8": {
+    "vendor": "SST",
+    "preferred_name": "SST39VF080",
+    "datasheet_url": "https://www.google.com/search?q=%22SST39VF080%22+datasheet+site%3Amicrochip.com"
+  },
+  "c2:18": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29F001T",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29F001T%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:19": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29F001B",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29F001B%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2010": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L512(E)/MX25V512(C)",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L512%28E%29%2FMX25V512%28C%29%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2011": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L1005(C)/MX25L1006E",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L1005%28C%29%2FMX25L1006E%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2012": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L2005(C)/MX25L2006E",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L2005%28C%29%2FMX25L2006E%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2013": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L4005(A/C)/MX25L4006E",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L4005%28A%2FC%29%2FMX25L4006E%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2014": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L8005/MX25L8006E/MX25L8008E/MX25V8005",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L8005%2FMX25L8006E%2FMX25L8008E%2FMX25V8005%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2015": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L1605",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L1605%22+datasheet+site%3Amxic.com.tw",
+    "aliases": [
+      "MX25L1605A/MX25L1606E/MX25L1608E",
+      "MX25L1605D/MX25L1608D/MX25L1673E"
+    ]
+  },
+  "c2:2016": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L3205(A)",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L3205%28A%29%22+datasheet+site%3Amxic.com.tw",
+    "aliases": [
+      "MX25L3205D/MX25L3208D",
+      "MX25L3206E/MX25L3208E",
+      "MX25L3233F/MX25L3273E"
+    ]
+  },
+  "c2:2017": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L6405",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L6405%22+datasheet+site%3Amxic.com.tw",
+    "aliases": [
+      "MX25L6405D",
+      "MX25L6406E/MX25L6408E",
+      "MX25L6436E/MX25L6445E/MX25L6465E/MX25L6473E/MX25L6473F"
+    ]
+  },
+  "c2:2018": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L12805D",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L12805D%22+datasheet+site%3Amxic.com.tw",
+    "aliases": [
+      "MX25L12833F/MX25L12835F/MX25L12845E/MX25L12865E/MX25L12873F"
+    ]
+  },
+  "c2:2019": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L25635F/MX25L25645G",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L25635F%2FMX25L25645G%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:201a": {
+    "vendor": "Macronix",
+    "preferred_name": "MX66L51235F/MX25L51245G",
+    "datasheet_url": "https://www.google.com/search?q=%22MX66L51235F%2FMX25L51245G%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:201b": {
+    "vendor": "Macronix",
+    "preferred_name": "MX66L1G45G",
+    "datasheet_url": "https://www.google.com/search?q=%22MX66L1G45G%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2210": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L5121E",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L5121E%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2415": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L1635D",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L1635D%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2515": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L1635E",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L1635E%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2534": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25U8032E",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25U8032E%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2535": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25U1635E",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25U1635E%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2536": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25U3235E/F",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25U3235E%2FF%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2537": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25U6435E/F",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25U6435E%2FF%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2538": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25U12835F",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25U12835F%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2539": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25U25635F",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25U25635F%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:253a": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25U51245G",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25U51245G%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2816": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25R3235F",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25R3235F%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:2817": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25R6435F",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25R6435F%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:34": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29F002(N)B",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29F002%28N%29B%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:36": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29F022(N)T",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29F022%28N%29T%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:37": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29F022(N)B",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29F022%28N%29B%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:4f": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29LV040",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29LV040%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:515": {
+    "vendor": "Macronix",
+    "preferred_name": "MX23L1654",
+    "datasheet_url": "https://www.google.com/search?q=%22MX23L1654%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:516": {
+    "vendor": "Macronix",
+    "preferred_name": "MX23L3254",
+    "datasheet_url": "https://www.google.com/search?q=%22MX23L3254%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:517": {
+    "vendor": "Macronix",
+    "preferred_name": "MX23L6454",
+    "datasheet_url": "https://www.google.com/search?q=%22MX23L6454%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:518": {
+    "vendor": "Macronix",
+    "preferred_name": "MX23L12854",
+    "datasheet_url": "https://www.google.com/search?q=%22MX23L12854%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:5e16": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L3235D",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L3235D%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:7e0c01": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29GL640EH/L",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29GL640EH%2FL%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:7e1000": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29GL640EB",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29GL640EB%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:7e1001": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29GL640ET",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29GL640ET%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:7e1a00": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29GL320EB",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29GL320EB%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:7e1a01": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29GL320ET",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29GL320ET%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:7e1d00": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29GL320EH/L",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29GL320EH%2FL%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:7e2101": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29GL128F",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29GL128F%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:9517": {
+    "vendor": "Macronix",
+    "preferred_name": "MX25L6495F",
+    "datasheet_url": "https://www.google.com/search?q=%22MX25L6495F%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:a4": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29F040",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29F040%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c2:b0": {
+    "vendor": "Macronix",
+    "preferred_name": "MX29F002(N)T",
+    "datasheet_url": "https://www.google.com/search?q=%22MX29F002%28N%29T%22+datasheet+site%3Amxic.com.tw"
+  },
+  "c8:3114": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25T80",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25T80%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4010": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q512",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q512%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4011": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q10",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q10%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4012": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q20(B)",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q20%28B%29%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4013": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q40(B)",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q40%28B%29%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4014": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q80(B)",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q80%28B%29%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4015": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q16(B)",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q16%28B%29%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4016": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q32(B)",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q32%28B%29%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4017": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q64(B)",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q64%28B%29%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4018": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q127C/GD25B127D",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q127C%2FGD25B127D%22+datasheet+site%3Agigadevice.com",
+    "aliases": [
+      "GD25Q128B/GD25B128B",
+      "GD25Q128C",
+      "GD25Q128E/GD25B128E/GD25R128E/GD25Q128H/GD25B128H"
+    ]
+  },
+  "c8:4019": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25Q256D/GD25B256D",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25Q256D%2FGD25B256D%22+datasheet+site%3Agigadevice.com",
+    "aliases": [
+      "GD25Q257D/GD25B257D",
+      "GD25Q256E/GD25B256E/GD25R256E"
+    ]
+  },
+  "c8:401a": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25B512MF/GD25R512MF",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25B512MF%2FGD25R512MF%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:401b": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD55B01GF",
+    "datasheet_url": "https://www.google.com/search?q=%22GD55B01GF%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:401c": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD55B02GF",
+    "datasheet_url": "https://www.google.com/search?q=%22GD55B02GF%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4212": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25VQ21B",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25VQ21B%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4213": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25VQ40C",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25VQ40C%22+datasheet+site%3Agigadevice.com",
+    "aliases": [
+      "GD25VQ41B"
+    ]
+  },
+  "c8:4214": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25VQ80C",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25VQ80C%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:4215": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25VQ16C",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25VQ16C%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:471a": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25B512ME/GD25R512ME",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25B512ME%2FGD25R512ME%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:471b": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD55B01GE",
+    "datasheet_url": "https://www.google.com/search?q=%22GD55B01GE%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:471c": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD55B02GE",
+    "datasheet_url": "https://www.google.com/search?q=%22GD55B02GE%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6012": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LQ20",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LQ20%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6013": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LQ40",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LQ40%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6014": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LQ80",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LQ80%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6015": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LQ16",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LQ16%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6016": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LQ32",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LQ32%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6017": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LQ64(B)",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LQ64%28B%29%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6018": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LQ128C/GD25LQ128D/GD25LQ128E",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LQ128C%2FGD25LQ128D%2FGD25LQ128E%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6019": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LQ256D/GD25LE256D/GD25LB256D/GD25LQ255E",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LQ256D%2FGD25LE256D%2FGD25LB256D%2FGD25LQ255E%22+datasheet+site%3Agigadevice.com",
+    "aliases": [
+      "GD25LQ256H/GD25LE256H/GD25LB256F",
+      "GD25LE255E"
+    ]
+  },
+  "c8:601a": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LB512MF/GD25LR512MF",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LB512MF%2FGD25LR512MF%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:601b": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD55LB01GF",
+    "datasheet_url": "https://www.google.com/search?q=%22GD55LB01GF%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:601c": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD55LB02GF",
+    "datasheet_url": "https://www.google.com/search?q=%22GD55LB02GF%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6314": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LF80E",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LF80E%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6315": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LF16E",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LF16E%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6316": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LF32E",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LF32E%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6317": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LF64E",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LF64E%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6318": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LF128E",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LF128E%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6514": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25WQ80E",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25WQ80E%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:6719": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LB256E/GD25LR256E",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LB256E%2FGD25LR256E%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:671a": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD25LB512ME/GD25LR512ME",
+    "datasheet_url": "https://www.google.com/search?q=%22GD25LB512ME%2FGD25LR512ME%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:671b": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD55LB01GE",
+    "datasheet_url": "https://www.google.com/search?q=%22GD55LB01GE%22+datasheet+site%3Agigadevice.com"
+  },
+  "c8:671c": {
+    "vendor": "GigaDevice",
+    "preferred_name": "GD55LB02GE",
+    "datasheet_url": "https://www.google.com/search?q=%22GD55LB02GE%22+datasheet+site%3Agigadevice.com"
+  },
+  "d5:3011": {
+    "vendor": "Nantronics",
+    "preferred_name": "N25S10",
+    "datasheet_url": "https://www.google.com/search?q=%22N25S10%22+Nantronics+datasheet+pdf"
+  },
+  "d5:3012": {
+    "vendor": "Nantronics",
+    "preferred_name": "N25S20",
+    "datasheet_url": "https://www.google.com/search?q=%22N25S20%22+Nantronics+datasheet+pdf"
+  },
+  "d5:3013": {
+    "vendor": "Nantronics",
+    "preferred_name": "N25S40",
+    "datasheet_url": "https://www.google.com/search?q=%22N25S40%22+Nantronics+datasheet+pdf"
+  },
+  "d5:3014": {
+    "vendor": "Nantronics",
+    "preferred_name": "N25S80",
+    "datasheet_url": "https://www.google.com/search?q=%22N25S80%22+Nantronics+datasheet+pdf"
+  },
+  "d5:3015": {
+    "vendor": "Nantronics",
+    "preferred_name": "N25S16",
+    "datasheet_url": "https://www.google.com/search?q=%22N25S16%22+Nantronics+datasheet+pdf"
+  },
+  "d5:7e0c01": {
+    "vendor": "ISSI",
+    "preferred_name": "IS29GL064H/L",
+    "datasheet_url": "https://www.google.com/search?q=%22IS29GL064H%2FL%22+datasheet+site%3Aissi.com"
+  },
+  "d5:7e1000": {
+    "vendor": "ISSI",
+    "preferred_name": "IS29GL064B",
+    "datasheet_url": "https://www.google.com/search?q=%22IS29GL064B%22+datasheet+site%3Aissi.com"
+  },
+  "d5:7e1001": {
+    "vendor": "ISSI",
+    "preferred_name": "IS29GL064T",
+    "datasheet_url": "https://www.google.com/search?q=%22IS29GL064T%22+datasheet+site%3Aissi.com"
+  },
+  "d5:7e2101": {
+    "vendor": "ISSI",
+    "preferred_name": "IS29GL128H/L",
+    "datasheet_url": "https://www.google.com/search?q=%22IS29GL128H%2FL%22+datasheet+site%3Aissi.com"
+  },
+  "da:31": {
+    "vendor": "Winbond",
+    "preferred_name": "W39L010",
+    "datasheet_url": "https://www.google.com/search?q=%22W39L010%22+datasheet+site%3Awinbond.com"
+  },
+  "da:32": {
+    "vendor": "Winbond",
+    "preferred_name": "W49V002FA",
+    "datasheet_url": "https://www.google.com/search?q=%22W49V002FA%22+datasheet+site%3Awinbond.com"
+  },
+  "da:34": {
+    "vendor": "Winbond",
+    "preferred_name": "W39V040FA",
+    "datasheet_url": "https://www.google.com/search?q=%22W39V040FA%22+datasheet+site%3Awinbond.com"
+  },
+  "da:3d": {
+    "vendor": "Winbond",
+    "preferred_name": "W39V040A",
+    "datasheet_url": "https://www.google.com/search?q=%22W39V040A%22+datasheet+site%3Awinbond.com"
+  },
+  "da:45": {
+    "vendor": "Winbond",
+    "preferred_name": "W29C020(C)/W29C022",
+    "datasheet_url": "https://www.google.com/search?q=%22W29C020%28C%29%2FW29C022%22+datasheet+site%3Awinbond.com"
+  },
+  "da:46": {
+    "vendor": "Winbond",
+    "preferred_name": "W29C040/P",
+    "datasheet_url": "https://www.google.com/search?q=%22W29C040%2FP%22+datasheet+site%3Awinbond.com"
+  },
+  "da:50": {
+    "vendor": "Winbond",
+    "preferred_name": "W39V040C",
+    "datasheet_url": "https://www.google.com/search?q=%22W39V040C%22+datasheet+site%3Awinbond.com",
+    "aliases": [
+      "W39V040FC"
+    ]
+  },
+  "da:54": {
+    "vendor": "Winbond",
+    "preferred_name": "W39V040B",
+    "datasheet_url": "https://www.google.com/search?q=%22W39V040B%22+datasheet+site%3Awinbond.com",
+    "aliases": [
+      "W39V040FB"
+    ]
+  },
+  "da:8c": {
+    "vendor": "Winbond",
+    "preferred_name": "W49F020",
+    "datasheet_url": "https://www.google.com/search?q=%22W49F020%22+datasheet+site%3Awinbond.com"
+  },
+  "da:93": {
+    "vendor": "Winbond",
+    "preferred_name": "W39V080FA (dual mode)",
+    "datasheet_url": "https://www.google.com/search?q=%22W39V080FA+%28dual+mode%29%22+datasheet+site%3Awinbond.com"
+  },
+  "da:a1": {
+    "vendor": "Winbond",
+    "preferred_name": "W39F010",
+    "datasheet_url": "https://www.google.com/search?q=%22W39F010%22+datasheet+site%3Awinbond.com"
+  },
+  "da:b": {
+    "vendor": "Winbond",
+    "preferred_name": "W49F002U/N",
+    "datasheet_url": "https://www.google.com/search?q=%22W49F002U%2FN%22+datasheet+site%3Awinbond.com"
+  },
+  "da:b0": {
+    "vendor": "Winbond",
+    "preferred_name": "W49V002A",
+    "datasheet_url": "https://www.google.com/search?q=%22W49V002A%22+datasheet+site%3Awinbond.com"
+  },
+  "da:b5": {
+    "vendor": "Winbond",
+    "preferred_name": "W39L020",
+    "datasheet_url": "https://www.google.com/search?q=%22W39L020%22+datasheet+site%3Awinbond.com"
+  },
+  "da:b6": {
+    "vendor": "Winbond",
+    "preferred_name": "W39L040",
+    "datasheet_url": "https://www.google.com/search?q=%22W39L040%22+datasheet+site%3Awinbond.com"
+  },
+  "da:c1": {
+    "vendor": "Winbond",
+    "preferred_name": "W29C010(M)/W29C011A/W29EE011/W29EE012",
+    "datasheet_url": "https://www.google.com/search?q=%22W29C010%28M%29%2FW29C011A%2FW29EE011%2FW29EE012%22+datasheet+site%3Awinbond.com",
+    "aliases": [
+      "W29C010(M)/W29C011A/W29EE011/W29EE012-old"
+    ]
+  },
+  "da:c8": {
+    "vendor": "Winbond",
+    "preferred_name": "W29C512A/W29EE512",
+    "datasheet_url": "https://www.google.com/search?q=%22W29C512A%2FW29EE512%22+datasheet+site%3Awinbond.com"
+  },
+  "da:d0": {
+    "vendor": "Winbond",
+    "preferred_name": "W39V080A",
+    "datasheet_url": "https://www.google.com/search?q=%22W39V080A%22+datasheet+site%3Awinbond.com"
+  },
+  "da:d3": {
+    "vendor": "Winbond",
+    "preferred_name": "W39V080FA",
+    "datasheet_url": "https://www.google.com/search?q=%22W39V080FA%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:2014": {
+    "vendor": "Winbond",
+    "preferred_name": "W25P80",
+    "datasheet_url": "https://www.google.com/search?q=%22W25P80%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:2015": {
+    "vendor": "Winbond",
+    "preferred_name": "W25P16",
+    "datasheet_url": "https://www.google.com/search?q=%22W25P16%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:2016": {
+    "vendor": "Winbond",
+    "preferred_name": "W25P32",
+    "datasheet_url": "https://www.google.com/search?q=%22W25P32%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:3010": {
+    "vendor": "Winbond",
+    "preferred_name": "W25X05",
+    "datasheet_url": "https://www.google.com/search?q=%22W25X05%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:3011": {
+    "vendor": "Winbond",
+    "preferred_name": "W25X10",
+    "datasheet_url": "https://www.google.com/search?q=%22W25X10%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:3012": {
+    "vendor": "Winbond",
+    "preferred_name": "W25X20",
+    "datasheet_url": "https://www.google.com/search?q=%22W25X20%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:3013": {
+    "vendor": "Winbond",
+    "preferred_name": "W25X40",
+    "datasheet_url": "https://www.google.com/search?q=%22W25X40%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:3014": {
+    "vendor": "Winbond",
+    "preferred_name": "W25X80",
+    "datasheet_url": "https://www.google.com/search?q=%22W25X80%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:3015": {
+    "vendor": "Winbond",
+    "preferred_name": "W25X16",
+    "datasheet_url": "https://www.google.com/search?q=%22W25X16%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:3016": {
+    "vendor": "Winbond",
+    "preferred_name": "W25X32",
+    "datasheet_url": "https://www.google.com/search?q=%22W25X32%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:3017": {
+    "vendor": "Winbond",
+    "preferred_name": "W25X64",
+    "datasheet_url": "https://www.google.com/search?q=%22W25X64%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:4013": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q40.V",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q40.V%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:4014": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q80.V",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q80.V%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:4015": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q16.V",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q16.V%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:4016": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q32BV/W25Q32CV/W25Q32DV",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q32BV%2FW25Q32CV%2FW25Q32DV%22+datasheet+site%3Awinbond.com",
+    "aliases": [
+      "W25Q32FV",
+      "W25Q32JV"
+    ]
+  },
+  "ef:4017": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q64BV/W25Q64CV/W25Q64FV",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q64BV%2FW25Q64CV%2FW25Q64FV%22+datasheet+site%3Awinbond.com",
+    "aliases": [
+      "W25Q64JV-.Q"
+    ]
+  },
+  "ef:4018": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q128.V",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q128.V%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:4019": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q256FV",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q256FV%22+datasheet+site%3Awinbond.com",
+    "aliases": [
+      "W25Q256JV_Q"
+    ]
+  },
+  "ef:4020": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q512JV",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q512JV%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:5012": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q20.W",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q20.W%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:5013": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q40BW",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q40BW%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:5014": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q80BW",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q80BW%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:6013": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q40EW",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q40EW%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:6014": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q80EW",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q80EW%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:6015": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q16.W",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q16.W%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:6016": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q32BW/W25Q32CW/W25Q32DW",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q32BW%2FW25Q32CW%2FW25Q32DW%22+datasheet+site%3Awinbond.com",
+    "aliases": [
+      "W25Q32FW",
+      "W25Q32JW...Q"
+    ]
+  },
+  "ef:6017": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q64DW",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q64DW%22+datasheet+site%3Awinbond.com",
+    "aliases": [
+      "W25Q64FW/W25Q64JW...Q"
+    ]
+  },
+  "ef:6018": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q128.W",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q128.W%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:6019": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q256JW",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q256JW%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:6020": {
+    "vendor": "Winbond",
+    "preferred_name": "W25R512NW/W74M51NW",
+    "datasheet_url": "https://www.google.com/search?q=%22W25R512NW%2FW74M51NW%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:7015": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q16JV_M",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q16JV_M%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:7016": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q32JV-.M",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q32JV-.M%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:7017": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q64JV-.M",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q64JV-.M%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:7018": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q128.V..M",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q128.V..M%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:7019": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q256JV_M",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q256JV_M%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:8016": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q32JW...M",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q32JW...M%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:8017": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q64JW...M",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q64JW...M%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:8018": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q128.JW.DTR",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q128.JW.DTR%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:8019": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q256JW_DTR",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q256JW_DTR%22+datasheet+site%3Awinbond.com"
+  },
+  "ef:8020": {
+    "vendor": "Winbond",
+    "preferred_name": "W25Q512NW-IM",
+    "datasheet_url": "https://www.google.com/search?q=%22W25Q512NW-IM%22+datasheet+site%3Awinbond.com"
+  },
+  "fffe:1": {
+    "vendor": "Programmer",
+    "preferred_name": "Opaque flash chip",
+    "datasheet_url": "https://www.google.com/search?q=%22Opaque+flash+chip%22+Programmer+datasheet+pdf"
+  }
+}
