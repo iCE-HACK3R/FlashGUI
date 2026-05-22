@@ -21,17 +21,21 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 ![FlashGUI toolbar and controls](screenshots/app-controls.png)
 
-### Additional operation captures
+### Read flow examples
 
 ![Read ROM in progress (serprog, GD25Q128C)](screenshots/read-rom-progress-serprog-gd25q128c.png)
 
 ![Read ROM completed (serprog, GD25Q128C)](screenshots/read-rom-complete-serprog-gd25q128c.png)
 
+![Read ROM completed (serprog, GD25Q32B)](screenshots/read-rom-complete-serprog-gd25q32b.png)
+
+### Chip information and status pages
+
 ![About ROM chip info (basic view)](screenshots/about-rom-chip-info-basic.png)
 
 ![About ROM chip info (verbose / WP status)](screenshots/about-rom-chip-info-verbose-wp.png)
 
-![Read ROM completed (serprog, GD25Q32B)](screenshots/read-rom-complete-serprog-gd25q32b.png)
+### Verify / Erase / Write flow examples
 
 ![Verify ROM completed (CH341A, MX25L1605)](screenshots/verify-rom-complete-ch341a-mx25l1605.png)
 
