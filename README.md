@@ -88,6 +88,11 @@ Settings persistence:
 - If dependency installation fails, verify the Python interpreter/version first.
 - For local checks, you can run `pytest` after installing development/build dependencies from `requirements-build.txt`.
 
+## License
+
+📜 License
+MIT License — see `LICENSE` for details.
+
 ## Repository layout
 
 - `flashgui.py` — main application entrypoint (Qt-first)

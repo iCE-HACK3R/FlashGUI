@@ -13,6 +13,7 @@ def test_required_files_exist() -> None:
         "requirements.txt",
         "requirements-build.txt",
         "README.md",
+        "LICENSE",
         "THIRD_PARTY_NOTICES.md",
     ]
     for rel in required:
@@ -42,6 +43,12 @@ def test_readme_mentions_python3_workflow() -> None:
     assert "python3 -m venv .venv" in readme
     assert "python3 -m pip install -r requirements.txt" in readme
     assert "python3 flashgui.py" in readme
+
+
+def test_readme_mentions_license() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "📜 License" in readme
+    assert "MIT License — see `LICENSE` for details." in readme
 
 
 def test_datasheet_helpers_are_shared_once() -> None:
