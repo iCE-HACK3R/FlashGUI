@@ -21,6 +21,26 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 ![FlashGUI toolbar and controls](screenshots/app-controls.png)
 
+### Additional operation captures
+
+![Operation capture 1](screenshots/image-1779466658657.png)
+
+![Operation capture 2](screenshots/image-1779466828965.png)
+
+![Operation capture 3](screenshots/image-1779466844195.png)
+
+![Operation capture 4](screenshots/image-1779466862402.png)
+
+![Operation capture 5](screenshots/image-1779466923204.png)
+
+![Operation capture 6](screenshots/image-1779467224429.png)
+
+![Operation capture 7](screenshots/image-1779467273151.png)
+
+![Operation capture 8](screenshots/image-1779467311106.png)
+
+![Operation capture 9](screenshots/image-1779467361265.png)
+
 ## Quick start
 
 1. Install Python 3.10+
