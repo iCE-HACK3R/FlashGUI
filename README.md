@@ -38,6 +38,14 @@ If PySide6/Qt startup fails on Linux, the app will attempt a Tk fallback (`flash
 - Select tool/programmer, detect chip, then perform read/verify/write operations from the GUI.
 - Keep `resources/` next to the executable/script so icons, datasheets, and optional tool bundles resolve correctly.
 
+Settings persistence:
+
+- Settings are stored in a per-user config file (not next to the executable).
+  - Windows: `%APPDATA%/FlashGUI/flashgui_settings.json`
+  - Linux: `$XDG_CONFIG_HOME/flashgui/flashgui_settings.json` (or `~/.config/flashgui/flashgui_settings.json`)
+  - macOS: `~/Library/Application Support/flashgui/flashgui_settings.json`
+- Optional override: set `FLASHGUI_SETTINGS_PATH` to use a custom settings file path.
+
 ## Build instructions
 
 Prerequisites (both platforms):

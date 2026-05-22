@@ -856,7 +856,38 @@ def _draw_flashgui(painter: QPainter, size: int, color1: str, color2: str) -> No
 
 
 def _settings_path() -> str:
+    override = os.getenv("FLASHGUI_SETTINGS_PATH", "").strip()
+    if override:
+        return os.path.abspath(os.path.expanduser(override))
+    return os.path.join(_app_config_dir(), SETTINGS_FILE)
+
+
+def _legacy_settings_path() -> str:
+    """Historical settings location (next to script/executable)."""
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(os.path.abspath(sys.executable)), SETTINGS_FILE)
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), SETTINGS_FILE)
+
+
+def _app_config_dir() -> str:
+    """Per-user writable config directory for persistent settings."""
+    if sys.platform.startswith("win"):
+        base = os.getenv("APPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "FlashGUI")
+    if sys.platform == "darwin":
+        return os.path.join(os.path.expanduser("~/Library/Application Support"), "flashgui")
+    base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return os.path.join(base, "flashgui")
+
+
+def _default_workspace_dir() -> str:
+    """Choose a sensible default workspace location."""
+    if getattr(sys, "frozen", False):
+        home = os.path.expanduser("~")
+        if home and os.path.isdir(home):
+            return home
+        return os.getcwd()
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def _load_settings(path: str) -> dict[str, object]:
@@ -5391,6 +5422,22 @@ class AppState:
         self.settings_path = _settings_path()
         self.settings = _load_settings(self.settings_path)
 
+        # One-time migration from legacy location (next to script/executable)
+        # to stable per-user config path.
+        legacy_path = _legacy_settings_path()
+        try:
+            same_path = os.path.samefile(self.settings_path, legacy_path)
+        except (FileNotFoundError, OSError):
+            same_path = os.path.abspath(self.settings_path) == os.path.abspath(legacy_path)
+        if not self.settings and not same_path:
+            legacy = _load_settings(legacy_path)
+            if legacy:
+                self.settings = legacy
+                try:
+                    _save_settings(self.settings_path, legacy)
+                except OSError:
+                    pass
+
         self.tool = str(self.settings.get("tool", "flashrom"))
         if self.tool not in {"flashrom", "flashprog"}:
             self.tool = "flashrom"
@@ -5399,7 +5446,7 @@ class AppState:
         self.flashprog_bin  = str(self.settings.get("flashprog_bin", "")).strip()
         self.workspace_dir  = (
             str(self.settings.get("workspace_dir", "")).strip()
-            or os.path.dirname(os.path.abspath(__file__))
+            or _default_workspace_dir()
         )
         self.preferred_font  = str(self.settings.get("preferred_font",  "")).strip()
         try:
