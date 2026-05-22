@@ -23,23 +23,23 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 ### Additional operation captures
 
-![Operation capture 1](screenshots/image-1779466658657.png)
+![Read ROM in progress (serprog, GD25Q128C)](screenshots/read-rom-progress-serprog-gd25q128c.png)
 
-![Operation capture 2](screenshots/image-1779466828965.png)
+![Read ROM completed (serprog, GD25Q128C)](screenshots/read-rom-complete-serprog-gd25q128c.png)
 
-![Operation capture 3](screenshots/image-1779466844195.png)
+![About ROM chip info (basic view)](screenshots/about-rom-chip-info-basic.png)
 
-![Operation capture 4](screenshots/image-1779466862402.png)
+![About ROM chip info (verbose / WP status)](screenshots/about-rom-chip-info-verbose-wp.png)
 
-![Operation capture 5](screenshots/image-1779466923204.png)
+![Read ROM completed (serprog, GD25Q32B)](screenshots/read-rom-complete-serprog-gd25q32b.png)
 
-![Operation capture 6](screenshots/image-1779467224429.png)
+![Verify ROM completed (CH341A, MX25L1605)](screenshots/verify-rom-complete-ch341a-mx25l1605.png)
 
-![Operation capture 7](screenshots/image-1779467273151.png)
+![Erase ROM completed (CH341A, MX25L1605)](screenshots/erase-rom-complete-ch341a-mx25l1605.png)
 
-![Operation capture 8](screenshots/image-1779467311106.png)
+![Write ROM confirmation dialog](screenshots/write-rom-confirm-dialog-ch341a.png)
 
-![Operation capture 9](screenshots/image-1779467361265.png)
+![Write ROM completed (CH341A, MX25L1605)](screenshots/write-rom-complete-ch341a-mx25l1605.png)
 
 ## Quick start
 
