@@ -10,6 +10,7 @@ venv/
 # PyInstaller outputs
 build/
 dist/
+publish/
 *.spec
 
 # Logs and local runtime files

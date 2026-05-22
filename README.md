@@ -48,17 +48,29 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 ## Quick start
 
 1. Install Python 3.10+
-2. Install dependencies from `requirements.txt`
-3. Run:
-   - `python flashgui.py`
+1. Create a virtual environment:
+
+- `python3 -m venv .venv`
+
+1. Activate the virtual environment:
+
+- Linux/macOS: `source .venv/bin/activate`
+- Windows (PowerShell): `.venv\Scripts\Activate.ps1`
+
+1. Install dependencies:
+
+- `python3 -m pip install -r requirements.txt`
+
+1. Run:
+
+- `python3 flashgui.py`
 
 If PySide6/Qt startup fails on Linux, the app will attempt a Tk fallback (`flashgui_legacy.py`).
 
 ## Usage
 
 - Launch the app:
-  - Windows: `python flashgui.py`
-  - Linux/macOS: `python3 flashgui.py`
+  - `python3 flashgui.py`
 - Select tool/programmer, detect chip, then perform read/verify/write operations from the GUI.
 - Keep `resources/` next to the executable/script so icons, datasheets, and optional tool bundles resolve correctly.
 
@@ -70,44 +82,11 @@ Settings persistence:
   - macOS: `~/Library/Application Support/flashgui/flashgui_settings.json`
 - Optional override: set `FLASHGUI_SETTINGS_PATH` to use a custom settings file path.
 
-## Build instructions
+## Development notes
 
-Prerequisites (both platforms):
-
-- CPython 3.10-3.13 (3.14 is currently not supported for this project build flow)
-- Build dependencies installed:
-  - Windows: `pip install -r requirements-build.txt`
-  - Linux: `python3 -m pip install -r requirements-build.txt`
-- `PySide6` must be importable in the build environment.
-
-If `PySide6` cannot be installed, check your Python distribution/version first (official python.org CPython 3.12 x64 is recommended on Windows).
-
-These build scripts are configured for **PySide6-only packaging**.
-
-### Windows executable (PyInstaller)
-
-- Run: `build_exe.bat`
-- Output: `dist/flashgui.exe`
-
-The script installs `pyinstaller` + `wheel`, validates `flashgui.py`, bundles `resources/`, and produces a one-file executable.
-
-Optional: select a specific Windows interpreter before running the build script:
-
-- `set PYTHON_CMD=py -3.12`
-- `build_exe.bat`
-
-### Linux executable (PyInstaller)
-
-- Make script executable once: `chmod +x build.sh`
-- Run: `./build.sh`
-- Output: `dist/flashgui`
-
-The Linux script performs the same validation/build flow and bundles `resources/`.
-
-Notes:
-
-- Shell scripts are tracked with LF endings via `.gitattributes`.
-- If the executable bit is lost during copy/checkout, re-apply with `chmod +x build.sh`.
+- Use Python 3.10+ (CPython 3.10–3.13 recommended).
+- If dependency installation fails, verify the Python interpreter/version first.
+- For local checks, you can run `pytest` after installing development/build dependencies from `requirements-build.txt`.
 
 ## Repository layout
 
@@ -119,8 +98,6 @@ Notes:
   - `datasheets/` — local datasheet cache
   - `icons/` — application icons
   - `tools/` — optional bundled tool binaries (`flashrom` / `flashprog`)
-- `build_exe.bat` — Windows helper script for building an executable
-- `build.sh` — Linux helper script for building an executable
 - `MANUAL_QA_CHECKLIST.md` — manual QA checklist used for release sanity checks
 
 ## Publishing / release notes
