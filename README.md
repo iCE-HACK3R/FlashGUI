@@ -45,6 +45,10 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 ![Write ROM completed (CH341A, MX25L1605)](screenshots/write-rom-complete-ch341a-mx25l1605.png)
 
+### Programmer console
+
+![Programmer console terminal view](screenshots/programmer-terminal.png)
+
 ## Quick start
 
 1. Install Python 3.10+
@@ -111,6 +115,11 @@ MIT License — see `LICENSE` for details.
 - If distributing bundled third-party binaries, include their required license notices in your release artifacts.
 - Use `THIRD_PARTY_NOTICES.md` as your release checklist and attribution baseline.
 - Validate your release build with the checklist in `MANUAL_QA_CHECKLIST.md`.
+
+Build/publish one-file executable with icon:
+
+- `python -m PyInstaller --name=flashgui --onefile --icon=resources\icons\flashgui.ico flashgui.py`
+- `python -m PyInstaller --name=flashgui --onefile --icon=resources/icons/flashgui.ico flashgui.py`
 
 ## Mentions & thanks
 

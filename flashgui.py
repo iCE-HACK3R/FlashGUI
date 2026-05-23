@@ -76,7 +76,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -4403,7 +4403,7 @@ class PageSettings:
         self.frame = outer  # public ref used by dialogs
 
         # ── Paths & Appearance ───────────────────────────────────────────────
-        lf1 = ttk.LabelFrame(outer, text="Paths & Appearance", padding=6)
+        lf1 = ttk.LabelFrame(outer, text="Paths && Appearance", padding=6)
         lf1.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         lf1.columnconfigure(1, weight=1)
 
@@ -5449,6 +5449,11 @@ class AppState:
             or _default_workspace_dir()
         )
         self.preferred_font  = str(self.settings.get("preferred_font",  "")).strip()
+        self.console_font    = str(self.settings.get("console_font", "")).strip()
+        try:
+            self.console_font_size = max(0, min(36, int(str(self.settings.get("console_font_size", 0)).strip() or "0")))
+        except (TypeError, ValueError):
+            self.console_font_size = 0
         try:
             self.font_size = max(8, int(str(self.settings.get("font_size", 10)).strip() or "10"))
         except (TypeError, ValueError):
@@ -5514,6 +5519,8 @@ class AppState:
             "flashprog_bin":          self.flashprog_bin,
             "workspace_dir":          self.workspace_dir,
             "preferred_font":         self.preferred_font,
+            "console_font":           self.console_font,
+            "console_font_size":      self.console_font_size,
             "font_size":              self.font_size,
             "window_geometry":        geometry if geometry is not None else self.window_geometry,
             "log_file_path":          self.log_file_path,
@@ -6030,7 +6037,7 @@ if sys.platform.startswith("linux"):
 faulthandler.enable(all_threads=True)
 
 from PySide6.QtCore import QByteArray, QObject, QRunnable, Qt, QSize, QThreadPool, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QIcon, QPixmap, QPainter, QLinearGradient, QPainterPath, QImage, QTextCharFormat, QTextCursor
+from PySide6.QtGui import QAction, QColor, QIcon, QPixmap, QPainter, QLinearGradient, QPainterPath, QImage, QTextCharFormat, QTextCursor, QFontDatabase
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
@@ -6399,6 +6406,10 @@ class PageBase(QWidget):
     def error(self, title: str, text: str) -> None:
         QMessageBox.critical(self, title, text)
 
+    def apply_runtime_font_preferences(self, font: QFont) -> None:
+        """Optional hook for pages with explicitly-set fonts."""
+        _ = font
+
     def _show_text_dialog(self, title: str, text: str) -> None:
         dlg = QDialog(self)
         dlg.setWindowTitle(title)
@@ -6663,9 +6674,6 @@ class OpPageBase(PageBase):
         self.cmd_preview.setPlaceholderText("—")
         self.cmd_preview.setMinimumHeight(24)
         self.cmd_preview.setMaximumHeight(24)
-        cmd_font = self.cmd_preview.font()
-        cmd_font.setPointSize(8)
-        self.cmd_preview.setFont(cmd_font)
         grid.addWidget(_caption("Commands :"), 1, 0)
         grid.addWidget(self.cmd_preview,      1, 1, 1, 5)
 
@@ -6676,6 +6684,11 @@ class OpPageBase(PageBase):
 
         outer.addLayout(grid, 0)
         outer.addStretch(1)
+
+    def apply_runtime_font_preferences(self, font: QFont) -> None:
+        cmd_font = QFont(font)
+        cmd_font.setPointSize(max(8, int(font.pointSize() or 10)))
+        self.cmd_preview.setFont(cmd_font)
 
     def append_output(self, line: str) -> None:
         self.log(line)
@@ -7695,13 +7708,10 @@ class SettingsPage(PageBase):
         outer = QVBoxLayout(self)
 
         # Paths & Appearance
-        g_paths = QGroupBox("Paths & Appearance")
+        g_paths = QGroupBox("Paths && Appearance")
         f_paths = QFormLayout(g_paths)
         self.font_combo = QComboBox()
-        available_fonts = list(_FONT_PRESETS) if _FONT_PRESETS else ["DejaVu Sans Mono"]
-        self.font_combo.addItems(available_fonts)
-        if self.state.preferred_font in available_fonts:
-            self.font_combo.setCurrentText(self.state.preferred_font)
+        self._populate_font_combo(preferred=self.state.preferred_font)
         self.font_size_slider = QSlider(Qt.Orientation.Horizontal)
         self.font_size_slider.setMinimum(8)
         self.font_size_slider.setMaximum(24)
@@ -7863,8 +7873,16 @@ class SettingsPage(PageBase):
         row_sudo_pw_l.addWidget(self.btn_clear_keyring)
         f_sudo.addRow(self.use_sudo)
         f_sudo.addRow("Sudo Password:", row_sudo_pw)
-        if not sys.platform.startswith("win"):
-            outer.addWidget(g_sudo)
+        # Keep this widget in the object tree on all platforms; if omitted,
+        # Qt may destroy it and later signal callbacks can hit deleted objects.
+        outer.addWidget(g_sudo)
+        if sys.platform.startswith("win"):
+            g_sudo.setTitle("Elevation / sudo (not used on Windows)")
+            self.use_sudo.setChecked(False)
+            self.use_sudo.setEnabled(False)
+            self.sudo_pw.setEnabled(False)
+            self.btn_save_keyring.setEnabled(False)
+            self.btn_clear_keyring.setEnabled(False)
 
         # System checks
         g_checks = QGroupBox("System Checks")
@@ -8042,6 +8060,55 @@ class SettingsPage(PageBase):
         self.btn_fix_dep.setEnabled(self._has_missing_core_binaries())
         self.btn_install_guide.setEnabled(True)
 
+    @staticmethod
+    def _merge_font_candidates(candidates: list[str]) -> list[str]:
+        merged: list[str] = []
+        seen: set[str] = set()
+        for name in candidates:
+            n = str(name or "").strip()
+            if not n:
+                continue
+            key = n.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(n)
+        return merged
+
+    def _collect_available_fonts(self) -> list[str]:
+        qt_fonts: list[str] = []
+        try:
+            qt_fonts = sorted(
+                [str(name).strip() for name in QFontDatabase.families() if str(name).strip()],
+                key=lambda s: s.casefold(),
+            )
+        except Exception as exc:
+            self._log(f"WARNING: Could not list OS fonts from Qt: {exc}")
+
+        combined = self._merge_font_candidates(
+            list(_FONT_PRESETS) + list(_FONT_DOWNLOADS.keys()) + qt_fonts
+        )
+        if not combined:
+            return ["DejaVu Sans Mono"]
+        return combined
+
+    def _populate_font_combo(self, preferred: str = "") -> None:
+        current = (preferred or self.font_combo.currentText() or self.state.preferred_font or "").strip()
+        fonts = self._collect_available_fonts()
+        if current and current.casefold() not in {f.casefold() for f in fonts}:
+            fonts.append(current)
+
+        self.font_combo.blockSignals(True)
+        try:
+            self.font_combo.clear()
+            self.font_combo.addItems(fonts)
+            if current:
+                self.font_combo.setCurrentText(current)
+            elif fonts:
+                self.font_combo.setCurrentIndex(0)
+        finally:
+            self.font_combo.blockSignals(False)
+
     def _download_font(self) -> None:
         font_name = self.font_combo.currentText().strip()
         if font_name not in _FONT_DOWNLOADS:
@@ -8051,20 +8118,29 @@ class SettingsPage(PageBase):
         self.btn_download_font.setEnabled(False)
         self._log(f"Downloading {font_name}...")
 
-        result: dict[str, object] = {"ok": False, "err": ""}
+        result: dict[str, object] = {"ok": False, "err": "", "path": ""}
 
         def _worker() -> None:
             try:
-                _download_font(font_name)
-                result["ok"] = True
+                path = _download_font(font_name)
+                if path:
+                    result["path"] = path
+                    result["ok"] = True
+                else:
+                    result["err"] = f"Download failed for {font_name}."
             except Exception as exc:
                 result["err"] = str(exc)
 
         def _done() -> None:
             self.btn_download_font.setEnabled(True)
             if result["ok"]:
+                path = str(result.get("path") or "").strip()
+                families = self._register_qt_font_file(path)
+                preferred = font_name
+                if families and font_name not in families:
+                    preferred = families[0]
+                self._populate_font_combo(preferred=preferred)
                 self._log(f"Downloaded font: {font_name}")
-                self.font_combo.setCurrentText(font_name)
                 self._apply_font_size()
                 self.info("Downloaded", f"{font_name} font downloaded.")
             else:
@@ -8072,17 +8148,53 @@ class SettingsPage(PageBase):
 
         self._run_background("font download", _worker, _done)
 
+    def _register_qt_font_file(self, font_path: str) -> list[str]:
+        path = (font_path or "").strip()
+        if not path or not os.path.isfile(path):
+            return []
+        try:
+            font_id = QFontDatabase.addApplicationFont(path)
+            if font_id < 0:
+                return []
+            return list(QFontDatabase.applicationFontFamilies(font_id))
+        except Exception as exc:
+            self._log(f"WARNING: Could not register font with Qt: {exc}")
+            return []
+
+    def _resolve_qt_font_family(self, requested_font: str) -> str:
+        requested = (requested_font or "").strip()
+        if not requested:
+            return ""
+        try:
+            if requested in set(QFontDatabase.families()):
+                return requested
+        except Exception:
+            return requested
+
+        path = _download_font(requested)
+        families = self._register_qt_font_file(path or "") if path else []
+        if requested in families:
+            return requested
+        if families:
+            return families[0]
+        return requested
+
     def _apply_font_size(self) -> None:
         selected_font = self.font_combo.currentText().strip()
         size = max(8, min(24, self.font_size_slider.value()))
         self.state.font_size = size
         self.state.preferred_font = selected_font
 
-        f = self.app.font()
-        f.setPointSize(size)
-        if selected_font:
-            f.setFamily(selected_font)
-        self.app.setFont(f)
+        resolved_family = self._resolve_qt_font_family(selected_font) if selected_font else ""
+        if resolved_family:
+            self.state.preferred_font = resolved_family
+
+        self.app.apply_runtime_font_preferences(
+            family=resolved_family or selected_font or None,
+            size=size,
+        )
+        if selected_font and resolved_family and resolved_family != selected_font:
+            self._log(f"Font mapped by Qt: '{selected_font}' -> '{resolved_family}'")
         self._log(f"Font size applied: {size}pt")
 
     def _preview_theme(self) -> None:
@@ -8483,6 +8595,8 @@ class SettingsPage(PageBase):
         data = {
             "preferred_font": self.font_combo.currentText().strip(),
             "font_size": str(self.font_size_slider.value()),
+            "console_font": str(getattr(self.state, "console_font", "") or "").strip(),
+            "console_font_size": int(getattr(self.state, "console_font_size", 0) or 0),
             "flashrom_bin": self.flashrom_edit.text().strip(),
             "flashprog_bin": self.flashprog_edit.text().strip(),
             "workspace_dir": self.workspace_edit.text().strip(),
@@ -8506,13 +8620,25 @@ class SettingsPage(PageBase):
 
     def _populate_from_dict(self, data: dict[str, object]) -> None:
         font = str(data.get("preferred_font", "")).strip()
-        if font and font in [self.font_combo.itemText(i) for i in range(self.font_combo.count())]:
+        if font:
+            if font not in [self.font_combo.itemText(i) for i in range(self.font_combo.count())]:
+                self._populate_font_combo(preferred=font)
             self.font_combo.setCurrentText(font)
         try:
             size = int(str(data.get("font_size", 10)))
             self.font_size_slider.setValue(max(8, min(24, size)))
         except (ValueError, TypeError):
             self.font_size_slider.setValue(10)
+        self.state.console_font = str(data.get("console_font", self.state.console_font)).strip()
+        try:
+            self.state.console_font_size = max(0, min(36, int(str(data.get("console_font_size", self.state.console_font_size)).strip() or "0")))
+        except (TypeError, ValueError):
+            self.state.console_font_size = 0
+        if hasattr(self.app, "_populate_console_font_combo"):
+            self.app._populate_console_font_combo()
+        if hasattr(self.app, "_populate_console_font_size_combo"):
+            self.app._populate_console_font_size_combo()
+        self.app.apply_runtime_font_preferences()
         self.flashrom_edit.setText(str(data.get("flashrom_bin", self.flashrom_edit.text())))
         self.flashprog_edit.setText(str(data.get("flashprog_bin", self.flashprog_edit.text())))
         self.workspace_edit.setText(str(data.get("workspace_dir", self.workspace_edit.text())))
@@ -8549,6 +8675,13 @@ class SettingsPage(PageBase):
         if default_font in [self.font_combo.itemText(i) for i in range(self.font_combo.count())]:
             self.font_combo.setCurrentText(default_font)
         self.font_size_slider.setValue(10)
+        self.state.console_font = ""
+        self.state.console_font_size = 0
+        if hasattr(self.app, "_populate_console_font_combo"):
+            self.app._populate_console_font_combo()
+        if hasattr(self.app, "_populate_console_font_size_combo"):
+            self.app._populate_console_font_size_combo()
+        self.app.apply_runtime_font_preferences()
         self.flashrom_edit.setText("")
         self.flashprog_edit.setText("")
         self.workspace_edit.setText(script_dir)
@@ -8592,11 +8725,13 @@ class SettingsPage(PageBase):
         if self.state.theme:
             self.app.apply_theme(self.state.theme)
 
-        f = self.app.font()
-        f.setPointSize(max(8, int(self.state.font_size)))
-        if selected_font:
-            f.setFamily(selected_font)
-        self.app.setFont(f)
+        resolved_family = self._resolve_qt_font_family(selected_font) if selected_font else ""
+        if resolved_family:
+            self.state.preferred_font = resolved_family
+        self.app.apply_runtime_font_preferences(
+            family=resolved_family or selected_font or None,
+            size=max(8, int(self.state.font_size)),
+        )
 
         geo = self.geometry_edit.text().strip()
         if geo and "x" in geo:
@@ -8646,34 +8781,300 @@ class ToolsPage(PageBase):
             l_tools.addWidget(btn, r, c)
         outer.addWidget(g_tools)
 
-        g_dump = QGroupBox("Dump Chip Info")
-        l_dump = QVBoxLayout(g_dump)
-        l_dump.setSpacing(8)
-        l_dump.addWidget(QLabel("Read Electronic Manufacturer ID & Device ID (REMS)"))
-        b_rems = QPushButton("Read Electronic Manufacturer ID & Device ID (REMS)")
-        b_rems.setProperty("kind", "subtle")
-        b_rems.clicked.connect(self._run_rems)
-        l_dump.addWidget(b_rems)
+        g_console = QGroupBox("Programmer Console")
+        l_console = QVBoxLayout(g_console)
+        l_console.setSpacing(8)
+        l_console.addWidget(
+            QLabel(
+                "Serial terminal for programmer devices (e.g. HydraBus / Bus Pirate). "
+                "Connect to a COM/TTY port, view live output, and send commands."
+            )
+        )
 
-        l_dump.addWidget(QLabel("JEDEC assigned manufacturer ID and specific device ID"))
-        b_rdid = QPushButton("RDID Command")
-        b_rdid.setProperty("kind", "subtle")
-        b_rdid.clicked.connect(self._run_rdid)
-        l_dump.addWidget(b_rdid)
-        outer.addWidget(g_dump)
+        top_row = QHBoxLayout()
+        self.console_port_combo = QComboBox()
+        self.console_port_combo.setEditable(True)
+        self.console_port_combo.setMinimumWidth(260)
+        self.console_port_combo.setToolTip("Serial device path (COMx / /dev/tty*).")
+        top_row.addWidget(QLabel("Port:"))
+        top_row.addWidget(self.console_port_combo, 1)
 
-        g_ds = QGroupBox("Datasheet")
-        l_ds = QVBoxLayout(g_ds)
-        l_ds.setSpacing(8)
-        l_ds.addWidget(QLabel("Use selected chip to download/open datasheet target, or pick local PDF."))
-        b_ds = QPushButton("Datasheet (Download/Open PDF ROM)")
-        b_ds.setProperty("kind", "subtle")
-        b_ds.setMinimumWidth(220)
-        b_ds.setToolTip("Resolves datasheet from selected chip first, then falls back to manual PDF selection.")
-        b_ds.clicked.connect(self._open_pdf_datasheet)
-        l_ds.addWidget(b_ds)
-        outer.addWidget(g_ds)
-        outer.addStretch(1)
+        self.console_baud_combo = QComboBox()
+        self.console_baud_combo.addItems(["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"])
+        self.console_baud_combo.setCurrentText("115200")
+        self.console_baud_combo.setMaximumWidth(120)
+        top_row.addWidget(QLabel("Baud:"))
+        top_row.addWidget(self.console_baud_combo)
+
+        self.console_newline_combo = QComboBox()
+        self.console_newline_combo.addItems(["LF (\\n)", "CRLF (\\r\\n)", "CR (\\r)", "None"])
+        self.console_newline_combo.setCurrentIndex(0)
+        self.console_newline_combo.setMaximumWidth(130)
+        top_row.addWidget(QLabel("Line end:"))
+        top_row.addWidget(self.console_newline_combo)
+
+        self.console_refresh_btn = QPushButton("Refresh Ports")
+        self.console_refresh_btn.setProperty("kind", "subtle")
+        self.console_refresh_btn.clicked.connect(self._refresh_serial_ports)
+        top_row.addWidget(self.console_refresh_btn)
+
+        self.console_connect_btn = QPushButton("Connect")
+        self.console_connect_btn.setProperty("kind", "subtle")
+        self.console_connect_btn.clicked.connect(self._connect_console)
+        top_row.addWidget(self.console_connect_btn)
+
+        self.console_disconnect_btn = QPushButton("Disconnect")
+        self.console_disconnect_btn.setProperty("kind", "subtle")
+        self.console_disconnect_btn.clicked.connect(self._disconnect_console)
+        self.console_disconnect_btn.setEnabled(False)
+        top_row.addWidget(self.console_disconnect_btn)
+        l_console.addLayout(top_row)
+
+        self.console_view = QPlainTextEdit()
+        self.console_view.setReadOnly(True)
+        self.console_view.setMinimumHeight(120)
+        self.console_view.setPlaceholderText("Serial terminal output…")
+        term_font = QFont("Consolas" if sys.platform.startswith("win") else "Monospace")
+        term_font.setStyleHint(QFont.StyleHint.TypeWriter)
+        term_font.setFixedPitch(True)
+        term_font.setPointSize(max(9, int(getattr(self.state, "font_size", 10) or 10)))
+        self.console_view.setFont(term_font)
+        self.console_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        l_console.addWidget(self.console_view)
+
+        send_row = QHBoxLayout()
+        self.console_input = QLineEdit()
+        self.console_input.setPlaceholderText("Type command and press Enter or Send")
+        self.console_input.returnPressed.connect(self._send_console_line)
+        send_row.addWidget(self.console_input, 1)
+
+        self.console_send_btn = QPushButton("Send")
+        self.console_send_btn.setProperty("kind", "subtle")
+        self.console_send_btn.clicked.connect(self._send_console_line)
+        send_row.addWidget(self.console_send_btn)
+
+        self.console_clear_btn = QPushButton("Clear Console")
+        self.console_clear_btn.setProperty("kind", "subtle")
+        self.console_clear_btn.clicked.connect(self.console_view.clear)
+        send_row.addWidget(self.console_clear_btn)
+        l_console.addLayout(send_row)
+
+        g_console.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        outer.addWidget(g_console, 1)
+
+        self._console_rx_queue: queue.Queue[str] = queue.Queue()
+        self._console_stop = threading.Event()
+        self._console_reader_thread: threading.Thread | None = None
+        self._console_serial: Any | None = None
+        self._console_poll_timer = QTimer(self)
+        self._console_poll_timer.setInterval(100)
+        self._console_poll_timer.timeout.connect(self._flush_console_rx)
+        self._console_poll_timer.start()
+
+        self._refresh_serial_ports(silent=True)
+
+    @staticmethod
+    def _serial_newline_bytes(mode: str) -> bytes:
+        m = (mode or "").lower()
+        if "crlf" in m:
+            return b"\r\n"
+        if "cr (" in m:
+            return b"\r"
+        if "none" in m:
+            return b""
+        return b"\n"
+
+    @staticmethod
+    def _serial_support() -> tuple[Any | None, Any | None, str | None]:
+        try:
+            import serial  # type: ignore[import-not-found]
+        except Exception:
+            return None, None, "pyserial is not installed. Install it with: python -m pip install pyserial"
+        try:
+            from serial.tools import list_ports  # type: ignore[import-not-found]
+        except Exception:
+            return serial, None, "pyserial is installed, but serial.tools.list_ports is unavailable."
+        return serial, list_ports, None
+
+    def _set_console_connected(self, connected: bool) -> None:
+        self.console_connect_btn.setEnabled(not connected)
+        self.console_disconnect_btn.setEnabled(connected)
+        self.console_port_combo.setEnabled(not connected)
+        self.console_baud_combo.setEnabled(not connected)
+
+    def _append_console_output(self, text: str) -> None:
+        if not text:
+            return
+        cursor = self.console_view.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.insertText(text)
+        self.console_view.setTextCursor(cursor)
+        self.console_view.ensureCursorVisible()
+
+    def _refresh_serial_ports(self, silent: bool = False) -> None:
+        serial_mod, list_ports_mod, err = self._serial_support()
+        current = self.console_port_combo.currentText().strip()
+        self.console_port_combo.blockSignals(True)
+        try:
+            self.console_port_combo.clear()
+            if err:
+                self.console_port_combo.addItem("")
+            elif list_ports_mod is not None:
+                ports = sorted(list_ports_mod.comports(), key=lambda p: str(getattr(p, "device", "")))
+                if ports:
+                    for p in ports:
+                        dev = str(getattr(p, "device", "")).strip()
+                        desc = str(getattr(p, "description", "")).strip()
+                        label = f"{dev}  —  {desc}" if desc and desc != "n/a" else dev
+                        self.console_port_combo.addItem(label, userData=dev)
+                else:
+                    self.console_port_combo.addItem("")
+
+            if current:
+                idx = self.console_port_combo.findData(current)
+                if idx >= 0:
+                    self.console_port_combo.setCurrentIndex(idx)
+                else:
+                    self.console_port_combo.setEditText(current)
+            elif self.console_port_combo.count() > 0:
+                dev = self.console_port_combo.itemData(0)
+                if isinstance(dev, str) and dev.strip():
+                    self.console_port_combo.setCurrentIndex(0)
+        finally:
+            self.console_port_combo.blockSignals(False)
+
+        if err and not silent:
+            self.warn("Programmer Console", err)
+        elif not silent:
+            self.log("Programmer Console: serial ports refreshed.")
+
+    def _console_reader_loop(self) -> None:
+        ser = self._console_serial
+        if ser is None:
+            return
+        while not self._console_stop.is_set():
+            try:
+                if not bool(getattr(ser, "is_open", False)):
+                    break
+                waiting = int(getattr(ser, "in_waiting", 0) or 0)
+                if waiting > 0:
+                    data = ser.read(waiting)
+                else:
+                    data = ser.readline()
+                if data:
+                    text = data.decode("utf-8", errors="replace")
+                    text = text.replace("\r\n", "\n").replace("\r", "\n")
+                    self._console_rx_queue.put(text)
+                else:
+                    time.sleep(0.02)
+            except Exception as exc:
+                self._console_rx_queue.put(f"\n[console error] {exc}\n")
+                break
+
+    def _flush_console_rx(self) -> None:
+        drained = 0
+        while drained < 200:
+            try:
+                chunk = self._console_rx_queue.get_nowait()
+            except queue.Empty:
+                break
+            self._append_console_output(chunk)
+            drained += 1
+
+    def _connect_console(self) -> None:
+        if self._console_serial is not None and bool(getattr(self._console_serial, "is_open", False)):
+            return
+
+        serial_mod, _list_ports_mod, err = self._serial_support()
+        if err or serial_mod is None:
+            self.warn("Programmer Console", err or "Serial support unavailable.")
+            return
+
+        port_text = self.console_port_combo.currentText().strip()
+        port_data = self.console_port_combo.currentData()
+        port = str(port_data).strip() if isinstance(port_data, str) and port_data.strip() else port_text.split("  —  ", 1)[0].strip()
+        if not port:
+            self.warn("Programmer Console", "Select a serial port first.")
+            return
+
+        try:
+            baud = int(self.console_baud_combo.currentText().strip())
+        except ValueError:
+            self.warn("Programmer Console", "Invalid baud rate.")
+            return
+
+        try:
+            ser = serial_mod.Serial(port=port, baudrate=baud, timeout=0.1, write_timeout=1)  # type: ignore[attr-defined]
+        except Exception as exc:
+            self.error("Programmer Console", f"Failed to open serial port:\n{exc}")
+            return
+
+        self._console_serial = ser
+        self._console_stop.clear()
+        self._console_reader_thread = threading.Thread(target=self._console_reader_loop, daemon=True)
+        self._console_reader_thread.start()
+        self._set_console_connected(True)
+        self._append_console_output(f"[connected] {port} @ {baud}\n")
+        self.log(f"Programmer Console connected: {port} @ {baud}")
+
+    def _disconnect_console(self, *, log_to_console: bool = True) -> None:
+        self._console_stop.set()
+        ser = self._console_serial
+        self._console_serial = None
+        if ser is not None:
+            try:
+                if bool(getattr(ser, "is_open", False)):
+                    ser.close()
+            except Exception:
+                pass
+        t = self._console_reader_thread
+        self._console_reader_thread = None
+        if t is not None and t.is_alive():
+            t.join(timeout=0.4)
+        self._set_console_connected(False)
+        if log_to_console:
+            self._append_console_output("[disconnected]\n")
+            self.log("Programmer Console disconnected.")
+
+    def _send_console_line(self) -> None:
+        ser = self._console_serial
+        if ser is None or not bool(getattr(ser, "is_open", False)):
+            self.warn("Programmer Console", "Connect to a serial port first.")
+            return
+
+        text = self.console_input.text()
+        if not text:
+            return
+
+        payload = text.encode("utf-8", errors="replace") + self._serial_newline_bytes(self.console_newline_combo.currentText())
+        try:
+            ser.write(payload)
+            ser.flush()
+        except Exception as exc:
+            self.error("Programmer Console", f"Failed to send data:\n{exc}")
+            return
+
+        self._append_console_output(f"> {text}\n")
+        self.console_input.clear()
+
+    def shutdown(self) -> None:
+        self._disconnect_console(log_to_console=False)
+        if hasattr(self, "_console_poll_timer") and self._console_poll_timer.isActive():
+            self._console_poll_timer.stop()
+
+    def apply_runtime_font_preferences(self, font: QFont) -> None:
+        term_font = QFont(font)
+        console_family = (getattr(self.state, "console_font", "") or "").strip()
+        if console_family:
+            term_font.setFamily(console_family)
+        console_size = int(getattr(self.state, "console_font_size", 0) or 0)
+        if console_size > 0:
+            term_font.setPointSize(max(9, console_size))
+        else:
+            term_font.setPointSize(max(9, int(font.pointSize() or 10)))
+        term_font.setStyleHint(QFont.StyleHint.TypeWriter)
+        term_font.setFixedPitch(True)
+        self.console_view.setFont(term_font)
 
     def _pick_file(self, title: str, flt: str = "All Files (*)") -> str | None:
         start_dir = (self.state.workspace_dir or "").strip() or os.path.expanduser("~")
@@ -8973,59 +9374,6 @@ class ToolsPage(PageBase):
                 body.append("... truncated ...")
         self._show_text_dialog("HexDiff ROMs", "\n".join(header + body))
 
-    def _run_rems(self) -> None:
-        base = self._chip_probe_base_cmd()
-        if not base:
-            return
-        cmd = self.state.with_verbose(base + ["-V"])
-        self._run_capture_to_dialog("REMS Command Output", cmd, timeout=120)
-
-    def _run_rdid(self) -> None:
-        base = self._chip_probe_base_cmd()
-        if not base:
-            return
-        cmd = self.state.with_verbose(base + ["-VV"])
-        self._run_capture_to_dialog("RDID Command Output", cmd, timeout=120)
-
-    def _open_pdf_datasheet(self) -> None:
-        chip = (self.state.selected_chip or "").strip()
-        if not chip:
-            chip_text, ok = QInputDialog.getText(
-                self,
-                "Datasheet",
-                "Enter chip name (leave blank to open local PDF):",
-                QLineEdit.EchoMode.Normal,
-                "",
-            )
-            if ok:
-                chip = (chip_text or "").strip()
-
-        if chip:
-            probe_ids = self.state.last_probe_ids
-            candidates = _datasheet_query_candidates(chip, probe_ids)
-            if len(candidates) > 1:
-                dlg = _DatasheetSelectDialog(self, chip, candidates)
-                if dlg.exec() != QDialog.DialogCode.Accepted:
-                    return
-                if dlg.open_all_requested():
-                    self._open_datasheet_candidates(candidates, probe_ids)
-                    return
-                selected = dlg.selected_candidate()
-                if not selected:
-                    return
-                chip = selected
-
-            if self._open_resolved_datasheet(chip, probe_ids):
-                return
-            self.warn("Datasheet not found", f"No datasheet target could be resolved for '{chip}'.")
-
-        fp = self._pick_file("Open PDF Datasheet", "PDF Files (*.pdf);;All Files (*)")
-        if not fp:
-            return
-        _open_datasheet_target(fp)
-        self.log(f"Opened datasheet PDF: {fp}")
-
-
 class HelpAboutPage(PageBase):
     title = "Help & About"
     _REPO_URL = "https://github.com/iCE-HACK3R/FlashGUI"
@@ -9094,8 +9442,8 @@ class HelpAboutPage(PageBase):
         tested_prog_text = (
             "CH341A  [1a86:5512]  →  programmer: ch341a_spi\n"
             "EZP2020 [1a86:5722]  →  programmer: serprog:dev=/dev/ttyACM0\n"
-            "Bus Pirate  [0403:6001] → /dev/ttyUSB0  →  programmer: buspirate_spi:dev=/dev/ttyUSB0\n"
-            "HydraBus  [1d50:60a7] → /dev/ttyACM0  →  programmer: serprog:dev=/dev/ttyACM0"
+            "BusPirate [0403:6001] → /dev/ttyUSB0  →  programmer: buspirate_spi:dev=/dev/ttyUSB0\n"
+            "HydraBus [1d50:60a7] → /dev/ttyACM0  →  programmer: serprog:dev=/dev/ttyACM0"
         )
         view_prog = QPlainTextEdit()
         view_prog.setReadOnly(True)
@@ -9108,7 +9456,7 @@ class HelpAboutPage(PageBase):
         l_chip = QVBoxLayout(g_tested_chip)
         view_chip = QPlainTextEdit()
         view_chip.setReadOnly(True)
-        view_chip.setPlainText("MX25V16066\nGD25Q32(B)\nGD25Q128C")
+        view_chip.setPlainText("MX25V16066\nGD25Q32(B)\nGD25Q128C\nW25X20")
         view_chip.setMaximumHeight(90)
         l_chip.addWidget(view_chip)
         outer.addWidget(g_tested_chip)
@@ -9375,12 +9723,7 @@ class FlashGUIQt(QMainWindow):
 
         if self.state.theme:
             self.apply_theme(self.state.theme)
-        if self.state.font_size:
-            f = self.font()
-            if self.state.preferred_font:
-                f.setFamily(self.state.preferred_font)
-            f.setPointSize(max(8, int(self.state.font_size)))
-            self.setFont(f)
+        self.apply_runtime_font_preferences()
 
         # Start tool probing after the event loop starts; kicking off thread-pool
         # work during window construction is unstable on some Linux/Qt builds.
@@ -9524,6 +9867,23 @@ class FlashGUIQt(QMainWindow):
         log_header.addWidget(_icon_text_label("logs", "Global Logs :", icon_size=16))
         log_header.addStretch(1)
 
+        # Console font selector (Global Logs)
+        log_header.addWidget(_icon_text_label("tools", "Console Font:", object_name="logConsoleFontLabel", icon_size=16))
+        self.console_font_combo = QComboBox()
+        self.console_font_combo.setMinimumWidth(220)
+        self.console_font_combo.setMaximumWidth(260)
+        self._populate_console_font_combo()
+        self.console_font_combo.currentTextChanged.connect(self._on_console_font_change)
+        log_header.addWidget(self.console_font_combo)
+
+        log_header.addWidget(_icon_text_label("verbose", "Size:", object_name="logConsoleFontSizeLabel", icon_size=16))
+        self.console_font_size_combo = QComboBox()
+        self.console_font_size_combo.setMinimumWidth(120)
+        self.console_font_size_combo.setMaximumWidth(140)
+        self._populate_console_font_size_combo()
+        self.console_font_size_combo.currentTextChanged.connect(self._on_console_font_size_change)
+        log_header.addWidget(self.console_font_size_combo)
+
         # Verbose selector
         log_header.addWidget(_icon_text_label("verbose", "Verbose Mode :", object_name="logVerboseLabel", icon_size=16))
         self.verbose_combo = QComboBox()
@@ -9626,6 +9986,11 @@ class FlashGUIQt(QMainWindow):
             "diffvue roms": "revert",
             "hexview roms": "preview",
             "hexdiff roms": "revert",
+            "refresh ports": "reload",
+            "connect": "detect",
+            "disconnect": "cancel-light",
+            "send": "apply",
+            "clear console": "clear",
             "read electronic manufacturer id & device id (rems)": "chip",
             "rdid command": "chip",
             "datasheet (open pdf rom)": "preview",
@@ -9731,6 +10096,151 @@ class FlashGUIQt(QMainWindow):
         sb.addPermanentWidget(self.status_tool)
         sb.addPermanentWidget(self.status_programmer)
 
+    @staticmethod
+    def _unique_casefold(values: list[str]) -> list[str]:
+        out: list[str] = []
+        seen: set[str] = set()
+        for v in values:
+            s = str(v or "").strip()
+            if not s:
+                continue
+            k = s.casefold()
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(s)
+        return out
+
+    def _collect_console_font_candidates(self) -> list[str]:
+        preferred = [
+            "Consolas",
+            "Cascadia Mono",
+            "JetBrainsMono Nerd Font",
+            "MesloLGS NF",
+            "DejaVu Sans Mono",
+            "Lucida Console",
+            "Courier New",
+            "Monospace",
+        ]
+        qt_fixed: list[str] = []
+        try:
+            all_families = [str(f).strip() for f in QFontDatabase.families() if str(f).strip()]
+            qt_fixed = sorted(
+                [f for f in all_families if QFontDatabase.isFixedPitch(f)],
+                key=lambda s: s.casefold(),
+            )
+        except Exception:
+            pass
+        return self._unique_casefold(preferred + qt_fixed)
+
+    def _populate_console_font_combo(self) -> None:
+        combo = getattr(self, "console_font_combo", None)
+        if not isinstance(combo, QComboBox):
+            return
+        current = (self.state.console_font or "").strip()
+        fonts = self._collect_console_font_candidates()
+        combo.blockSignals(True)
+        try:
+            combo.clear()
+            combo.addItem("Auto (use app font)", userData="")
+            for family in fonts:
+                combo.addItem(family, userData=family)
+            if current:
+                idx = combo.findData(current)
+                if idx < 0:
+                    combo.addItem(current, userData=current)
+                    idx = combo.findData(current)
+                combo.setCurrentIndex(max(0, idx))
+            else:
+                combo.setCurrentIndex(0)
+        finally:
+            combo.blockSignals(False)
+
+    def _populate_console_font_size_combo(self) -> None:
+        combo = getattr(self, "console_font_size_combo", None)
+        if not isinstance(combo, QComboBox):
+            return
+        current = int(getattr(self.state, "console_font_size", 0) or 0)
+        combo.blockSignals(True)
+        try:
+            combo.clear()
+            combo.addItem("Auto", userData=0)
+            for pt in range(8, 25):
+                combo.addItem(f"{pt} pt", userData=pt)
+            idx = combo.findData(current)
+            combo.setCurrentIndex(idx if idx >= 0 else 0)
+        finally:
+            combo.blockSignals(False)
+
+    def _on_console_font_change(self, _text: str) -> None:
+        combo = getattr(self, "console_font_combo", None)
+        if not isinstance(combo, QComboBox):
+            return
+        selected = combo.currentData()
+        self.state.console_font = str(selected or "").strip()
+        self.apply_runtime_font_preferences()
+        try:
+            self.state.save_settings(geometry=self.state.window_geometry)
+        except Exception:
+            pass
+        if self.state.console_font:
+            self.log.append_line(f"Console font set to: {self.state.console_font}")
+        else:
+            self.log.append_line("Console font set to: Auto (use app font)")
+
+    def _on_console_font_size_change(self, _text: str) -> None:
+        combo = getattr(self, "console_font_size_combo", None)
+        if not isinstance(combo, QComboBox):
+            return
+        selected = combo.currentData()
+        try:
+            size = int(selected or 0)
+        except (TypeError, ValueError):
+            size = 0
+        self.state.console_font_size = max(0, min(36, size))
+        self.apply_runtime_font_preferences()
+        try:
+            self.state.save_settings(geometry=self.state.window_geometry)
+        except Exception:
+            pass
+        if self.state.console_font_size > 0:
+            self.log.append_line(f"Console font size set to: {self.state.console_font_size} pt")
+        else:
+            self.log.append_line("Console font size set to: Auto")
+
+    def apply_runtime_font_preferences(self, family: str | None = None, size: int | None = None) -> None:
+        ui_font = QFont(self.font())
+        ui_size = max(8, int(size if size is not None else (self.state.font_size or ui_font.pointSize() or 10)))
+        ui_font.setPointSize(ui_size)
+
+        ui_family = (family if family is not None else self.state.preferred_font or "").strip()
+        if ui_family:
+            ui_font.setFamily(ui_family)
+
+        app_obj = QApplication.instance()
+        if isinstance(app_obj, QApplication):
+            app_obj.setFont(ui_font)
+        self.setFont(ui_font)
+
+        log_widget = getattr(self, "log", None)
+        if isinstance(log_widget, QTextEdit):
+            log_font = QFont(ui_font)
+            console_family = (getattr(self.state, "console_font", "") or "").strip()
+            if console_family:
+                log_font.setFamily(console_family)
+            console_size = int(getattr(self.state, "console_font_size", 0) or 0)
+            if console_size > 0:
+                log_font.setPointSize(max(8, console_size))
+            log_widget.setFont(log_font)
+
+        for page in getattr(self, "pages", []):
+            hook = getattr(page, "apply_runtime_font_preferences", None)
+            if callable(hook):
+                try:
+                    hook(QFont(ui_font))
+                except Exception:
+                    pass
+
     def apply_theme(self, name: str) -> None:
         n = (name or "").lower()
         dark_palettes: dict[str, dict[str, str]] = {
@@ -9771,7 +10281,7 @@ class FlashGUIQt(QMainWindow):
             c = dark_palettes.get(n, dark_palettes["dark"])
             self.setStyleSheet(
                 f"QMainWindow {{ background: {c['main']}; }}"
-                f"QWidget {{ background: {c['bg']}; color: {c['text']}; font-size: 10pt; }}"
+                f"QWidget {{ background: {c['bg']}; color: {c['text']}; }}"
                 f"QToolTip {{ background: {c['toolbar']}; color: {c['text']}; border: 1px solid {c['border']}; padding: 4px; }}"
                 f"QGroupBox {{ border: 1px solid {c['border']}; border-radius: 8px; margin-top: 10px; padding-top: 8px; }}"
                 f"QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 6px; color: {c['text']}; }}"
@@ -9786,7 +10296,7 @@ class FlashGUIQt(QMainWindow):
                 f"QListWidget#sidebar::item {{ padding: 12px 14px; border-bottom: 1px solid {c['border']}; min-height: 20px; }}"
                 f"QListWidget#sidebar::item:selected {{ background: {c['sidebar_sel']}; color: {c['text']}; border-left: 3px solid {c['accent']}; }}"
                 f"QListWidget#sidebar::item:hover {{ background: {c['toolbar']}; }}"
-                f"QTextEdit#globalLog, QTextEdit#outputLog {{ background: {c['main']}; font-family: Consolas, 'Courier New', monospace; }}"
+                f"QTextEdit#globalLog, QTextEdit#outputLog {{ background: {c['main']}; }}"
                 f"QSplitter::handle {{ background: {c['border']}; width: 2px; }}"
                 f"QProgressBar {{ background: {c['main']}; border: 1px solid {c['border']}; border-radius: 6px; text-align: center; }}"
                 f"QProgressBar::chunk {{ background: {c['accent']}; border-radius: 5px; }}"
@@ -9992,6 +10502,13 @@ class FlashGUIQt(QMainWindow):
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         _APP_SHUTTING_DOWN.set()
+        for p in getattr(self, "pages", []):
+            shutdown = getattr(p, "shutdown", None)
+            if callable(shutdown):
+                try:
+                    shutdown()
+                except Exception:
+                    pass
         _terminate_active_processes()
         try:
             self.state.window_geometry = f"{self.width()}x{self.height()}"
