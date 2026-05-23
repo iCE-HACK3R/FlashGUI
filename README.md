@@ -121,6 +121,17 @@ Build/publish one-file executable with icon:
 - `python -m PyInstaller --name=flashgui --onefile --icon=resources\icons\flashgui.ico flashgui.py`
 - `python -m PyInstaller --name=flashgui --onefile --icon=resources/icons/flashgui.ico flashgui.py`
 
+Release bundle generated in this repo:
+
+- `release/flashgui-v1.1.0-windows-x64.zip`
+
+GitHub publish flow (tag-based):
+
+- Commit release changes (version bump, docs, screenshots)
+- Create an annotated tag (example: `v1.1.0`)
+- Push branch and tag to `origin`
+- Create a GitHub Release from tag `v1.1.0` and upload `release/flashgui-v1.1.0-windows-x64.zip`
+
 ## Mentions & thanks
 
 Big thanks to the open-source projects and documentation that made this app possible:
