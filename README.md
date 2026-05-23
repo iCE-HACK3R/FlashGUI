@@ -4,6 +4,12 @@ Desktop GUI for `flashrom` and `flashprog`, focused on safer firmware operations
 
 This repository currently ships as a Python desktop app (`flashgui.py`) with a Qt UI and a Tk fallback path.
 
+## Platform status
+
+- Windows: tested
+- Linux: tested
+- macOS: **currently untested**
+
 ## What it does
 
 - Detects and uses either `flashrom` or `flashprog`
@@ -123,14 +129,14 @@ Build/publish one-file executable with icon:
 
 Release bundle generated in this repo:
 
-- `release/flashgui-v1.1.0-windows-x64.zip`
+- `release/flashgui-v1.1.1-windows-x64.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.0`)
+- Create an annotated tag (example: `v1.1.1`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.0` and upload `release/flashgui-v1.1.0-windows-x64.zip`
+- Create a GitHub Release from tag `v1.1.1` and upload `release/flashgui-v1.1.1-windows-x64.zip`
 
 ## Mentions & thanks
 

@@ -1,5 +1,29 @@
 # Release Notes
 
+## v1.1.1
+
+### Highlights (v1.1.1)
+
+- Improved cross-platform programmer detection flow (Windows/macOS serial-aware paths).
+- Improved macOS behavior around monospace font handling in the UI.
+- Settings page now better reflects platform-specific options.
+
+### Documentation (v1.1.1)
+
+- README release references updated for `v1.1.1`.
+- README screenshots section retained/expanded with current UI captures.
+- Platform status keeps macOS explicitly marked as **currently untested**.
+
+### Version (v1.1.1)
+
+- Bumped application version in `flashgui.py`:
+  - `VERSION = "1.1.1"`
+
+### Build Artifact (v1.1.1)
+
+- Target release bundle name:
+  - `release/flashgui-v1.1.1-windows-x64.zip`
+
 ## v1.1.0
 
 ### Highlights

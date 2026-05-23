@@ -76,7 +76,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -1588,6 +1588,144 @@ def _find_serial_port(label_hint: str = "") -> str | None:
         return None
 
 
+def _detect_programmer_serial_windows() -> list[tuple[str, str]]:
+    """Detect likely serial-based programmers on Windows COM ports.
+
+    Uses pyserial port metadata to map Hydrabus/Bus Pirate/serprog-style
+    devices into flashrom programmer arguments like ``serprog:dev=COM7``.
+    """
+    results: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    try:
+        from serial.tools import list_ports  # type: ignore[import-not-found]
+    except Exception:
+        return results
+
+    ports = list(list_ports.comports())
+    for port in ports:
+        device = str(getattr(port, "device", "")).strip()
+        if not device:
+            continue
+
+        desc = str(getattr(port, "description", "")).strip()
+        manu = str(getattr(port, "manufacturer", "")).strip()
+        hwid = str(getattr(port, "hwid", "")).strip()
+        blob = " ".join([device, desc, manu, hwid]).lower()
+
+        prog = ""
+        label = desc or manu or "Serial programmer"
+
+        # Hydrabus / explicit serprog devices should use the serprog backend.
+        if any(token in blob for token in ("hydrabus", "hydra bus", "serprog")):
+            prog = f"serprog:dev={device}"
+            label = desc or manu or "HydraBus / serprog"
+        # Bus Pirate is typically exposed as a serial device too.
+        elif any(token in blob for token in ("bus pirate", "buspirate")):
+            prog = f"buspirate_spi:dev={device}"
+            label = desc or manu or "Bus Pirate"
+
+        if not prog or prog in seen:
+            continue
+        seen.add(prog)
+
+        full_label = f"{label} → {device}"
+        results.append((prog, full_label))
+        _PROGRAMMER_LABEL_HINTS[prog] = full_label
+        _PROGRAMMER_BASE_LABEL_HINTS[prog.split(":", 1)[0].lower()] = label
+
+    # If nothing matched explicitly, still enumerate all COM ports so the
+    # user can manually pick the right one (useful when the driver reports
+    # only a generic USB Serial Device name).
+    if not results:
+        for port in ports:
+            device = str(getattr(port, "device", "")).strip()
+            if not device:
+                continue
+            desc = str(getattr(port, "description", "")).strip()
+            manu = str(getattr(port, "manufacturer", "")).strip()
+            label = desc or manu or device
+            prog = f"serprog:dev={device}"
+            if prog in seen:
+                continue
+            seen.add(prog)
+            full_label = f"{label} → {device}"
+            results.append((prog, full_label))
+            _PROGRAMMER_LABEL_HINTS[prog] = full_label
+            _PROGRAMMER_BASE_LABEL_HINTS["serprog"] = label
+
+    return results
+
+
+def _detect_programmer_serial_posix() -> list[tuple[str, str]]:
+    """Detect likely serial-based programmers on POSIX (especially macOS).
+
+    On macOS, USB serial adapters are commonly exposed as ``/dev/cu.*``.
+    We map known devices to flashrom programmer args and fall back to
+    enumerating serial ports as ``serprog:dev=...`` when metadata is generic.
+    """
+    results: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    try:
+        from serial.tools import list_ports  # type: ignore[import-not-found]
+    except Exception:
+        return results
+
+    ports = list(list_ports.comports())
+    for port in ports:
+        device = str(getattr(port, "device", "")).strip()
+        if not device:
+            continue
+
+        desc = str(getattr(port, "description", "")).strip()
+        manu = str(getattr(port, "manufacturer", "")).strip()
+        hwid = str(getattr(port, "hwid", "")).strip()
+        blob = " ".join([device, desc, manu, hwid]).lower()
+
+        prog = ""
+        label = desc or manu or "Serial programmer"
+
+        if any(token in blob for token in ("hydrabus", "hydra bus", "serprog")):
+            prog = f"serprog:dev={device}"
+            label = desc or manu or "HydraBus / serprog"
+        elif any(token in blob for token in ("bus pirate", "buspirate")):
+            prog = f"buspirate_spi:dev={device}"
+            label = desc or manu or "Bus Pirate"
+
+        if not prog or prog in seen:
+            continue
+        seen.add(prog)
+
+        full_label = f"{label} → {device}"
+        results.append((prog, full_label))
+        _PROGRAMMER_LABEL_HINTS[prog] = full_label
+        _PROGRAMMER_BASE_LABEL_HINTS[prog.split(":", 1)[0].lower()] = label
+
+    # On macOS many adapters are reported with generic names, so if no explicit
+    # match was found, still expose serial ports as serprog candidates.
+    if not results and sys.platform == "darwin":
+        for port in ports:
+            device = str(getattr(port, "device", "")).strip()
+            if not device:
+                continue
+            if not (device.startswith("/dev/cu.") or device.startswith("/dev/tty.")):
+                continue
+            desc = str(getattr(port, "description", "")).strip()
+            manu = str(getattr(port, "manufacturer", "")).strip()
+            label = desc or manu or device
+            prog = f"serprog:dev={device}"
+            if prog in seen:
+                continue
+            seen.add(prog)
+            full_label = f"{label} → {device}"
+            results.append((prog, full_label))
+            _PROGRAMMER_LABEL_HINTS[prog] = full_label
+            _PROGRAMMER_BASE_LABEL_HINTS["serprog"] = label
+
+    return results
+
+
 def _programmer_display_label(prog: str) -> str:
     """Return a filename-safe display label for a programmer arg (e.g. 'ch341a_spi' -> 'CH341A')."""
     hinted = _PROGRAMMER_LABEL_HINTS.get(prog, "").strip()
@@ -2165,6 +2303,13 @@ def _detect_programmer_usb() -> list[tuple[str, str]]:
     Returns a list of (programmer_arg, description) tuples in discovery order.
     Duplicate programmer_args are suppressed (first match wins).
     """
+    if sys.platform.startswith("win"):
+        # On Windows, use COM-port metadata instead of lsusb/dmesg.
+        return _detect_programmer_serial_windows()
+    if sys.platform == "darwin":
+        # On macOS, lsusb may be unavailable; rely on serial metadata.
+        return _detect_programmer_serial_posix()
+
     results: list[tuple[str, str]] = []
     seen: set[str] = set()
     used_serial_ports: set[str] = set()
@@ -5829,6 +5974,10 @@ class FlashGUI:
         threading.Thread(target=_worker, daemon=False).start()
 
     def _set_tool_refresh_result(self, ver: str | None, progs: list[str]) -> None:
+        if sys.platform.startswith("win"):
+            progs = progs + [p for p, _label in _detect_programmer_serial_windows()]
+        elif sys.platform == "darwin":
+            progs = progs + [p for p, _label in _detect_programmer_serial_posix()]
         self.log.append(f"Tool version: {ver or 'unknown'}")
         self._set_programmers(progs)
 
@@ -5860,7 +6009,12 @@ class FlashGUI:
             self.log.append(f"Programmer set to {self.state.programmer}")
 
     def _on_detect_programmer(self) -> None:
-        self.log.append("Scanning USB devices via lsusb / dmesg…")
+        if sys.platform.startswith("win"):
+            self.log.append("Scanning Windows serial ports for programmer devices…")
+        elif sys.platform == "darwin":
+            self.log.append("Scanning macOS serial devices (/dev/cu.*, /dev/tty.*)…")
+        else:
+            self.log.append("Scanning USB devices via lsusb / dmesg…")
 
         def _worker() -> None:
             hits = _detect_programmer_usb()
@@ -5882,7 +6036,12 @@ class FlashGUI:
 
     def _apply_detected_programmers(self, hits: list[tuple[str, str]]) -> None:
         if not hits:
-            self.log.append("No known programmer detected via USB scan.")
+            if sys.platform.startswith("win"):
+                self.log.append("No known programmer detected via Windows serial scan.")
+            elif sys.platform == "darwin":
+                self.log.append("No known programmer detected via macOS serial scan.")
+            else:
+                self.log.append("No known programmer detected via USB scan.")
             return
         for prog, label in hits:
             self.log.append(f"  Found: {label}  →  programmer: {prog}")
@@ -6071,6 +6230,36 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+def _qt_preferred_mono_family() -> str:
+    """Return the best available fixed-pitch Qt font family for this host."""
+    preferred: list[str] = []
+    if sys.platform.startswith("win"):
+        preferred = ["Consolas", "Cascadia Mono", "Lucida Console", "Courier New"]
+    elif sys.platform == "darwin":
+        preferred = ["SF Mono", "Menlo", "Monaco", "Courier"]
+    else:
+        preferred = ["JetBrainsMono Nerd Font", "DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Monospace"]
+
+    try:
+        families = [str(f).strip() for f in QFontDatabase.families() if str(f).strip()]
+        family_set = {f.casefold(): f for f in families}
+
+        for name in preferred:
+            hit = family_set.get(name.casefold())
+            if hit:
+                return hit
+
+        fixed = [f for f in families if QFontDatabase.isFixedPitch(f)]
+        if fixed:
+            fixed.sort(key=lambda s: s.casefold())
+            return fixed[0]
+    except Exception:
+        pass
+
+    # Last-resort family names (Qt will substitute if needed).
+    return "Consolas" if sys.platform.startswith("win") else "Courier"
 
 
 # Keep worker objects alive until they emit finished; otherwise Python GC may
@@ -7704,6 +7893,9 @@ class SettingsPage(PageBase):
         super().__init__(app)
 
         self.theme_original = self.state.theme or "default"
+        self._is_linux = sys.platform.startswith("linux")
+        self._is_windows = sys.platform.startswith("win")
+        self._is_macos = sys.platform == "darwin"
 
         outer = QVBoxLayout(self)
 
@@ -7876,8 +8068,13 @@ class SettingsPage(PageBase):
         # Keep this widget in the object tree on all platforms; if omitted,
         # Qt may destroy it and later signal callbacks can hit deleted objects.
         outer.addWidget(g_sudo)
-        if sys.platform.startswith("win"):
-            g_sudo.setTitle("Elevation / sudo (not used on Windows)")
+        if not self._is_linux:
+            if self._is_windows:
+                g_sudo.setTitle("Elevation / sudo (not used on Windows)")
+            elif self._is_macos:
+                g_sudo.setTitle("Elevation / sudo (not used on macOS)")
+            else:
+                g_sudo.setTitle("Elevation / sudo (not used on this platform)")
             self.use_sudo.setChecked(False)
             self.use_sudo.setEnabled(False)
             self.sudo_pw.setEnabled(False)
@@ -7935,14 +8132,26 @@ class SettingsPage(PageBase):
         r1.addStretch(1)
         l_checks.addLayout(r1)
 
-        if sys.platform.startswith("win"):
+        if self._is_windows:
             self.btn_check_perms.setEnabled(False)
             self.btn_fix_perms.setEnabled(False)
+
+        # Linux-only maintenance actions should not appear on macOS/Windows.
+        if not self._is_linux:
             self.btn_check_udev.setEnabled(False)
             self.btn_backup_udev.setEnabled(False)
             self.btn_fix_udev.setEnabled(False)
             self.btn_reload_udev.setEnabled(False)
             self.btn_add_plugdev.setEnabled(False)
+            self.btn_check_udev.setVisible(False)
+            self.btn_backup_udev.setVisible(False)
+            self.btn_fix_udev.setVisible(False)
+            self.btn_reload_udev.setVisible(False)
+            self.btn_add_plugdev.setVisible(False)
+            if self._is_macos:
+                g_checks.setTitle("System Checks (macOS)")
+            elif self._is_windows:
+                g_checks.setTitle("System Checks (Windows)")
         outer.addWidget(g_checks)
         outer.addStretch(1)
 
@@ -8295,7 +8504,15 @@ class SettingsPage(PageBase):
                     lines.append(f"  {label}: {found}  ({ver})")
                 else:
                     lines.append(f"  {label}: NOT FOUND")
-            for name in ("lsusb", "udevadm", "dmesg", "tee", "sudo"):
+            if self._is_linux:
+                platform_tools = ("lsusb", "udevadm", "dmesg", "tee", "sudo")
+            elif self._is_macos:
+                platform_tools = ("ioreg", "system_profiler", "brew")
+            elif self._is_windows:
+                platform_tools = ("where", "powershell")
+            else:
+                platform_tools = ("sudo",)
+            for name in platform_tools:
                 loc = shutil.which(name)
                 lines.append(f"  {name}: {loc or 'NOT FOUND'}")
 
@@ -8465,9 +8682,15 @@ class SettingsPage(PageBase):
         self._log("=== end ===")
 
     def _fix_udev(self) -> None:
+        if not self._is_linux:
+            self._log("Udev rules are Linux-only. Skipping on this platform.")
+            return
         self._check_udev()
 
     def _backup_udev(self) -> None:
+        if not self._is_linux:
+            self._log("Udev rules are Linux-only. Skipping on this platform.")
+            return
         self._log("=== Backup udev rules ===")
         prog_full = self.app.state.programmer
         prog_key = prog_full.split(":")[0] if prog_full else ""
@@ -8489,6 +8712,9 @@ class SettingsPage(PageBase):
         self._log("=== end ===")
 
     def _check_udev(self) -> None:
+        if not self._is_linux:
+            self._log("Udev rules are Linux-only. Skipping on this platform.")
+            return
         self._log("=== udev check ===")
         lines: list[str] = []
 
@@ -8542,6 +8768,9 @@ class SettingsPage(PageBase):
         self._run_background("udev check", _worker, _done)
 
     def _reload_udev(self) -> None:
+        if not self._is_linux:
+            self._log("Udev rules are Linux-only. Skipping on this platform.")
+            return
         self._log("=== Reload udev rules ===")
         result: dict[str, tuple[bool, str]] = {}
 
@@ -8559,6 +8788,9 @@ class SettingsPage(PageBase):
         self._run_background("reload udev", _worker, _done)
 
     def _add_plugdev(self) -> None:
+        if not self._is_linux:
+            self._log("plugdev group management is Linux-only. Skipping on this platform.")
+            return
         import getpass
         user = getpass.getuser()
         self._log(f"=== Add {user} to plugdev ===")
@@ -8644,7 +8876,8 @@ class SettingsPage(PageBase):
         self.workspace_edit.setText(str(data.get("workspace_dir", self.workspace_edit.text())))
         self.geometry_edit.setText(str(data.get("window_geometry", self.geometry_edit.text())))
         self.log_file_edit.setText(str(data.get("log_file_path", self.log_file_edit.text())))
-        self.use_sudo.setChecked(bool(data.get("use_sudo", self.use_sudo.isChecked())))
+        loaded_use_sudo = bool(data.get("use_sudo", self.use_sudo.isChecked()))
+        self.use_sudo.setChecked(loaded_use_sudo if self._is_linux else False)
         self.auto_detect.setChecked(bool(data.get("auto_detect_programmer", self.auto_detect.isChecked())))
         self.beep.setChecked(bool(data.get("beep_on_complete", self.beep.isChecked())))
         try:
@@ -8711,7 +8944,7 @@ class SettingsPage(PageBase):
         self.state.log_file_path = self.log_file_edit.text().strip() or self.state.log_file_path
 
         self.state.theme = self.theme_combo.currentText().strip()
-        self.state.use_sudo = self.use_sudo.isChecked()
+        self.state.use_sudo = self.use_sudo.isChecked() if self._is_linux else False
         self.state.sudo_password = self.sudo_pw.text()
         self.state.auto_detect_programmer = self.auto_detect.isChecked()
         self.state.beep_on_complete = self.beep.isChecked()
@@ -8834,7 +9067,7 @@ class ToolsPage(PageBase):
         self.console_view.setReadOnly(True)
         self.console_view.setMinimumHeight(120)
         self.console_view.setPlaceholderText("Serial terminal output…")
-        term_font = QFont("Consolas" if sys.platform.startswith("win") else "Monospace")
+        term_font = QFont(_qt_preferred_mono_family())
         term_font.setStyleHint(QFont.StyleHint.TypeWriter)
         term_font.setFixedPitch(True)
         term_font.setPointSize(max(9, int(getattr(self.state, "font_size", 10) or 10)))
@@ -9065,6 +9298,8 @@ class ToolsPage(PageBase):
     def apply_runtime_font_preferences(self, font: QFont) -> None:
         term_font = QFont(font)
         console_family = (getattr(self.state, "console_font", "") or "").strip()
+        if console_family.casefold() == "monospace":
+            console_family = _qt_preferred_mono_family()
         if console_family:
             term_font.setFamily(console_family)
         console_size = int(getattr(self.state, "console_font_size", 0) or 0)
@@ -10120,7 +10355,9 @@ class FlashGUIQt(QMainWindow):
             "DejaVu Sans Mono",
             "Lucida Console",
             "Courier New",
-            "Monospace",
+            "SF Mono",
+            "Menlo",
+            "Monaco",
         ]
         qt_fixed: list[str] = []
         try:
@@ -10214,6 +10451,8 @@ class FlashGUIQt(QMainWindow):
         ui_font.setPointSize(ui_size)
 
         ui_family = (family if family is not None else self.state.preferred_font or "").strip()
+        if ui_family.casefold() == "monospace":
+            ui_family = _qt_preferred_mono_family()
         if ui_family:
             ui_font.setFamily(ui_family)
 
@@ -10226,6 +10465,8 @@ class FlashGUIQt(QMainWindow):
         if isinstance(log_widget, QTextEdit):
             log_font = QFont(ui_font)
             console_family = (getattr(self.state, "console_font", "") or "").strip()
+            if console_family.casefold() == "monospace":
+                console_family = _qt_preferred_mono_family()
             if console_family:
                 log_font.setFamily(console_family)
             console_size = int(getattr(self.state, "console_font_size", 0) or 0)
@@ -10347,6 +10588,12 @@ class FlashGUIQt(QMainWindow):
         try:
             ver = _get_version(self.state.binary)
             progs = _with_internal_programmer(_list_programmers(self.state.binary))
+            if sys.platform.startswith("win"):
+                win_serial = [prog for prog, _label in _detect_programmer_serial_windows()]
+                progs = _with_internal_programmer(progs + win_serial)
+            elif sys.platform == "darwin":
+                mac_serial = [prog for prog, _label in _detect_programmer_serial_posix()]
+                progs = _with_internal_programmer(progs + mac_serial)
         except Exception as exc:
             self.log.append_line(f"ERROR: refresh tool failed: {exc}")
             return
@@ -10360,6 +10607,14 @@ class FlashGUIQt(QMainWindow):
             for p in progs:
                 self.programmer_combo.addItem(p)
             current = (self.state.programmer or "").strip()
+            if sys.platform.startswith("win") and current.startswith("/dev/"):
+                self.log.append_line(f"Ignoring Linux-style programmer setting on Windows: {current}")
+                current = ""
+                self.state.programmer = ""
+            if sys.platform == "darwin" and re.match(r"^[A-Za-z]:", current):
+                self.log.append_line(f"Ignoring Windows-style programmer setting on macOS: {current}")
+                current = ""
+                self.state.programmer = ""
             if current:
                 idx = self.programmer_combo.findText(current)
                 if idx >= 0:
@@ -10435,7 +10690,12 @@ class FlashGUIQt(QMainWindow):
             pass
 
     def _on_detect_programmer(self) -> None:
-        self.log.append_line("Scanning USB devices via lsusb / dmesg…")
+        if sys.platform.startswith("win"):
+            self.log.append_line("Scanning Windows serial ports for programmer devices…")
+        elif sys.platform == "darwin":
+            self.log.append_line("Scanning macOS serial devices (/dev/cu.*, /dev/tty.*)…")
+        else:
+            self.log.append_line("Scanning USB devices via lsusb / dmesg…")
         try:
             hits = _detect_programmer_usb()
         except Exception as exc:
@@ -10443,8 +10703,22 @@ class FlashGUIQt(QMainWindow):
             return
 
         if not hits:
-            self.log.append_line("No known programmer detected via USB scan.")
-            return
+            if sys.platform.startswith("win"):
+                self.log.append_line("No known programmer detected via Windows serial scan.")
+            elif sys.platform == "darwin":
+                self.log.append_line("No known programmer detected via macOS serial scan.")
+            else:
+                self.log.append_line("No known programmer detected via USB scan.")
+            if sys.platform.startswith("win"):
+                ports = _detect_programmer_serial_windows()
+                if ports:
+                    self.log.append_line("Windows COM ports enumerated — select one from the dropdown.")
+                    hits = ports
+                else:
+                    self.log.append_line("No COM ports were enumerated on Windows.")
+                    return
+            else:
+                return
 
         existing = [self.programmer_combo.itemText(i) for i in range(self.programmer_combo.count())]
         self._programmer_updating = True
