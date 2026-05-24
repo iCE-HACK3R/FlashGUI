@@ -199,3 +199,6 @@ Also worth a look from the "flashrom gui" ecosystem search:
 - [`RestlessGoose/QuickFlash`](https://github.com/RestlessGoose/QuickFlash) (archived)
 
 > This project is an independent frontend and is not affiliated with or endorsed by the `flashrom` or `flashprog` maintainers.
+
+## For the EZP2020 serprog FW 
+- https://github.com/iCE-HACK3R/EZP2020_CH552x-FW
