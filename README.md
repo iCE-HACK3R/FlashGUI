@@ -19,41 +19,51 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 ## Screenshots
 
-### Main workspace
-
-![FlashGUI main workspace](screenshots/app-main.png)
-
-### Toolbar and control flow
-
-![FlashGUI toolbar and controls](screenshots/app-controls.png)
-
-### Read flow examples
-
-![Read ROM in progress (serprog, GD25Q128C)](screenshots/read-rom-progress-serprog-gd25q128c.png)
-
-![Read ROM completed (serprog, GD25Q128C)](screenshots/read-rom-complete-serprog-gd25q128c.png)
-
-![Read ROM completed (serprog, GD25Q32B)](screenshots/read-rom-complete-serprog-gd25q32b.png)
-
-### Chip information and status pages
+### About ROM / Help pages
 
 ![About ROM chip info (basic view)](screenshots/about-rom-chip-info-basic.png)
 
-![About ROM chip info (verbose / WP status)](screenshots/about-rom-chip-info-verbose-wp.png)
+![About ROM chip info (verbose / write-protect)](screenshots/about-rom-chip-info-verbose-wp.png)
 
-### Verify / Erase / Write flow examples
+![Help & About page](screenshots/help-about.png)
 
-![Verify ROM completed (CH341A, MX25L1605)](screenshots/verify-rom-complete-ch341a-mx25l1605.png)
+### Read ROM flow
 
-![Erase ROM completed (CH341A, MX25L1605)](screenshots/erase-rom-complete-ch341a-mx25l1605.png)
+![Read ROM in progress (serprog, GD25Q128C, macOS)](screenshots/read-rom-progress-serprog-gd25q128c-mac.png)
 
-![Write ROM confirmation dialog](screenshots/write-rom-confirm-dialog-ch341a.png)
+![Read ROM completed (serprog, GD25Q128C, macOS)](screenshots/read-rom-complete-serprog-gd25q128c-mac.png)
+
+![Read ROM completed (serprog, MX25V16066, Linux)](screenshots/read-rom-complete-serprog-mx25v16066-linux.png)
+
+### Write / Verify / Erase flow
+
+![Write ROM confirmation dialog (CH341A)](screenshots/write-rom-confirm-dialog-ch341a.png)
 
 ![Write ROM completed (CH341A, MX25L1605)](screenshots/write-rom-complete-ch341a-mx25l1605.png)
 
-### Programmer console
+![Verify ROM completed (CH341A, MX25L1605)](screenshots/verify-rom-complete-ch341a-mx25l1605.png)
 
-![Programmer console terminal view](screenshots/programmer-terminal.png)
+![Erase ROM confirmation dialog (CH341A, MX25L1605)](screenshots/erase-rom-confirm-ch341a-mx25l1605.png)
+
+![Erase ROM completed (CH341A, MX25L1605)](screenshots/erase-rom-complete-ch341a-mx25l1605.png)
+
+### Programmer terminal / console
+
+![Programmer terminal](screenshots/programmer-terminal.png)
+
+![Programmer terminal help](screenshots/programmer-terminal-help.png)
+
+![Programmer terminal (Bus Pirate)](screenshots/programmer-terminal-bp.png)
+
+![Programmer terminal (HydraBus)](screenshots/programmer-terminal-hb.png)
+
+### Settings across platforms
+
+![Settings on Windows](screenshots/settings-windows.png)
+
+![Settings on Linux](screenshots/settings-linux.png)
+
+![Settings on macOS](screenshots/settings-darwin.png)
 
 ## Quick start
 
@@ -98,6 +108,32 @@ Settings persistence:
 - If dependency installation fails, verify the Python interpreter/version first.
 - For local checks, you can run `pytest` after installing development/build dependencies from `requirements-build.txt`.
 
+## Build binaries (Windows/Linux/macOS)
+
+Use the build helper script:
+
+- `python scripts/build_binaries.py`
+
+Optional target override (run on the matching OS):
+
+- `python scripts/build_binaries.py --target windows`
+- `python scripts/build_binaries.py --target linux`
+- `python scripts/build_binaries.py --target macos`
+
+What it does:
+
+- Builds a one-file executable with PyInstaller
+- Names output as `flashgui-<target>-<arch>` (plus `.exe` on Windows)
+- Creates a **portable** release zip in `release/`:
+  - `flashgui-v<version>-<target>-<arch>-portable.zip`
+- Bundles app assets/attachments into releases (including `resources/`, `screenshots/`, and release docs)
+
+Note: cross-compiling to a different OS is not supported in this script; run it on the target platform.
+
+Optional flags:
+
+- `python scripts/build_binaries.py --no-screenshots` (skip bundling screenshots)
+
 ## License
 
 📜 License
@@ -127,16 +163,21 @@ Build/publish one-file executable with icon:
 - `python -m PyInstaller --name=flashgui --onefile --icon=resources\icons\flashgui.ico flashgui.py`
 - `python -m PyInstaller --name=flashgui --onefile --icon=resources/icons/flashgui.ico flashgui.py`
 
+Or use the cross-platform helper:
+
+- `python scripts/build_binaries.py`
+
 Release bundle generated in this repo:
 
-- `release/flashgui-v1.1.2-windows-x64.zip`
+- `release/flashgui-v1.1.3-windows-x64-portable.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.2`)
+- Create an annotated tag (example: `v1.1.3`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.2` and upload `release/flashgui-v1.1.2-windows-x64.zip`
+- Create a GitHub Release from tag `v1.1.3`
+- CI will build on Windows/Linux/macOS and auto-attach generated portable artifacts to that release
 
 ## Mentions & thanks
 

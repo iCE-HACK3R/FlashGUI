@@ -1,0 +1,62 @@
+name: Build binaries (Windows/Linux/macOS)
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          - os: ubuntu-latest
+            target: linux
+          - os: macos-latest
+            target: macos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build/test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Build binary
+        run: python scripts/build_binaries.py --target ${{ matrix.target }}
+
+      - name: Upload portable artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flashgui-${{ matrix.target }}
+          path: release/flashgui-v*-${{ matrix.target }}-*-portable.zip
+          if-no-files-found: error
+
+      - name: Attach artifacts to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/flashgui-v*-${{ matrix.target }}-*-portable.zip
+          fail_on_unmatched_files: false

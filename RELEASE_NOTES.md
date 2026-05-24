@@ -1,5 +1,45 @@
 # Release Notes
 
+## v1.1.3
+
+### Highlights (v1.1.3)
+
+- Fixed `Read Chip Info` parsing for `flashprog -V` so chip IDs are captured from verbose formats including:
+  - `probe_spi_rdid: id1 ... id2 ...`
+  - `SPI_RDID: id1 ... id2 ...`
+- Fixed `Write Protection` population in `About ROM` when using `flashprog --flash-name` output.
+- Updated `Read ROM` auto-generated output filenames to include tool prefixes:
+  - `FR_...` for `flashrom`
+  - `FP_...` for `flashprog`
+- Made `Tested Chips (ROMs)` data-driven from `resources/chips/tested_chips.json`.
+
+### Build & Release (v1.1.3)
+
+- Added cross-platform build helper: `scripts/build_binaries.py`.
+- Build helper now produces per-OS portable artifacts (`-portable.zip`).
+- Release bundles now include bundled assets/attachments (`resources/`, `screenshots/`, and release docs).
+- Added GitHub Actions workflow `.github/workflows/build-binaries.yml`:
+  - matrix builds for Windows/Linux/macOS
+  - artifact upload for portable outputs
+  - release-event auto-attach to GitHub Release assets
+
+### Documentation (v1.1.3)
+
+- Expanded README screenshots section to include all current screenshots.
+- Updated README build/release documentation for new artifact names and native installer modes.
+- Updated tag/release examples to `v1.1.3`.
+
+### Version (v1.1.3)
+
+- Bumped application version in `flashgui.py`:
+  - `VERSION = "1.1.3"`
+
+### Build Artifact Targets (v1.1.3)
+
+- `release/flashgui-v1.1.3-windows-x64-portable.zip`
+- `release/flashgui-v1.1.3-linux-x64-portable.zip`
+- `release/flashgui-v1.1.3-macos-x64-portable.zip`
+
 ## v1.1.2
 
 ### Highlights (v1.1.2)

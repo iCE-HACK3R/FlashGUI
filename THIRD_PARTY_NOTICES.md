@@ -41,6 +41,19 @@ Python package dependencies are defined in:
 
 For release builds, generate a dependency license report and include it in artifacts when required by your distribution policy.
 
+## Fonts (Downloadable / Embedded)
+
+- This project supports downloadable fonts from upstream sources at runtime.
+- Embedded-font redistribution must be treated as a release-time compliance decision.
+- In `flashgui.py`, embedded font loading is intentionally disabled by default unless explicitly enabled for a licensed font payload.
+
+If you plan to distribute an embedded font payload, include in release artifacts:
+
+- Exact font family name and upstream source URL
+- Exact license text (e.g., OFL/MIT/etc. as applicable)
+- Required attribution/notice statements
+- Any reserved-name or modification conditions required by the license
+
 ## Documentation and Community References (Acknowledgements)
 
 - [flashrom classic CLI manpage](https://www.flashrom.org/classic_cli_manpage.html)
