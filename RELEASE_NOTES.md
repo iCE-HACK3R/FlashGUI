@@ -1,5 +1,29 @@
 # Release Notes
 
+## v1.1.2
+
+### Highlights (v1.1.2)
+
+- Fixed lingering **Save & Apply** font persistence issues in the Qt UI.
+- Fixed startup font propagation so restored app font is applied across built page widgets.
+- Added recovery logic for previously mis-saved downloadable font family names.
+
+### Documentation (v1.1.2)
+
+- Updated README release references for `v1.1.2`.
+- Added a dedicated GitHub release draft file for `v1.1.2`.
+
+### Version (v1.1.2)
+
+- Bumped application version in `flashgui.py`:
+  - `VERSION = "1.1.2"`
+
+### Build Artifact (v1.1.2)
+
+- Target release bundle names:
+  - `release/flashgui-v1.1.2-windows-x64.zip`
+  - `release/flashgui-v1.1.2-linux-x64.zip`
+
 ## v1.1.1
 
 ### Highlights (v1.1.1)

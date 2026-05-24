@@ -76,7 +76,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -985,6 +985,91 @@ def _font_cache_dir() -> str:
     p = os.path.join(tempfile.gettempdir(), "flashgui-font-cache")
     os.makedirs(p, exist_ok=True)
     return p
+
+
+def _font_download_cache_path(font_name: str) -> str | None:
+    info = _FONT_DOWNLOADS.get(font_name)
+    if not info:
+        return None
+    _url, filename = info
+    return os.path.join(_font_cache_dir(), filename)
+
+
+def _normalize_font_lookup_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(name or "").casefold())
+
+
+def _match_downloadable_font_key(font_name: str) -> str | None:
+    requested = (font_name or "").strip()
+    if not requested:
+        return None
+
+    requested_casefold = requested.casefold()
+    for key in _FONT_DOWNLOADS:
+        if key.casefold() == requested_casefold:
+            return key
+
+    requested_norm = _normalize_font_lookup_name(requested)
+    if not requested_norm:
+        return None
+
+    for key, (_url, filename) in _FONT_DOWNLOADS.items():
+        key_norm = _normalize_font_lookup_name(key)
+        file_norm = _normalize_font_lookup_name(os.path.splitext(filename)[0])
+        if (
+            requested_norm == key_norm
+            or requested_norm == file_norm
+            or requested_norm in file_norm
+            or key_norm in requested_norm
+        ):
+            return key
+    return None
+
+
+def _preferred_font_storage_name(font_name: str) -> str:
+    requested = (font_name or "").strip()
+    return _match_downloadable_font_key(requested) or requested
+
+
+def _resolve_downloadable_font_family(
+    requested_font: str,
+    register_font_file: Callable[[str], list[str]],
+) -> str:
+    requested = (requested_font or "").strip()
+    if not requested:
+        return ""
+
+    requested_norm = _normalize_font_lookup_name(requested)
+    candidate_keys: list[str] = []
+    preferred_key = _match_downloadable_font_key(requested)
+    if preferred_key:
+        candidate_keys.append(preferred_key)
+    candidate_keys.extend([key for key in _FONT_DOWNLOADS if key not in candidate_keys])
+
+    for index, key in enumerate(candidate_keys):
+        path = _font_download_cache_path(key)
+        if index == 0 and preferred_key == key and (not path or not os.path.isfile(path)):
+            try:
+                path = _download_font(key)
+            except Exception:
+                path = None
+        if not path or not os.path.isfile(path):
+            continue
+
+        families = [str(name).strip() for name in register_font_file(path) if str(name).strip()]
+        if not families:
+            continue
+        if requested in families:
+            return requested
+
+        normalized_matches = [family for family in families if _normalize_font_lookup_name(family) == requested_norm]
+        if normalized_matches:
+            return normalized_matches[0]
+
+        if preferred_key == key:
+            return families[0]
+
+    return requested
 
 
 def _download_font(font_name: str) -> str | None:
@@ -5593,8 +5678,13 @@ class AppState:
             str(self.settings.get("workspace_dir", "")).strip()
             or _default_workspace_dir()
         )
-        self.preferred_font  = str(self.settings.get("preferred_font",  "")).strip()
-        self.console_font    = str(self.settings.get("console_font", "")).strip()
+        raw_preferred_font = str(self.settings.get("preferred_font", "")).strip()
+        raw_console_font = str(self.settings.get("console_font", "")).strip()
+        self.preferred_font = _preferred_font_storage_name(raw_preferred_font)
+        self.console_font = _preferred_font_storage_name(raw_console_font)
+        self._normalized_font_settings_changed = (
+            self.preferred_font != raw_preferred_font or self.console_font != raw_console_font
+        )
         try:
             self.console_font_size = max(0, min(36, int(str(self.settings.get("console_font_size", 0)).strip() or "0")))
         except (TypeError, ValueError):
@@ -5625,6 +5715,14 @@ class AppState:
         self.last_probe_ids: list[tuple[int, int]] = []
         self.tmpdir     = tempfile.mkdtemp()
         self._load_sudo_keyring()
+
+        if self._normalized_font_settings_changed:
+            self.settings["preferred_font"] = self.preferred_font
+            self.settings["console_font"] = self.console_font
+            try:
+                self.save_settings(geometry=self.window_geometry)
+            except Exception:
+                pass
 
     def _load_sudo_keyring(self) -> None:
         """Restore sudo password from system keyring if the keyring package is available."""
@@ -6597,7 +6695,7 @@ class PageBase(QWidget):
 
     def apply_runtime_font_preferences(self, font: QFont) -> None:
         """Optional hook for pages with explicitly-set fonts."""
-        _ = font
+        self.setFont(QFont(font))
 
     def _show_text_dialog(self, title: str, text: str) -> None:
         dlg = QDialog(self)
@@ -6826,6 +6924,9 @@ class OpPageBase(PageBase):
         self.form_lay.setContentsMargins(8, 8, 8, 8)
         self.form_lay.setSpacing(4)
         self.form_lay.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        self.form_lay.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        self.form_lay.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.form_lay.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         outer.addWidget(self.form_group, 0)
 
         # Row order: HashValue → Command → Progress.
@@ -7902,6 +8003,9 @@ class SettingsPage(PageBase):
         # Paths & Appearance
         g_paths = QGroupBox("Paths && Appearance")
         f_paths = QFormLayout(g_paths)
+        f_paths.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        f_paths.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        f_paths.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.font_combo = QComboBox()
         self._populate_font_combo(preferred=self.state.preferred_font)
         self.font_size_slider = QSlider(Qt.Orientation.Horizontal)
@@ -7990,6 +8094,9 @@ class SettingsPage(PageBase):
         # Behavior
         g_behavior = QGroupBox("Behavior")
         f_behavior = QFormLayout(g_behavior)
+        f_behavior.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        f_behavior.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        f_behavior.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.theme_combo = QComboBox()
         themes = [
             "default",
@@ -8046,6 +8153,9 @@ class SettingsPage(PageBase):
         # Elevation / sudo
         g_sudo = QGroupBox("Elevation / sudo")
         f_sudo = QFormLayout(g_sudo)
+        f_sudo.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        f_sudo.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        f_sudo.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.use_sudo = QCheckBox("Use sudo for privileged operations (including internal programmer access)")
         self.use_sudo.setChecked(self.state.use_sudo)
         self.sudo_pw = QLineEdit(self.state.sudo_password)
@@ -8081,8 +8191,8 @@ class SettingsPage(PageBase):
             self.btn_save_keyring.setEnabled(False)
             self.btn_clear_keyring.setEnabled(False)
 
-        # System checks
-        g_checks = QGroupBox("System Checks")
+        # Systems & settings
+        g_checks = QGroupBox("Systems & Settings")
         l_checks = QVBoxLayout(g_checks)
         # l_checks.setContentsMargins(0, 0, 0, 0)
         # l_checks.setSpacing(0)
@@ -8093,7 +8203,6 @@ class SettingsPage(PageBase):
         self.btn_fix_dep = QPushButton("Fix Dependencies")
         self.btn_check_perms = QPushButton("Check Binary Permissions")
         self.btn_fix_perms = QPushButton("Fix Binary Permissions")
-        self.btn_install_guide = QPushButton("Install Binaries Guide")
         self.btn_check_udev = QPushButton("Check Udev Rules")
         self.btn_backup_udev = QPushButton("Backup Udev Rules")
         self.btn_fix_udev = QPushButton("Fix Udev Rules")
@@ -8107,8 +8216,6 @@ class SettingsPage(PageBase):
         self.btn_check_perms.setMinimumWidth(140)
         self.btn_fix_perms.setProperty("kind", "subtle")
         self.btn_fix_perms.setMinimumWidth(140)
-        self.btn_install_guide.setProperty("kind", "subtle")
-        self.btn_install_guide.setMinimumWidth(140)
         self.btn_check_udev.setProperty("kind", "subtle")
         self.btn_check_udev.setMinimumWidth(140)
         self.btn_backup_udev.setProperty("kind", "subtle")
@@ -8123,14 +8230,11 @@ class SettingsPage(PageBase):
         r1.addWidget(self.btn_fix_dep)
         r1.addWidget(self.btn_check_perms)
         r1.addWidget(self.btn_fix_perms)
-        r1.addWidget(self.btn_install_guide)
         r1.addWidget(self.btn_check_udev)
         r1.addWidget(self.btn_backup_udev)
         r1.addWidget(self.btn_fix_udev)
         r1.addWidget(self.btn_reload_udev)
         r1.addWidget(self.btn_add_plugdev)
-        r1.addStretch(1)
-        l_checks.addLayout(r1)
 
         if self._is_windows:
             self.btn_check_perms.setEnabled(False)
@@ -8149,15 +8253,11 @@ class SettingsPage(PageBase):
             self.btn_reload_udev.setVisible(False)
             self.btn_add_plugdev.setVisible(False)
             if self._is_macos:
-                g_checks.setTitle("System Checks (macOS)")
+                g_checks.setTitle("Systems & Settings (macOS)")
             elif self._is_windows:
-                g_checks.setTitle("System Checks (Windows)")
-        outer.addWidget(g_checks)
-        outer.addStretch(1)
+                g_checks.setTitle("Systems & Settings (Windows)")
 
-        # Settings management
-        g_manage = QGroupBox("Settings Management")
-        l_manage = QHBoxLayout(g_manage)
+        # Settings management (merged into Systems & Settings)
         self.btn_load_file = QPushButton("Load From File…")
         self.btn_save_file = QPushButton("Save To File…")
         self.btn_reset_defaults = QPushButton("Reset To Defaults")
@@ -8169,12 +8269,14 @@ class SettingsPage(PageBase):
         self.btn_reset_defaults.setProperty("kind", "subtle")
         self.btn_reset_defaults.setMinimumWidth(140)
         self.btn_apply.setMinimumWidth(140)
-        l_manage.addWidget(self.btn_load_file)
-        l_manage.addWidget(self.btn_save_file)
-        l_manage.addWidget(self.btn_reset_defaults)
-        l_manage.addWidget(self.btn_apply)
-        l_manage.addStretch(1)
-        outer.addWidget(g_manage)
+        r1.addWidget(self.btn_load_file)
+        r1.addWidget(self.btn_save_file)
+        r1.addWidget(self.btn_reset_defaults)
+        r1.addWidget(self.btn_apply)
+        r1.addStretch(1)
+        l_checks.addLayout(r1)
+
+        outer.addWidget(g_checks)
         outer.addStretch(1)
 
         self.btn_download_font.clicked.connect(self._download_font)
@@ -8198,7 +8300,6 @@ class SettingsPage(PageBase):
         self.btn_fix_dep.clicked.connect(self._fix_dependencies)
         self.btn_check_perms.clicked.connect(self._check_binary_perms)
         self.btn_fix_perms.clicked.connect(self._fix_binary_perms)
-        self.btn_install_guide.clicked.connect(self._download_binaries)
         self.btn_check_udev.clicked.connect(self._check_udev)
         self.btn_backup_udev.clicked.connect(self._backup_udev)
         self.btn_fix_udev.clicked.connect(self._fix_udev)
@@ -8210,9 +8311,53 @@ class SettingsPage(PageBase):
         self.btn_reset_defaults.clicked.connect(self._reset_defaults)
         self.btn_apply.clicked.connect(self._apply)
 
+        # Keep right-side action columns visually aligned on macOS.
+        self._normalize_settings_button_widths()
+
         self.flashrom_edit.textChanged.connect(lambda _: self._refresh_system_fix_buttons())
         self.flashprog_edit.textChanged.connect(lambda _: self._refresh_system_fix_buttons())
         self._refresh_system_fix_buttons()
+
+    def _normalize_settings_button_widths(self) -> None:
+        """Apply uniform action-button widths for cleaner Settings row alignment.
+
+        Qt/macOS style metrics can produce uneven size-hints; pinning to a
+        consistent width improves scanability and parity with Windows layout.
+        """
+        if not self._is_macos:
+            return
+        width = 140
+        buttons: list[QPushButton] = [
+            self.btn_download_font,
+            self.btn_apply_font_size,
+            self.btn_browse_flashrom,
+            self.btn_browse_flashprog,
+            self.btn_browse_workspace,
+            self.btn_capture_geometry,
+            self.btn_browse_log,
+            self.btn_theme_preview,
+            self.btn_theme_revert,
+            self.btn_theme_default,
+            self.btn_theme_apply,
+            self.btn_save_keyring,
+            self.btn_clear_keyring,
+            self.btn_check_dep,
+            self.btn_fix_dep,
+            self.btn_check_perms,
+            self.btn_fix_perms,
+            self.btn_check_udev,
+            self.btn_backup_udev,
+            self.btn_fix_udev,
+            self.btn_reload_udev,
+            self.btn_add_plugdev,
+            self.btn_load_file,
+            self.btn_save_file,
+            self.btn_reset_defaults,
+            self.btn_apply,
+        ]
+        for btn in buttons:
+            btn.setMinimumWidth(width)
+            btn.setMaximumWidth(width)
 
     def _log(self, text: str) -> None:
         self.log(text)
@@ -8267,7 +8412,6 @@ class SettingsPage(PageBase):
 
     def _refresh_system_fix_buttons(self) -> None:
         self.btn_fix_dep.setEnabled(self._has_missing_core_binaries())
-        self.btn_install_guide.setEnabled(True)
 
     @staticmethod
     def _merge_font_candidates(candidates: list[str]) -> list[str]:
@@ -8344,11 +8488,8 @@ class SettingsPage(PageBase):
             self.btn_download_font.setEnabled(True)
             if result["ok"]:
                 path = str(result.get("path") or "").strip()
-                families = self._register_qt_font_file(path)
-                preferred = font_name
-                if families and font_name not in families:
-                    preferred = families[0]
-                self._populate_font_combo(preferred=preferred)
+                self._register_qt_font_file(path)
+                self._populate_font_combo(preferred=font_name)
                 self._log(f"Downloaded font: {font_name}")
                 self._apply_font_size()
                 self.info("Downloaded", f"{font_name} font downloaded.")
@@ -8380,23 +8521,15 @@ class SettingsPage(PageBase):
         except Exception:
             return requested
 
-        path = _download_font(requested)
-        families = self._register_qt_font_file(path or "") if path else []
-        if requested in families:
-            return requested
-        if families:
-            return families[0]
-        return requested
+        return _resolve_downloadable_font_family(requested, self._register_qt_font_file)
 
     def _apply_font_size(self) -> None:
         selected_font = self.font_combo.currentText().strip()
         size = max(8, min(24, self.font_size_slider.value()))
         self.state.font_size = size
-        self.state.preferred_font = selected_font
+        self.state.preferred_font = _preferred_font_storage_name(selected_font)
 
         resolved_family = self._resolve_qt_font_family(selected_font) if selected_font else ""
-        if resolved_family:
-            self.state.preferred_font = resolved_family
 
         self.app.apply_runtime_font_preferences(
             family=resolved_family or selected_font or None,
@@ -8934,7 +9067,7 @@ class SettingsPage(PageBase):
 
     def _apply(self) -> None:
         selected_font = self.font_combo.currentText().strip()
-        self.state.preferred_font = selected_font
+        self.state.preferred_font = _preferred_font_storage_name(selected_font)
         self.state.font_size = self.font_size_slider.value()
 
         self.state.flashrom_bin = self.flashrom_edit.text().strip()
@@ -8959,8 +9092,6 @@ class SettingsPage(PageBase):
             self.app.apply_theme(self.state.theme)
 
         resolved_family = self._resolve_qt_font_family(selected_font) if selected_font else ""
-        if resolved_family:
-            self.state.preferred_font = resolved_family
         self.app.apply_runtime_font_preferences(
             family=resolved_family or selected_font or None,
             size=max(8, int(self.state.font_size)),
@@ -9637,12 +9768,16 @@ class HelpAboutPage(PageBase):
         row_update_l = QHBoxLayout(row_update)
         row_update_l.setContentsMargins(0, 0, 0, 0)
         btn_link = QPushButton("FlashGUI Link")
+        btn_install = QPushButton("Install Binaries Guide")
         btn_update = QPushButton("FlashGUI Check Update")
         btn_link.setProperty("kind", "subtle")
+        btn_install.setProperty("kind", "subtle")
         btn_update.setProperty("kind", "subtle")
         btn_link.clicked.connect(self._open_link)
+        btn_install.clicked.connect(self._open_install_binaries_guide)
         btn_update.clicked.connect(self._check_update)
         row_update_l.addWidget(btn_link)
+        row_update_l.addWidget(btn_install)
         row_update_l.addWidget(btn_update)
         row_update_l.addStretch(1)
         l_about.addRow("Actions", row_update)
@@ -9734,6 +9869,28 @@ class HelpAboutPage(PageBase):
         except Exception as exc:
             self.warn("Update check failed", f"Could not check updates:\n{exc}")
             webbrowser.open(self._REPO_URL + "/releases")
+
+    def _open_install_binaries_guide(self) -> None:
+        lines = [
+            "Automatic binary downloads are intentionally disabled for safety.",
+            "",
+            "Install manually, then set paths in Settings:",
+        ]
+        if sys.platform.startswith("linux"):
+            lines.extend([
+                "- Debian/Ubuntu: sudo apt update && sudo apt install flashrom",
+                "- Arch: sudo pacman -S flashrom",
+                "- Fedora: sudo dnf install flashrom",
+            ])
+        elif sys.platform == "darwin":
+            lines.append("- macOS: brew install flashrom")
+        elif sys.platform.startswith("win"):
+            lines.append("- Windows: use official flashrom/flashprog builds, then set paths in Settings.")
+        else:
+            lines.append("- Use your OS package manager to install flashrom/flashprog.")
+
+        self._show_text_dialog("Install Binaries Guide", "\n".join(lines))
+        self.log("Opened Install Binaries Guide.")
 
     def _run_tool_help(self, tool_name: str, args: list[str], title: str) -> None:
         binary = self._resolve_tool_binary(tool_name)
@@ -9959,12 +10116,29 @@ class FlashGUIQt(QMainWindow):
         if self.state.theme:
             self.apply_theme(self.state.theme)
         self.apply_runtime_font_preferences()
+        self._log_startup_font_restore()
 
         # Start tool probing after the event loop starts; kicking off thread-pool
         # work during window construction is unstable on some Linux/Qt builds.
         QTimer.singleShot(0, self._refresh_tool)
         if self.state.auto_detect_programmer:
             QTimer.singleShot(1200, self._on_detect_programmer)
+
+    def _log_startup_font_restore(self) -> None:
+        log_widget = getattr(self, "log", None)
+        if not isinstance(log_widget, LogWidget):
+            return
+
+        applied_font = QFont(self.font())
+        family = (applied_font.family() or "").strip() or "Default"
+        size = max(8, applied_font.pointSize() or int(self.state.font_size or 10))
+        log_widget.append_line(f"Restored UI font: {family} ({size} pt)")
+
+        console_font = QFont(log_widget.font())
+        console_family = (console_font.family() or "").strip() or family
+        console_size = max(8, console_font.pointSize() or size)
+        if console_family != family or console_size != size:
+            log_widget.append_line(f"Restored console font: {console_family} ({console_size} pt)")
 
     def _build_toolbar(self) -> None:
         tb = QToolBar("Main")
@@ -10409,6 +10583,35 @@ class FlashGUIQt(QMainWindow):
         finally:
             combo.blockSignals(False)
 
+    def _resolve_runtime_qt_font_family(self, requested_font: str) -> str:
+        """Ensure a requested Qt font family is available in the current process.
+
+        Downloaded/application fonts must be re-registered after restart because
+        Qt only keeps them for the lifetime of the process.
+        """
+        requested = (requested_font or "").strip()
+        if not requested:
+            return ""
+        try:
+            if requested in set(QFontDatabase.families()):
+                return requested
+        except Exception:
+            return requested
+
+        def _register_font_file(font_path: str) -> list[str]:
+            path = (font_path or "").strip()
+            if not path or not os.path.isfile(path):
+                return []
+            try:
+                font_id = QFontDatabase.addApplicationFont(path)
+                if font_id < 0:
+                    return []
+                return [str(name).strip() for name in QFontDatabase.applicationFontFamilies(font_id) if str(name).strip()]
+            except Exception:
+                return []
+
+        return _resolve_downloadable_font_family(requested, _register_font_file)
+
     def _on_console_font_change(self, _text: str) -> None:
         combo = getattr(self, "console_font_combo", None)
         if not isinstance(combo, QComboBox):
@@ -10453,6 +10656,8 @@ class FlashGUIQt(QMainWindow):
         ui_family = (family if family is not None else self.state.preferred_font or "").strip()
         if ui_family.casefold() == "monospace":
             ui_family = _qt_preferred_mono_family()
+        elif ui_family:
+            ui_family = self._resolve_runtime_qt_font_family(ui_family)
         if ui_family:
             ui_font.setFamily(ui_family)
 
@@ -10460,6 +10665,15 @@ class FlashGUIQt(QMainWindow):
         if isinstance(app_obj, QApplication):
             app_obj.setFont(ui_font)
         self.setFont(ui_font)
+        central = self.centralWidget()
+        if isinstance(central, QWidget):
+            central.setFont(QFont(ui_font))
+
+        for widget in self.findChildren(QWidget):
+            try:
+                widget.setFont(QFont(ui_font))
+            except Exception:
+                pass
 
         log_widget = getattr(self, "log", None)
         if isinstance(log_widget, QTextEdit):
@@ -10467,6 +10681,8 @@ class FlashGUIQt(QMainWindow):
             console_family = (getattr(self.state, "console_font", "") or "").strip()
             if console_family.casefold() == "monospace":
                 console_family = _qt_preferred_mono_family()
+            elif console_family:
+                console_family = self._resolve_runtime_qt_font_family(console_family)
             if console_family:
                 log_font.setFamily(console_family)
             console_size = int(getattr(self.state, "console_font_size", 0) or 0)
@@ -10481,6 +10697,66 @@ class FlashGUIQt(QMainWindow):
                     hook(QFont(ui_font))
                 except Exception:
                     pass
+
+    def _apply_theme_macos_native(
+        self,
+        theme_name: str,
+        dark_palettes: dict[str, dict[str, str]],
+        light_palettes: dict[str, dict[str, str]],
+    ) -> None:
+        """Apply a lighter-touch theme on macOS.
+
+        Keep macOS-native controls and only tint major containers/chrome so the UI
+        feels at home on Aqua instead of a fully custom-skinned dashboard.
+        """
+        n = (theme_name or "").lower().strip()
+        is_dark = n in dark_palettes or "dark" in n
+
+        # Ask Qt for native macOS controls when available.
+        app_obj = QApplication.instance()
+        if isinstance(app_obj, QApplication):
+            try:
+                app_obj.setStyle("macOS")
+            except Exception:
+                pass
+
+        if is_dark:
+            c = dark_palettes.get(n, dark_palettes.get("macosx-dark", dark_palettes["dark"]))
+            self.setStyleSheet(
+                f"QMainWindow {{ background: {c['main']}; }}"
+                f"QToolBar#mainToolbar {{ background: {c['toolbar']}; border-bottom: 1px solid {c['border']}; }}"
+                f"QStatusBar#statusBar {{ background: {c['toolbar']}; color: {c['text']}; border-top: 1px solid {c['border']}; }}"
+                f"QLabel#statusChip {{ background: {c['sidebar_sel']}; border: 1px solid {c['border']}; border-radius: 7px; padding: 3px 8px; color: {c['text']}; }}"
+                f"QListWidget#sidebar {{ background: {c['bg']}; border: 1px solid {c['border']}; border-radius: 8px; }}"
+                f"QListWidget#sidebar::item {{ padding: 10px 12px; border-bottom: 1px solid {c['border']}; color: {c['text']}; }}"
+                f"QListWidget#sidebar::item:selected {{ background: {c['sidebar_sel']}; border-left: 3px solid {c['accent']}; }}"
+                f"QListWidget#sidebar::item:hover {{ background: {c['toolbar']}; }}"
+                f"QGroupBox {{ border: 1px solid {c['border']}; border-radius: 8px; margin-top: 10px; padding-top: 8px; color: {c['text']}; }}"
+                f"QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 6px; color: {c['text']}; }}"
+                f"QTextEdit#globalLog, QTextEdit#outputLog {{ background: {c['main']}; border: 1px solid {c['border']}; color: {c['text']}; }}"
+                f"QProgressBar {{ background: {c['main']}; border: 1px solid {c['border']}; border-radius: 6px; text-align: center; color: {c['text']}; }}"
+                f"QProgressBar::chunk {{ background: {c['accent']}; border-radius: 5px; }}"
+                f"QSplitter::handle {{ background: {c['border']}; width: 2px; }}"
+            )
+            return
+
+        c = light_palettes.get(n, light_palettes["default"])
+        self.setStyleSheet(
+            f"QMainWindow {{ background: {c['bg']}; }}"
+            f"QToolBar#mainToolbar {{ background: {c['toolbar']}; border-bottom: 1px solid {c['border']}; }}"
+            f"QStatusBar#statusBar {{ background: {c['toolbar']}; border-top: 1px solid {c['border']}; }}"
+            f"QLabel#statusChip {{ background: {c['field']}; border: 1px solid {c['border']}; border-radius: 7px; padding: 3px 8px; }}"
+            f"QListWidget#sidebar {{ background: {c['field']}; border: 1px solid {c['border']}; border-radius: 8px; }}"
+            f"QListWidget#sidebar::item {{ padding: 10px 12px; border-bottom: 1px solid {c['border']}; }}"
+            f"QListWidget#sidebar::item:selected {{ background: {c['sidebar_sel']}; border-left: 3px solid {c['accent']}; }}"
+            f"QListWidget#sidebar::item:hover {{ background: {c['sidebar_hover']}; }}"
+            f"QGroupBox {{ border: 1px solid {c['border']}; border-radius: 8px; margin-top: 10px; padding-top: 8px; }}"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; }"
+            f"QTextEdit#globalLog, QTextEdit#outputLog {{ background: {c['field']}; border: 1px solid {c['border']}; }}"
+            f"QProgressBar {{ background: {c['bg']}; border: 1px solid {c['border']}; border-radius: 6px; text-align: center; }}"
+            f"QProgressBar::chunk {{ background: {c['accent']}; border-radius: 5px; }}"
+            f"QSplitter::handle {{ background: {c['border']}; width: 2px; }}"
+        )
 
     def apply_theme(self, name: str) -> None:
         n = (name or "").lower()
@@ -10499,10 +10775,46 @@ class FlashGUIQt(QMainWindow):
             "macosx-dark": {"main": "#1c1c1e", "bg": "#232326", "toolbar": "#2c2c30", "border": "#46464c", "text": "#efeff4", "accent": "#5e9bff", "sidebar_sel": "#35363c"},
         }
         light_palettes: dict[str, dict[str, str]] = {
-            "default": {"bg": "#f5f7fb", "field": "#ffffff", "toolbar": "#eef3fc", "border": "#c6d2e6", "text": "#1d2740", "accent": "#3a72d8", "sidebar_sel": "#dbe8ff"},
-            "light": {"bg": "#f5f7fb", "field": "#ffffff", "toolbar": "#eef3fc", "border": "#c6d2e6", "text": "#1d2740", "accent": "#3a72d8", "sidebar_sel": "#dbe8ff"},
-            "flatly": {"bg": "#edf2f7", "field": "#ffffff", "toolbar": "#e5ecf3", "border": "#c2ccd8", "text": "#2c3e50", "accent": "#2c7be5", "sidebar_sel": "#d7e5f7"},
-            "morph": {"bg": "#f3f5fb", "field": "#ffffff", "toolbar": "#f0f3fb", "border": "#d5dced", "text": "#2b3550", "accent": "#7c83fd", "sidebar_sel": "#e3e7fb"},
+            "default": {
+                "bg": "#f1f4fa",
+                "field": "#ffffff",
+                "toolbar": "#e2e9f5",
+                "border": "#b2c0da",
+                "text": "#1d2942",
+                "accent": "#4c5ab0",
+                "sidebar_sel": "#cfd9f0",
+                "sidebar_hover": "#dce5f4",
+            },
+            "light": {
+                "bg": "#f9fcff",
+                "field": "#ffffff",
+                "toolbar": "#e3f2ff",
+                "border": "#b6d4ee",
+                "text": "#12304f",
+                "accent": "#00a2ff",
+                "sidebar_sel": "#c8e8ff",
+                "sidebar_hover": "#dbf1ff",
+            },
+            "flatly": {
+                "bg": "#ecf1f7",
+                "field": "#ffffff",
+                "toolbar": "#dfe7f0",
+                "border": "#a5b8cb",
+                "text": "#253648",
+                "accent": "#1e70db",
+                "sidebar_sel": "#cbdced",
+                "sidebar_hover": "#e1eaf3",
+            },
+            "morph": {
+                "bg": "#f2f1fb",
+                "field": "#fcfcff",
+                "toolbar": "#ebe9fb",
+                "border": "#d3cff0",
+                "text": "#2f2f52",
+                "accent": "#7a63ff",
+                "sidebar_sel": "#e0d7ff",
+                "sidebar_hover": "#eae3ff",
+            },
         }
 
         dark_aliases = set(dark_palettes.keys())
@@ -10517,6 +10829,16 @@ class FlashGUIQt(QMainWindow):
                 log.set_palette(is_dark)
             except Exception:
                 pass
+
+        # Force shared cross-platform rendering on macOS too, so layout/spacing
+        # and control appearance closely match Windows/Linux.
+        if sys.platform == "darwin":
+            app_obj = QApplication.instance()
+            if isinstance(app_obj, QApplication):
+                try:
+                    app_obj.setStyle("Fusion")
+                except Exception:
+                    pass
 
         if is_dark:
             c = dark_palettes.get(n, dark_palettes["dark"])
@@ -10562,16 +10884,162 @@ class FlashGUIQt(QMainWindow):
 
         # light (and unknown) fallback remains intentionally safe and readable
         c = light_palettes.get(n, light_palettes["default"])
+
+        if n == "morph":
+            field_radius = "11px"
+            button_radius = "13px"
+            group_radius = "14px"
+            border_w = "1px"
+            focus_w = "2px"
+            toolbar_border_w = "0px"
+            sidebar_border_w = "0px"
+            sidebar_indicator_w = "5px"
+            status_radius = "10px"
+            button_bg = (
+                "qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                "stop:0 #ffffff, stop:1 #f0edff)"
+            )
+            button_hover = "#e8e2ff"
+            button_press = "#ddd6ff"
+            subtle_bg = "#f4f1ff"
+            log_bg = "#f7f5ff"
+            combo_drop_bg = "#f0edff"
+            progress_bg = "#f3f1ff"
+            progress_chunk = "#7c6bff"
+            read_bg, read_border, read_fg = "#dff6e8", "#9ed7b3", "#1b5b3d"
+            write_bg, write_border, write_fg = "#e5e8ff", "#a9b2ff", "#283f92"
+            verify_bg, verify_border, verify_fg = "#fff1db", "#eac68e", "#7a541d"
+            erase_bg, erase_border, erase_fg = "#ffe1e7", "#e8a4b2", "#842d41"
+            wp_bg, wp_border, wp_fg = "#efe6ff", "#c5b0ea", "#4f3587"
+            info_bg, info_border, info_fg = "#def5ff", "#9fcae0", "#1f5674"
+        elif n == "flatly":
+            field_radius = "4px"
+            button_radius = "4px"
+            group_radius = "5px"
+            border_w = "2px"
+            focus_w = "2px"
+            toolbar_border_w = "2px"
+            sidebar_border_w = "2px"
+            sidebar_indicator_w = "4px"
+            status_radius = "4px"
+            button_bg = "#f8fbff"
+            button_hover = "#e7edf5"
+            button_press = "#dfe6ef"
+            subtle_bg = "#eef3f8"
+            log_bg = "#f7fafc"
+            combo_drop_bg = "#e5edf6"
+            progress_bg = "#e8eef5"
+            progress_chunk = "#2c7be5"
+            read_bg, read_border, read_fg = "#1f8f47", "#1b7b3d", "#f6fffb"
+            write_bg, write_border, write_fg = "#2c7be5", "#1f66cd", "#f5f9ff"
+            verify_bg, verify_border, verify_fg = "#c6801f", "#a76915", "#fff9ef"
+            erase_bg, erase_border, erase_fg = "#c54656", "#a93a48", "#fff6f7"
+            wp_bg, wp_border, wp_fg = "#6753b8", "#5644a5", "#fbf9ff"
+            info_bg, info_border, info_fg = "#2a8d9d", "#247989", "#f1feff"
+        elif n == "default":
+            field_radius = "5px"
+            button_radius = "6px"
+            group_radius = "7px"
+            border_w = "1px"
+            focus_w = "2px"
+            toolbar_border_w = "2px"
+            sidebar_border_w = "2px"
+            sidebar_indicator_w = "3px"
+            status_radius = "5px"
+            button_bg = "#ffffff"
+            button_hover = "#e3e9f5"
+            button_press = "#d8e0f0"
+            subtle_bg = "#e9eef8"
+            log_bg = "#f4f7fc"
+            combo_drop_bg = "#e0e7f3"
+            progress_bg = "#e8edf7"
+            progress_chunk = "#4c5ab0"
+            read_bg, read_border, read_fg = "#d7f0e1", "#95c8ad", "#21503c"
+            write_bg, write_border, write_fg = "#dce5f8", "#9badde", "#213c78"
+            verify_bg, verify_border, verify_fg = "#f6e7cd", "#d9ba87", "#6e4f1e"
+            erase_bg, erase_border, erase_fg = "#f5d9de", "#d9a0aa", "#7c2f3f"
+            wp_bg, wp_border, wp_fg = "#e4dcf5", "#b6a5de", "#48367d"
+            info_bg, info_border, info_fg = "#d9edf3", "#9fc0ce", "#245062"
+        elif n == "light":
+            field_radius = "8px"
+            button_radius = "10px"
+            group_radius = "11px"
+            border_w = "1px"
+            focus_w = "3px"
+            toolbar_border_w = "1px"
+            sidebar_border_w = "1px"
+            sidebar_indicator_w = "4px"
+            status_radius = "8px"
+            button_bg = "#ffffff"
+            button_hover = "#d6eeff"
+            button_press = "#c6e5ff"
+            subtle_bg = "#f1f8ff"
+            log_bg = "#fafdff"
+            combo_drop_bg = "#dff1ff"
+            progress_bg = "#e9f5ff"
+            progress_chunk = "#00a2ff"
+            read_bg, read_border, read_fg = "#c8f4dd", "#7dd3ab", "#0f5c37"
+            write_bg, write_border, write_fg = "#d8ecff", "#8fc4f7", "#134f87"
+            verify_bg, verify_border, verify_fg = "#ffefcf", "#ebc077", "#7a5317"
+            erase_bg, erase_border, erase_fg = "#ffd9e1", "#ef9fb0", "#85253c"
+            wp_bg, wp_border, wp_fg = "#e7dcff", "#b9a0ea", "#4f3489"
+            info_bg, info_border, info_fg = "#d5f4ff", "#8ecde5", "#195973"
+        else:
+            field_radius = "6px"
+            button_radius = "6px"
+            group_radius = "8px"
+            border_w = "1px"
+            focus_w = "1px"
+            toolbar_border_w = "1px"
+            sidebar_border_w = "1px"
+            sidebar_indicator_w = "3px"
+            status_radius = "6px"
+            button_bg = c["field"]
+            button_hover = c["sidebar_hover"]
+            button_press = c["sidebar_sel"]
+            subtle_bg = c["field"]
+            log_bg = c["field"]
+            combo_drop_bg = c["toolbar"]
+            progress_bg = c["bg"]
+            progress_chunk = c["accent"]
+            read_bg, read_border, read_fg = "#1f8f47", "#36b468", "#f3fff7"
+            write_bg, write_border, write_fg = "#2e6fbe", "#4d8be0", "#f4f9ff"
+            verify_bg, verify_border, verify_fg = "#be7a23", "#d69a4c", "#fff9f0"
+            erase_bg, erase_border, erase_fg = "#b23a43", "#d35a62", "#fff5f6"
+            wp_bg, wp_border, wp_fg = "#5b49a8", "#7a67ca", "#f7f4ff"
+            info_bg, info_border, info_fg = "#257a86", "#3999a7", "#f2feff"
+
         self.setStyleSheet(
+            f"QMainWindow {{ background: {c['bg']}; }}"
             f"QWidget {{ background: {c['bg']}; color: {c['text']}; }}"
+            f"QGroupBox {{ border: {border_w} solid {c['border']}; border-radius: {group_radius}; margin-top: 10px; padding-top: 8px; background: {c['bg']}; }}"
+            f"QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 6px; color: {c['text']}; font-weight: 600; }}"
             f"QToolTip {{ background: {c['field']}; color: {c['text']}; border: 1px solid {c['border']}; padding: 4px; }}"
-            f"QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {{ background: {c['field']}; border: 1px solid {c['border']}; border-radius: 6px; padding: 6px; min-height: 30px; }}"
-            f"QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{ border: 1px solid {c['accent']}; }}"
-            f"QPushButton {{ background: {c['field']}; border: 1px solid {c['border']}; border-radius: 6px; padding: 7px 12px; min-height: 32px; }}"
-            f"QListWidget#sidebar::item:selected {{ background: {c['sidebar_sel']}; border-left: 3px solid {c['accent']}; }}"
-            f"QToolBar#mainToolbar {{ background: {c['toolbar']}; border-bottom: 1px solid {c['border']}; }}"
+            f"QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {{ background: {c['field']}; border: 1px solid {c['border']}; border-radius: {field_radius}; padding: 6px; min-height: 30px; }}"
+            f"QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{ border: {focus_w} solid {c['accent']}; }}"
+            f"QComboBox::drop-down {{ background: {combo_drop_bg}; border-left: 1px solid {c['border']}; width: 24px; border-top-right-radius: {button_radius}; border-bottom-right-radius: {button_radius}; }}"
+            f"QPushButton {{ background: {button_bg}; border: 1px solid {c['border']}; border-radius: {button_radius}; padding: 7px 12px; min-height: 32px; }}"
+            f"QPushButton:hover {{ background: {button_hover}; }}"
+            f"QPushButton:pressed {{ background: {button_press}; }}"
+            f"QPushButton[kind='subtle'] {{ background: {subtle_bg}; border-color: {c['border']}; }}"
+            f"QPushButton[kind='log'] {{ background: {c['sidebar_sel']}; border-color: {c['border']}; }}"
+            f"QPushButton[kind='read'] {{ background: {read_bg}; border: 1px solid {read_border}; color: {read_fg}; }}"
+            f"QPushButton[kind='write'] {{ background: {write_bg}; border: 1px solid {write_border}; color: {write_fg}; }}"
+            f"QPushButton[kind='verify'] {{ background: {verify_bg}; border: 1px solid {verify_border}; color: {verify_fg}; }}"
+            f"QPushButton[kind='erase'] {{ background: {erase_bg}; border: 1px solid {erase_border}; color: {erase_fg}; }}"
+            f"QPushButton[kind='wp'] {{ background: {wp_bg}; border: 1px solid {wp_border}; color: {wp_fg}; }}"
+            f"QPushButton[kind='info'] {{ background: {info_bg}; border: 1px solid {info_border}; color: {info_fg}; }}"
+            f"QListWidget#sidebar {{ border: {sidebar_border_w} solid {c['border']}; border-radius: {group_radius}; background: {c['field']}; }}"
+            f"QListWidget#sidebar::item {{ padding: 12px 14px; border-bottom: 1px solid {c['border']}; min-height: 20px; }}"
+            f"QListWidget#sidebar::item:selected {{ background: {c['sidebar_sel']}; border-left: {sidebar_indicator_w} solid {c['accent']}; }}"
+            f"QListWidget#sidebar::item:hover {{ background: {c['sidebar_hover']}; }}"
+            f"QToolBar#mainToolbar {{ background: {c['toolbar']}; border-bottom: {toolbar_border_w} solid {c['border']}; }}"
             "QLabel#toolbarLabel { font-weight: 600; margin-right: 2px; }"
-            f"QLabel#statusChip {{ background: {c['field']}; border: 1px solid {c['border']}; border-radius: 6px; padding: 3px 8px; }}"
+            f"QStatusBar#statusBar {{ background: {c['toolbar']}; border-top: {toolbar_border_w} solid {c['border']}; }}"
+            f"QLabel#statusChip {{ background: {c['field']}; border: 1px solid {c['border']}; border-radius: {status_radius}; padding: 3px 8px; }}"
+            f"QTextEdit#globalLog, QTextEdit#outputLog {{ background: {log_bg}; border: 1px solid {c['border']}; }}"
+            f"QProgressBar {{ background: {progress_bg}; border: 1px solid {c['border']}; border-radius: {button_radius}; text-align: center; }}"
+            f"QProgressBar::chunk {{ background: {progress_chunk}; border-radius: {button_radius}; }}"
             f"QSplitter::handle {{ background: {c['border']}; width: 2px; }}"
             f"QScrollBar:vertical {{ background: {c['bg']}; width: 12px; margin: 2px; border-radius: 6px; }}"
             f"QScrollBar::handle:vertical {{ background: {c['sidebar_sel']}; min-height: 26px; border-radius: 6px; }}"

@@ -129,14 +129,14 @@ Build/publish one-file executable with icon:
 
 Release bundle generated in this repo:
 
-- `release/flashgui-v1.1.1-windows-x64.zip`
+- `release/flashgui-v1.1.2-windows-x64.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.1`)
+- Create an annotated tag (example: `v1.1.2`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.1` and upload `release/flashgui-v1.1.1-windows-x64.zip`
+- Create a GitHub Release from tag `v1.1.2` and upload `release/flashgui-v1.1.2-windows-x64.zip`
 
 ## Mentions & thanks
 
