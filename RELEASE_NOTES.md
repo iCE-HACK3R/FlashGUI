@@ -1,5 +1,35 @@
 # Release Notes
 
+## v1.1.4
+
+### Highlights (v1.1.4)
+
+- Fixed Minipro progress handling while preserving existing `flashrom` / `flashprog` progress behavior.
+- Reduced noisy Minipro terminal output by cleaning duplicated ANSI/status spam in live logs.
+- Fixed Minipro erase action by switching to the correct uppercase `-E` flag.
+- Improved `FW Info` UX: now prompts for a `.dat` file or a folder containing `.dat` files.
+- Expanded Binwalk tooling:
+  - kept `Binwalk ROMs` (scan flow)
+  - added `Binwalk Extract & Analize` (extract + analyze flow)
+- Updated Help/About tested programmer list to include **T48**.
+
+### Documentation (v1.1.4)
+
+- Added Minipro T48 workflow screenshots to `README.md`.
+- Updated release/tag examples and artifact references to `v1.1.4`.
+
+### Version (v1.1.4)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.4"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.4"`
+
+### Build Artifact Targets (v1.1.4)
+
+- `release/flashgui-v1.1.4-windows-x64-portable.zip`
+- `release/flashgui-v1.1.4-linux-x64-portable.zip`
+- `release/flashgui-v1.1.4-macos-x64-portable.zip`
+
 ## v1.1.3
 
 ### Highlights (v1.1.3)

@@ -13,8 +13,10 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 ## What it does
 
 - Detects and uses either `flashrom` or `flashprog`
+- Supports `minipro` workflows (including T48/T56 class programmers)
 - Helps with programmer/chip probing and operation setup
 - Supports safer workflows (backup-first habits, explicit write actions, status logging)
+- Includes Binwalk tooling for ROM analysis and extract+analyze flows
 - Includes datasheet resolution helpers (including handling ambiguous chip-ID matches)
 
 ## Screenshots
@@ -46,6 +48,24 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 ![Erase ROM confirmation dialog (CH341A, MX25L1605)](screenshots/erase-rom-confirm-ch341a-mx25l1605.png)
 
 ![Erase ROM completed (CH341A, MX25L1605)](screenshots/erase-rom-complete-ch341a-mx25l1605.png)
+
+### Minipro T48 flow
+
+![Minipro T48 initialization](screenshots/minipro-t48-init.png)
+
+![Minipro T48 read progress](screenshots/minipro-t48-read-progress.png)
+
+![Minipro T48 read completed](screenshots/minipro-t48-read-completed.png)
+
+![Minipro T48 write progress](screenshots/minipro-t48-write-progress.png)
+
+![Minipro T48 write completed](screenshots/minipro-t48-write-complete.png)
+
+![Minipro T48 verify progress](screenshots/minipro-t48-verify-progress.png)
+
+![Minipro T48 verify completed](screenshots/minipro-t48-verify-complete.png)
+
+![Minipro T48 erase completed](screenshots/minipro-t48-erase-complete.png)
 
 ### Programmer terminal / console
 
@@ -169,14 +189,14 @@ Or use the cross-platform helper:
 
 Release bundle generated in this repo:
 
-- `release/flashgui-v1.1.3-windows-x64-portable.zip`
+- `release/flashgui-v1.1.4-windows-x64-portable.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.3`)
+- Create an annotated tag (example: `v1.1.4`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.3`
+- Create a GitHub Release from tag `v1.1.4`
 - CI will build on Windows/Linux/macOS and auto-attach generated portable artifacts to that release
 
 ## Mentions & thanks

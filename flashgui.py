@@ -76,7 +76,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.3"
+VERSION = "1.1.4"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -1444,6 +1444,29 @@ _FLASHPROG_PROGRESS = re.compile(
 # Value: human label (e.g. "EZP2020 serprog  [1a86:5722] → /dev/ttyACM0")
 _PROGRAMMER_LABEL_HINTS: dict[str, str] = {}
 _PROGRAMMER_BASE_LABEL_HINTS: dict[str, str] = {}
+_MINIPRO_PROGRAMMER_ARG = "minipro-usb"
+
+
+def _normalize_minipro_model_tokens(text: str) -> str:
+    """Normalize common minipro model tokens to canonical casing."""
+    if not text:
+        return ""
+
+    model_map = {
+        "t48": "T48",
+        "t56": "T56",
+        "t76": "T76",
+        "tl866": "TL866",
+        "tl866ii+": "TL866II+",
+        "tl866a/cs": "TL866A/CS",
+    }
+
+    return re.sub(
+        r"\b(t48|t56|t76|tl866ii\+|tl866a/cs|tl866)\b",
+        lambda m: model_map.get(m.group(1).lower(), m.group(1)),
+        str(text),
+        flags=re.IGNORECASE,
+    )
 
 
 def _programmer_friendly_name(prog: str) -> str:
@@ -1454,9 +1477,11 @@ def _programmer_friendly_name(prog: str) -> str:
 
     hinted = _PROGRAMMER_LABEL_HINTS.get(value, "").strip()
     if hinted:
-        return hinted.split("  [")[0].strip()
+        return _normalize_minipro_model_tokens(hinted.split("  [")[0].strip())
 
     base = value.split(":")[0].lower()
+    if base in {"minipro-usb", "minipro"}:
+        return "minipro USB programmer"
     base_hint = _PROGRAMMER_BASE_LABEL_HINTS.get(base, "").strip()
     if base_hint:
         return base_hint
@@ -1532,6 +1557,199 @@ def _list_programmers(binary: str) -> list[str]:
         return programmers
     except Exception:
         return []
+
+
+def _is_minipro_tool(tool: str, binary: str = "") -> bool:
+    t = (tool or "").strip().lower()
+    if t == "minipro":
+        return True
+    b = os.path.basename((binary or "").strip()).lower()
+    return b in {"minipro", "minipro.exe"}
+
+
+def _detect_minipro_hardware(minipro_binary: str) -> tuple[bool, str, list[str]]:
+    """Probe minipro hardware non-invasively and return (detected, label, output_lines).
+
+    IMPORTANT: this intentionally avoids ``-t`` (self-test), because self-test can
+    require the programmer to be disconnected from an inserted chip.
+    """
+    try:
+        proc = subprocess.run(
+            [minipro_binary, "-l"],
+            check=False,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=120,
+        )
+    except Exception:
+        return False, "", []
+
+    out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+    raw_lines = [ln.rstrip("\r\n") for ln in out.splitlines() if ln.strip()]
+
+    diag_prefixes = (
+        "found ",
+        "warning:",
+        "expected",
+        "device code:",
+        "serial code:",
+        "manufactured:",
+        "usb speed:",
+        "supply voltage:",
+    )
+    lines = [
+        _normalize_minipro_model_tokens(ln)
+        for ln in raw_lines
+        if ln.lower().startswith(diag_prefixes)
+    ]
+    if not lines:
+        lines = [_normalize_minipro_model_tokens(ln) for ln in raw_lines[:20]]
+
+    found_line = ""
+    for ln in raw_lines:
+        if ln.lower().startswith("found "):
+            found_line = _normalize_minipro_model_tokens(ln.strip())
+            break
+
+    if found_line:
+        label = found_line
+        _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = label
+        model = ""
+        model_match = re.search(r"\b(TL866II\+|TL866A/CS|TL866|T48|T56|T76)\b", label, re.IGNORECASE)
+        if model_match:
+            model = _normalize_minipro_model_tokens(model_match.group(1))
+        _PROGRAMMER_BASE_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = f"minipro USB ({model})" if model else "minipro USB"
+        return True, label, lines
+
+    return False, "", lines
+
+
+def _list_minipro_devices(minipro_binary: str, limit: int = 8192) -> list[str]:
+    """Return minipro part names from `minipro -l` output."""
+    try:
+        proc = subprocess.run(
+            [minipro_binary, "-l"],
+            check=False,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=120,
+        )
+    except Exception:
+        return []
+
+    lines = ((proc.stdout or "") + "\n" + (proc.stderr or "")).splitlines()
+    parts: list[str] = []
+    seen: set[str] = set()
+    skip_prefixes = (
+        "minipro version",
+        "usage:",
+        "see the manual",
+        "found ",
+        "warning:",
+        "device code:",
+        "serial code:",
+        "manufactured:",
+        "usb speed:",
+        "supply voltage:",
+    )
+
+    for raw in lines:
+        s = (raw or "").strip()
+        if not s:
+            continue
+        if s.lower().startswith(skip_prefixes):
+            continue
+        token = s.split()[0].strip()
+        if not token:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9@._()+\-/]+", token):
+            continue
+        k = token.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        parts.append(token)
+        if len(parts) >= limit:
+            break
+    return parts
+
+
+def _autodetect_minipro_spi_devices(minipro_binary: str) -> tuple[bool, str, list[str], list[str], str]:
+    """Autodetect SPI 25xx devices using minipro ``-a``.
+
+    Returns ``(detected_programmer, label, chips, lines, bus_width)`` where
+    ``bus_width`` is either ``"8"`` / ``"16"`` when a match is found.
+    """
+    all_lines: list[str] = []
+    found_line = ""
+
+    def _collect_candidates(lines: list[str]) -> list[str]:
+        chips: list[str] = []
+        seen: set[str] = set()
+        for raw in lines:
+            s = (raw or "").strip()
+            if not s:
+                continue
+            lo = s.lower()
+            if (
+                lo.startswith("found ")
+                or lo.startswith("warning:")
+                or lo.startswith("expected")
+                or lo.startswith("device code:")
+                or lo.startswith("serial code:")
+                or lo.startswith("manufactured:")
+                or lo.startswith("usb speed:")
+                or lo.startswith("supply voltage:")
+                or lo.startswith("autodetecting device")
+                or lo.endswith("device(s) found.")
+            ):
+                continue
+            if not re.fullmatch(r"[A-Za-z0-9@._()+\-/]+", s):
+                continue
+            k = s.lower()
+            if k in seen:
+                continue
+            seen.add(k)
+            chips.append(s)
+        return chips
+
+    for width in ("8", "16"):
+        try:
+            proc = subprocess.run(
+                [minipro_binary, "-a", width],
+                check=False,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=60,
+            )
+        except Exception:
+            continue
+
+        raw_lines = [ln.rstrip("\r\n") for ln in ((proc.stdout or "") + "\n" + (proc.stderr or "")).splitlines() if ln.strip()]
+        norm_lines = [_normalize_minipro_model_tokens(ln) for ln in raw_lines]
+        all_lines.extend(norm_lines)
+
+        if not found_line:
+            for ln in norm_lines:
+                if ln.lower().startswith("found "):
+                    found_line = ln.strip()
+                    break
+
+        chips = _collect_candidates(norm_lines)
+        if chips:
+            if found_line:
+                _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = found_line
+                model = ""
+                model_match = re.search(r"\b(TL866II\+|TL866A/CS|TL866|T48|T56|T76)\b", found_line, re.IGNORECASE)
+                if model_match:
+                    model = _normalize_minipro_model_tokens(model_match.group(1))
+                _PROGRAMMER_BASE_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = f"minipro USB ({model})" if model else "minipro USB"
+            return bool(found_line), found_line, chips, norm_lines[:120], width
+
+    return bool(found_line), found_line, [], all_lines[:120], ""
 
 
 def _with_internal_programmer(programmers: list[str]) -> list[str]:
@@ -1860,7 +2078,12 @@ def _build_rom_filename(workspace: str, chip: str, prog: str, tool: str = "") ->
     chip_clean = re.sub(r"[^A-Za-z0-9]", "", chip)
     prog_label = _programmer_display_label(prog)
     tool_key = (tool or "").strip().lower()
-    tool_prefix = "FR" if tool_key == "flashrom" else "FP" if tool_key == "flashprog" else ""
+    tool_prefix = (
+        "FR" if tool_key == "flashrom" else
+        "FP" if tool_key == "flashprog" else
+        "MP" if tool_key == "minipro" else
+        ""
+    )
     dt = datetime.now().strftime("%d%m%y%H%M")
     core = f"{prog_label}_{chip_clean}_{dt}.bin"
     fname = f"{tool_prefix}_{core}" if tool_prefix else core
@@ -2775,8 +2998,22 @@ def _run_command_progress(
         r"(erase/write done|erase done|write done|verified|verification.*(?:ok|success)|read:\s*100%)",
         re.IGNORECASE,
     )
+    _ansi_re = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+    _minipro_prog_re = re.compile(r"^(Reading|Writing|Erasing|Verifying)\b.*?(\d{1,3})%$", re.IGNORECASE)
+
+    is_minipro_cmd = bool(cmd) and os.path.basename(str(cmd[0]).strip()).lower() in {"minipro", "minipro.exe"}
+
     pct_state = {"last": -1}
     pct_lock = threading.Lock()
+    minipro_state = {
+        "last_pct": -1,
+        "last_line": "",
+    }
+
+    def _clean_line(raw: str) -> str:
+        s = _ansi_re.sub("", str(raw or ""))
+        s = s.replace("\r", "")
+        return s.strip()
 
     def _emit_pct(value: int) -> None:
         if pct_callback is None:
@@ -2787,6 +3024,34 @@ def _run_command_progress(
                 return
             pct_state["last"] = pct
         pct_callback(pct)
+
+    def _emit_line(line: str) -> None:
+        cleaned = _clean_line(line)
+        if not cleaned:
+            return
+
+        if is_minipro_cmd:
+            m_prog = _minipro_prog_re.match(cleaned)
+            if m_prog:
+                pct = max(0, min(100, int(m_prog.group(2))))
+                _emit_pct(pct)
+                if pct == minipro_state["last_pct"]:
+                    return
+                minipro_state["last_pct"] = pct
+                verb = m_prog.group(1).capitalize()
+                cleaned = f"{verb}... {pct}%"
+
+            if cleaned == minipro_state["last_line"]:
+                return
+            minipro_state["last_line"] = cleaned
+
+        out_queue.put(cleaned)
+
+        m = _pct_re.search(cleaned)
+        if m:
+            _emit_pct(int(m.group(1)))
+        elif _done_re.search(cleaned):
+            _emit_pct(100)
     run_cmd, stdin_text = _with_optional_sudo_for_internal(
         cmd, use_sudo=use_sudo, sudo_password=sudo_password
     )
@@ -2819,14 +3084,7 @@ def _run_command_progress(
 
         def _read_log(stream: object) -> None:
             for raw in stream:  # type: ignore[union-attr]
-                line = raw.rstrip("\r\n")
-                if line.strip():
-                    out_queue.put(line)
-                    m = _pct_re.search(line)
-                    if m:
-                        _emit_pct(int(m.group(1)))
-                    elif _done_re.search(line):
-                        _emit_pct(100)
+                _emit_line(str(raw).rstrip("\n"))
 
         def _read_progress(stream: object) -> None:
             buf = ""
@@ -2838,14 +3096,7 @@ def _run_command_progress(
                     if buf:
                         buf = buf[:-1]
                 elif ch == "\n":
-                    line = buf.strip()
-                    if line:
-                        out_queue.put(line)
-                        m_line = _pct_re.search(line)
-                        if m_line:
-                            _emit_pct(int(m_line.group(1)))
-                        elif _done_re.search(line):
-                            _emit_pct(100)
+                    _emit_line(buf)
                     buf = ""
                 else:
                     buf += ch
@@ -2857,11 +3108,7 @@ def _run_command_progress(
 
             tail = buf.strip()
             if tail:
-                m_tail = _pct_re.search(tail)
-                if m_tail:
-                    _emit_pct(int(m_tail.group(1)))
-                elif _done_re.search(tail):
-                    _emit_pct(100)
+                _emit_line(tail)
 
         t_out = threading.Thread(target=_read_progress, args=(proc.stdout,), daemon=True)
         t_err = threading.Thread(target=_read_log,      args=(proc.stderr,), daemon=True)
@@ -3146,6 +3393,28 @@ class _ChipMixin:
     progress: _ProgressFrame
 
     def _autodetect(self) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append("minipro mode: autodetecting SPI chip via -a 8 (fallback -a 16)…")
+            self.progress.pulse_start()
+
+            def _worker_minipro() -> None:
+                detected, label, chips, lines, bus = _autodetect_minipro_spi_devices(self.state.binary)
+                for ln in lines[:60]:
+                    _safe_after(self.root, 0, lambda l=ln: self.log.append(l))
+                if detected:
+                    self.state.programmer = _MINIPRO_PROGRAMMER_ARG
+                    if label:
+                        _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = label
+                hint = None
+                if not chips:
+                    hint = "No SPI devices matched via minipro -a 8/-a 16. Check chip seating/orientation and try again."
+                elif bus:
+                    _safe_after(self.root, 0, lambda b=bus: self.log.append(f"Autodetect matched {len(chips)} device(s) on SPI{b}."))
+                _safe_after(self.root, 0, lambda: self._autodetect_done(chips, self.state.programmer or None, hint))
+
+            threading.Thread(target=_worker_minipro, daemon=False).start()
+            return
+
         if not self.state.programmer:
             self.log.append("Select a programmer first.")
             return
@@ -3382,17 +3651,21 @@ class PageRead(_ChipMixin):
     def _run(self) -> None:
         fp = self.file_var.get().strip()
         chip = self.chip_var.get().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
         if not fp:
             self.log.append("ERROR: Select a save path first.")
             return
         if not chip:
             self.log.append("ERROR: Run Detect ROM to find a chip first.")
             return
-        if not self.state.programmer:
+        if not is_minipro and not self.state.programmer:
             self.log.append("ERROR: Select a programmer first.")
             return
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-r", fp]
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-r", fp]
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-r", fp]
         run_cmd, stdin_text = _with_optional_sudo_for_internal(
             cmd,
             use_sudo=self.state.use_sudo,
@@ -3700,13 +3973,14 @@ class PageWrite(_ChipMixin):
     def _run(self) -> None:
         fp = self.file_var.get().strip()
         chip = self.chip_var.get().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
         if not fp or not os.path.isfile(fp):
             self.log.append("ERROR: Select a valid ROM file.")
             return
         if not chip:
             self.log.append("ERROR: Run Detect ROM first.")
             return
-        if not self.state.programmer:
+        if not is_minipro and not self.state.programmer:
             self.log.append("ERROR: Select a programmer first.")
             return
 
@@ -3719,7 +3993,7 @@ class PageWrite(_ChipMixin):
             return
 
         actual_fp = fp
-        if self.opt_pad.get():
+        if self.opt_pad.get() and not is_minipro:
             size = _get_chip_size(self.state.binary, self.state.programmer, chip)
             if size:
                 actual_fp = _pad_file(fp, size, self.state.tmpdir)
@@ -3727,8 +4001,11 @@ class PageWrite(_ChipMixin):
             else:
                 self.log.append("WARNING: Could not determine chip size — skipping padding.")
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-w", actual_fp]
-        if self.opt_noverify.get():
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-w", actual_fp]
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-w", actual_fp]
+        if self.opt_noverify.get() and not is_minipro:
             cmd.append("-n")
 
         self.progress.stop_reset()
@@ -3776,7 +4053,7 @@ class PageWrite(_ChipMixin):
                     had_error[0] = True
                     _safe_after(root_ref, 0, lambda e=exc: log_ref.append(f"ERROR: post-write hashing failed: {e}"))
 
-            if rc == 0 and file_exists and do_verify_hash_readback:
+            if rc == 0 and file_exists and do_verify_hash_readback and not is_minipro:
                 verify_tmp = os.path.join(
                     self.state.tmpdir,
                     f"verify_readback_{int(time.time() * 1000)}.bin",
@@ -3784,10 +4061,8 @@ class PageWrite(_ChipMixin):
                 q_verify: queue.Queue[str] = queue.Queue()
                 verify_cmd = [
                     self.state.binary,
-                    "-p",
-                    self.state.programmer,
-                    "-c",
-                    chip,
+                    "-p", self.state.programmer,
+                    "-c", chip,
                     "-r",
                     verify_tmp,
                 ]
@@ -3990,17 +4265,21 @@ class PageVerify(_ChipMixin):
     def _run(self) -> None:
         fp = self.file_var.get().strip()
         chip = self.chip_var.get().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
         if not fp or not os.path.isfile(fp):
             self.log.append("ERROR: Select a valid file.")
             return
         if not chip:
             self.log.append("ERROR: Run Detect ROM first.")
             return
-        if not self.state.programmer:
+        if not is_minipro and not self.state.programmer:
             self.log.append("ERROR: Select a programmer first.")
             return
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-v", fp]
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-m", fp]
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-v", fp]
         self.progress.stop_reset()
         self.sha256_var.set("—")
         self.elapsed_var.set("—")
@@ -4190,10 +4469,11 @@ class PageErase(_ChipMixin):
 
     def _run(self) -> None:
         chip = self.chip_var.get().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
         if not chip:
             self.log.append("ERROR: Run Detect ROM first.")
             return
-        if not self.state.programmer:
+        if not is_minipro and not self.state.programmer:
             self.log.append("ERROR: Select a programmer first.")
             return
 
@@ -4204,7 +4484,10 @@ class PageErase(_ChipMixin):
         ):
             return
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-E"]
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-E"]
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-E"]
         self.progress.stop_reset()
         self.sha256_var.set("N/A")
         self.elapsed_var.set("—")
@@ -4393,6 +4676,9 @@ class PageWriteProtect(_ChipMixin):
         self.output_text.config(state="disabled")
 
     def _wp(self, flag: str) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append("ERROR: Write-Protect controls are not supported in minipro mode.")
+            return
         chip = self.chip_var.get().strip()
         if not chip or not self.state.programmer:
             self.log.append("ERROR: Select programmer and detect chip first.")
@@ -4401,6 +4687,9 @@ class PageWriteProtect(_ChipMixin):
         self._run_cmd(cmd)
 
     def _wp_range(self) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append("ERROR: Write-Protect controls are not supported in minipro mode.")
+            return
         chip = self.chip_var.get().strip()
         rng = self.wp_range_var.get().strip()
         if not chip or not self.state.programmer or not rng:
@@ -4410,6 +4699,9 @@ class PageWriteProtect(_ChipMixin):
         self._run_cmd(cmd)
 
     def _wp_region(self) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append("ERROR: Write-Protect controls are not supported in minipro mode.")
+            return
         chip = self.chip_var.get().strip()
         region = self.wp_region_var.get().strip()
         if not chip or not self.state.programmer or not region:
@@ -4580,7 +4872,8 @@ class PageInfo(_ChipMixin):
         if not chip:
             self.log.append("ERROR: Run Detect ROM first.")
             return
-        if not self.state.programmer:
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if not is_minipro and not self.state.programmer:
             self.log.append("ERROR: Select a programmer first.")
             return
         self.progress.pulse_start()
@@ -4664,7 +4957,37 @@ class PageInfo(_ChipMixin):
             wp = "N/A"
 
             try:
-                if tool != "flashprog":
+                if _is_minipro_tool(tool, binary):
+                    proc = subprocess.run(
+                        [binary, "-d", chip],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        errors="replace",
+                        timeout=45,
+                    )
+                    out_lines = ((proc.stdout or "") + (proc.stderr or "")).splitlines()
+                    model = chip
+                    vendor = "N/A"
+                    size_str = "N/A"
+                    wp = "N/A"
+                    for ln in out_lines:
+                        s = (ln or "").strip()
+                        lo = s.lower()
+                        m_name = re.match(r"^Name:\s*(.+)$", s, re.IGNORECASE)
+                        if m_name:
+                            model = m_name.group(1).strip() or model
+                        m_mem = re.match(r"^Memory:\s*(.+)$", s, re.IGNORECASE)
+                        if m_mem:
+                            size_str = m_mem.group(1).strip() or size_str
+                        if vendor == "N/A" and (m_name or lo.startswith("name:")):
+                            name_val = (m_name.group(1).strip() if m_name else s.split(":", 1)[-1].strip())
+                            vm = re.match(r"^([A-Za-z]+)", name_val)
+                            if vm:
+                                vendor = vm.group(1)
+                    for ln in out_lines[:80]:
+                        _safe_after(self.root, 0, lambda l=ln: self.log.append(l))
+                elif tool != "flashprog":
                     # ── flashrom: single call to --wp-status gives Found line + WP ──
                     try:
                         probe_cmd, probe_stdin = _with_optional_sudo_for_internal(
@@ -4790,23 +5113,39 @@ class PageSettings:
                    command=lambda: self._browse_binary(self.flashprog_var, "Select flashprog binary")
                    ).grid(row=3, column=2, columnspan=2, pady=3)
 
+        ttk.Label(lf1, text="minipro binary:").grid(row=4, column=0, sticky="e", pady=3)
+        self.minipro_var = tk.StringVar(value=self.state.minipro_bin)
+        ttk.Entry(lf1, textvariable=self.minipro_var, width=50).grid(row=4, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8,
+               command=lambda: self._browse_binary(self.minipro_var, "Select minipro binary")
+               ).grid(row=4, column=2, columnspan=2, pady=3)
+
+        ttk.Label(lf1, text="fwinfo binary:").grid(row=5, column=0, sticky="e", pady=3)
+        self.fwinfo_var = tk.StringVar(value=self.state.fwinfo_bin)
+        ttk.Entry(lf1, textvariable=self.fwinfo_var, width=50).grid(row=5, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8,
+               command=lambda: self._browse_binary(self.fwinfo_var, "Select fwinfo binary")
+               ).grid(row=5, column=2, columnspan=2, pady=3)
+
         self.flashrom_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
         self.flashprog_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
+        self.minipro_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
+        self.fwinfo_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
 
-        ttk.Label(lf1, text="Workspace path:").grid(row=4, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="Workspace path:").grid(row=6, column=0, sticky="e", pady=3)
         self.workspace_var = tk.StringVar(value=self.state.workspace_dir)
-        ttk.Entry(lf1, textvariable=self.workspace_var, width=50).grid(row=4, column=1, sticky="ew", padx=(6, 4), pady=3)
-        ttk.Button(lf1, text="Browse", width=8, command=self._browse_workspace).grid(row=4, column=2, columnspan=2, pady=3)
+        ttk.Entry(lf1, textvariable=self.workspace_var, width=50).grid(row=6, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8, command=self._browse_workspace).grid(row=6, column=2, columnspan=2, pady=3)
 
-        ttk.Label(lf1, text="Window geometry:").grid(row=5, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="Window geometry:").grid(row=7, column=0, sticky="e", pady=3)
         self.geometry_var = tk.StringVar(value=self.state.window_geometry or self.app.root.geometry())
-        ttk.Entry(lf1, textvariable=self.geometry_var, width=50).grid(row=5, column=1, sticky="ew", padx=(6, 4), pady=3)
-        ttk.Button(lf1, text="Acquire", width=8, command=self._capture_geometry).grid(row=5, column=2, columnspan=2, pady=3)
+        ttk.Entry(lf1, textvariable=self.geometry_var, width=50).grid(row=7, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Acquire", width=8, command=self._capture_geometry).grid(row=7, column=2, columnspan=2, pady=3)
 
-        ttk.Label(lf1, text="Log file path:").grid(row=6, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="Log file path:").grid(row=8, column=0, sticky="e", pady=3)
         self.log_file_var = tk.StringVar(value=self.state.log_file_path)
-        ttk.Entry(lf1, textvariable=self.log_file_var, width=50).grid(row=6, column=1, sticky="ew", padx=(6, 4), pady=3)
-        ttk.Button(lf1, text="Browse", width=8, command=self._browse_log_file).grid(row=6, column=2, columnspan=2, pady=3)
+        ttk.Entry(lf1, textvariable=self.log_file_var, width=50).grid(row=8, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8, command=self._browse_log_file).grid(row=8, column=2, columnspan=2, pady=3)
 
         # ── Behavior ─────────────────────────────────────────────────────────
         lf2 = ttk.LabelFrame(outer, text="Behavior", padding=6)
@@ -4929,6 +5268,15 @@ class PageSettings:
         self.btn_install_guide = ttk.Button(lf4, text="Install Guide", width=14,
                    command=self._download_binaries)
         self.btn_install_guide.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
+        col += 1
+        ttk.Button(lf4, text="fwinfo", width=9,
+               command=self._diag_fwinfo).grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
+        col += 1
+        ttk.Button(lf4, text="FW update", width=10,
+               command=self._diag_fw_update).grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
+        col += 1
+        ttk.Button(lf4, text="Self-test (-t)", width=13,
+               command=self._diag_self_test).grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
         col += 1
         
         if sys.platform.startswith("win"):
@@ -5120,6 +5468,8 @@ class PageSettings:
         checks = [
             (self.flashrom_var.get().strip(), "flashrom"),
             (self.flashprog_var.get().strip(), "flashprog"),
+            (self.minipro_var.get().strip(), "minipro"),
+            (self.fwinfo_var.get().strip(), "fwinfo"),
         ]
         for configured, fallback in checks:
             if configured:
@@ -5141,8 +5491,13 @@ class PageSettings:
         log.append("=== Fix dependencies ===")
 
         missing_tools: list[str] = []
-        for tool in ("flashrom", "flashprog"):
-            configured = self.state.flashrom_bin if tool == "flashrom" else self.state.flashprog_bin
+        for tool in ("flashrom", "flashprog", "minipro", "fwinfo"):
+            configured = (
+                self.state.flashrom_bin if tool == "flashrom" else
+                self.state.flashprog_bin if tool == "flashprog" else
+                self.state.minipro_bin if tool == "minipro" else
+                self.state.fwinfo_bin
+            )
             found = shutil.which(configured) if configured else shutil.which(tool)
             if not found:
                 missing_tools.append(tool)
@@ -5223,6 +5578,8 @@ class PageSettings:
             for label, path in [
                 ("flashrom",  self.state.flashrom_bin),
                 ("flashprog", self.state.flashprog_bin),
+                ("minipro", self.state.minipro_bin),
+                ("fwinfo", self.state.fwinfo_bin),
             ]:
                 if not path or not os.path.isfile(path):
                     continue
@@ -5411,6 +5768,8 @@ class PageSettings:
             for label, path in [
                 ("flashrom",  self.state.flashrom_bin  or "flashrom"),
                 ("flashprog", self.state.flashprog_bin or "flashprog"),
+                ("minipro", self.state.minipro_bin or "minipro"),
+                ("fwinfo", self.state.fwinfo_bin or "fwinfo"),
             ]:
                 found = shutil.which(path) or shutil.which(label)
                 if found:
@@ -5445,6 +5804,8 @@ class PageSettings:
             for label, path in [
                 ("flashrom",  self.state.flashrom_bin),
                 ("flashprog", self.state.flashprog_bin),
+                ("minipro", self.state.minipro_bin),
+                ("fwinfo", self.state.fwinfo_bin),
             ]:
                 if not path:
                     lines.append(f"  {label}: (using system PATH — skipping)")
@@ -5610,6 +5971,8 @@ class PageSettings:
             "font_size": self.font_size_var.get(),
             "flashrom_bin": self.flashrom_var.get(),
             "flashprog_bin": self.flashprog_var.get(),
+            "minipro_bin": self.minipro_var.get(),
+            "fwinfo_bin": self.fwinfo_var.get(),
             "workspace_dir": self.workspace_var.get(),
             "window_geometry": self.geometry_var.get(),
             "log_file_path": self.log_file_var.get(),
@@ -5649,6 +6012,8 @@ class PageSettings:
             pass
         self.flashrom_var.set(str(data.get("flashrom_bin", "")))
         self.flashprog_var.set(str(data.get("flashprog_bin", "")))
+        self.minipro_var.set(str(data.get("minipro_bin", "")))
+        self.fwinfo_var.set(str(data.get("fwinfo_bin", "")))
         self.workspace_var.set(str(data.get("workspace_dir", self.state.workspace_dir)))
         self.geometry_var.set(str(data.get("window_geometry", "")))
         self.log_file_var.set(str(data.get("log_file_path", "")))
@@ -5673,6 +6038,8 @@ class PageSettings:
         self.font_var.set(_FONT_PRESETS[0] if _FONT_PRESETS else "")
         self.flashrom_var.set("")
         self.flashprog_var.set("")
+        self.minipro_var.set("")
+        self.fwinfo_var.set("")
         self.workspace_var.set(script_dir)
         self.geometry_var.set("")
         self.log_file_var.set(os.path.join(script_dir, "flashgui.log"))
@@ -5697,6 +6064,8 @@ class PageSettings:
             self.state.beep_on_complete = self.beep_var.get()
             self.state.flashrom_bin   = self.flashrom_var.get().strip()
             self.state.flashprog_bin  = self.flashprog_var.get().strip()
+            self.state.minipro_bin    = self.minipro_var.get().strip()
+            self.state.fwinfo_bin     = self.fwinfo_var.get().strip()
 
             workspace = self.workspace_var.get().strip()
             if workspace:
@@ -5753,6 +6122,96 @@ class PageSettings:
         except Exception as e:
             self.app.log.append(f"ERROR: Failed to apply settings: {e}")
 
+    def _run_diag_capture(self, title: str, cmd: list[str]) -> None:
+        self.app.log.append(f"=== {title} ===")
+        self.app.log.append(f"$ {' '.join(cmd)}")
+        lines: list[str] = []
+
+        def _worker() -> None:
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                    timeout=240,
+                    cwd=self.state.workspace_dir,
+                    check=False,
+                )
+                out = ((proc.stdout or "") + ("\n" if proc.stdout and proc.stderr else "") + (proc.stderr or "")).strip()
+                if out:
+                    lines.extend(out.splitlines())
+                lines.append(f"Exit code: {proc.returncode}")
+            except Exception as exc:
+                lines.append(f"ERROR: {exc}")
+
+        def _done() -> None:
+            for line in lines:
+                self.app.log.append(line)
+            self.app.log.append("=== end ===")
+
+        self._run_background(title, _worker, _done)
+
+    def _diag_fwinfo(self) -> None:
+        fwinfo = self.state.fwinfo_bin or _resolve_binary("fwinfo", "FLASHGUI_FWINFO_BIN")
+        if not (shutil.which(fwinfo) or os.path.isfile(fwinfo)):
+            self.app.log.append("ERROR: fwinfo binary not found. Set path in Settings.")
+            return
+
+        pick_mode = messagebox.askyesnocancel(
+            "Firmware Info (fwinfo)",
+            "Select input type for fwinfo:\n\n"
+            "Yes = Choose a .dat file\n"
+            "No = Choose a folder containing .dat files\n"
+            "Cancel = Abort",
+            parent=self.frame,
+        )
+        if pick_mode is None:
+            return
+
+        if pick_mode:
+            target = filedialog.askopenfilename(
+                title="Select .dat file",
+                initialdir=self.state.workspace_dir,
+                filetypes=[("DAT Files", "*.dat"), ("All Files", "*.*")],
+            )
+            if not target:
+                return
+        else:
+            target = filedialog.askdirectory(
+                title="Select folder containing .dat files",
+                initialdir=self.state.workspace_dir,
+            )
+            if not target:
+                return
+            dats = [f for f in os.listdir(target) if f.lower().endswith(".dat")]
+            if not dats:
+                self.app.log.append("ERROR: Selected folder does not contain any *.dat files.")
+                return
+
+        self._run_diag_capture("Firmware Info (fwinfo)", [fwinfo, target])
+
+    def _diag_fw_update(self) -> None:
+        minipro = self.state.minipro_bin or _resolve_binary("minipro", "FLASHGUI_MINIPRO_BIN")
+        if not (shutil.which(minipro) or os.path.isfile(minipro)):
+            self.app.log.append("ERROR: minipro binary not found. Set path in Settings.")
+            return
+        fw_path = filedialog.askopenfilename(
+            title="Select minipro firmware file",
+            initialdir=self.state.workspace_dir,
+            filetypes=[("Firmware", "*.bin *.hex *.fw *.upd"), ("All", "*.*")],
+        )
+        if not fw_path:
+            return
+        self._run_diag_capture("Firmware Update", [minipro, "-u", fw_path])
+
+    def _diag_self_test(self) -> None:
+        minipro = self.state.minipro_bin or _resolve_binary("minipro", "FLASHGUI_MINIPRO_BIN")
+        if not (shutil.which(minipro) or os.path.isfile(minipro)):
+            self.app.log.append("ERROR: minipro binary not found. Set path in Settings.")
+            return
+        self._run_diag_capture("Hardware Self-Test (-t)", [minipro, "-t"])
+
 
 # ────────────────────────── app state ─────────────────────────────────────────
 
@@ -5778,11 +6237,13 @@ class AppState:
                     pass
 
         self.tool = str(self.settings.get("tool", "flashrom"))
-        if self.tool not in {"flashrom", "flashprog"}:
+        if self.tool not in {"flashrom", "flashprog", "minipro"}:
             self.tool = "flashrom"
 
         self.flashrom_bin   = str(self.settings.get("flashrom_bin",  "")).strip()
         self.flashprog_bin  = str(self.settings.get("flashprog_bin", "")).strip()
+        self.minipro_bin    = str(self.settings.get("minipro_bin", "")).strip()
+        self.fwinfo_bin     = str(self.settings.get("fwinfo_bin", "")).strip()
         self.workspace_dir  = (
             str(self.settings.get("workspace_dir", "")).strip()
             or _default_workspace_dir()
@@ -5846,7 +6307,11 @@ class AppState:
     def resolve_tool_binary(self, tool: str) -> str:
         if tool == "flashrom":
             return self.flashrom_bin or _resolve_binary("flashrom", "FLASHGUI_FLASHROM_BIN")
-        return self.flashprog_bin or _resolve_binary("flashprog", "FLASHGUI_FLASHPROG_BIN")
+        if tool == "flashprog":
+            return self.flashprog_bin or _resolve_binary("flashprog", "FLASHGUI_FLASHPROG_BIN")
+        if tool == "minipro":
+            return self.minipro_bin or _resolve_binary("minipro", "FLASHGUI_MINIPRO_BIN")
+        return tool
 
     def verbose_arg(self) -> str | None:
         lvl = max(0, min(3, int(self.verbose_level)))
@@ -5869,6 +6334,8 @@ class AppState:
             "tool":                   self.tool,
             "flashrom_bin":           self.flashrom_bin,
             "flashprog_bin":          self.flashprog_bin,
+            "minipro_bin":            self.minipro_bin,
+            "fwinfo_bin":             self.fwinfo_bin,
             "workspace_dir":          self.workspace_dir,
             "preferred_font":         self.preferred_font,
             "console_font":           self.console_font,
@@ -5897,10 +6364,14 @@ def _startup_runtime_log_lines(state: AppState) -> list[str]:
     os_name = platform.system().strip() or sys.platform
     flashrom_bin = state.resolve_tool_binary("flashrom")
     flashprog_bin = state.resolve_tool_binary("flashprog")
+    minipro_bin = state.resolve_tool_binary("minipro")
+    fwinfo_bin = state.fwinfo_bin or _resolve_binary("fwinfo", "FLASHGUI_FWINFO_BIN")
     return [
         f"OS Detected: {os_name}",
         f"Using Binary for flashrom: {flashrom_bin}",
         f"Using Binary for flashprog: {flashprog_bin}",
+        f"Using Binary for minipro: {minipro_bin}",
+        f"Using Binary for fwinfo: {fwinfo_bin}",
     ]
 
 
@@ -5968,7 +6439,7 @@ class FlashGUI:
         ttk.Label(bar, text="Tool Selection:").grid(row=0, column=0, sticky="e", padx=(0, 4))
         self.tool_var = tk.StringVar(value=self.state.tool)
         tool_combo = ttk.Combobox(bar, textvariable=self.tool_var,
-                                  values=["flashrom", "flashprog"], width=12, state="readonly")
+                                  values=["flashrom", "flashprog", "minipro"], width=12, state="readonly")
         tool_combo.grid(row=0, column=1, sticky="w")
         tool_combo.bind("<<ComboboxSelected>>", self._on_tool_change)
 
@@ -6188,21 +6659,39 @@ class FlashGUI:
 
         def _worker() -> None:
             ver = _get_version(self.state.binary)
-            progs = _list_programmers(self.state.binary)
+            if _is_minipro_tool(tool, self.state.binary):
+                progs = [_MINIPRO_PROGRAMMER_ARG]
+            else:
+                progs = _list_programmers(self.state.binary)
             _safe_after(self.root, 0, lambda v=ver, p=progs: self._set_tool_refresh_result(v, p))
 
         threading.Thread(target=_worker, daemon=False).start()
 
     def _set_tool_refresh_result(self, ver: str | None, progs: list[str]) -> None:
-        if sys.platform.startswith("win"):
-            progs = progs + [p for p, _label in _detect_programmer_serial_windows()]
-        elif sys.platform == "darwin":
-            progs = progs + [p for p, _label in _detect_programmer_serial_posix()]
+        if not _is_minipro_tool(self.state.tool, self.state.binary):
+            if sys.platform.startswith("win"):
+                progs = progs + [p for p, _label in _detect_programmer_serial_windows()]
+            elif sys.platform == "darwin":
+                progs = progs + [p for p, _label in _detect_programmer_serial_posix()]
         self.log.append(f"Tool version: {ver or 'unknown'}")
         self._set_programmers(progs)
 
     def _set_programmers(self, progs: list[str]) -> None:
-        progs = _with_internal_programmer(progs)
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            uniq: list[str] = []
+            seen: set[str] = set()
+            for p in progs:
+                s = (p or "").strip()
+                if not s:
+                    continue
+                k = s.lower()
+                if k in seen:
+                    continue
+                seen.add(k)
+                uniq.append(s)
+            progs = uniq or [_MINIPRO_PROGRAMMER_ARG]
+        else:
+            progs = _with_internal_programmer(progs)
         self._programmer_manual_override = False
         self._programmer_updating = True
         try:
@@ -6211,6 +6700,10 @@ class FlashGUI:
             if current:
                 self.programmer_var.set(current)
                 self.state.programmer = current
+                return
+            if _is_minipro_tool(self.state.tool, self.state.binary) and progs:
+                self.programmer_var.set(progs[0])
+                self.state.programmer = progs[0]
                 return
         finally:
             self._programmer_updating = False
@@ -6229,6 +6722,19 @@ class FlashGUI:
             self.log.append(f"Programmer set to {self.state.programmer}")
 
     def _on_detect_programmer(self) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append("Probing minipro USB programmer (T48/TL866)…")
+
+            def _worker_minipro() -> None:
+                hits: list[tuple[str, str]] = []
+                detected, label, lines = _detect_minipro_hardware(self.state.binary)
+                if detected:
+                    hits = [(_MINIPRO_PROGRAMMER_ARG, label or "minipro USB programmer")]
+                _safe_after(self.root, 0, lambda lns=lines, h=hits: self._apply_detected_minipro_programmer(lns, h))
+
+            threading.Thread(target=_worker_minipro, daemon=False).start()
+            return
+
         if sys.platform.startswith("win"):
             self.log.append("Scanning Windows serial ports for programmer devices…")
         elif sys.platform == "darwin":
@@ -6241,6 +6747,26 @@ class FlashGUI:
             _safe_after(self.root, 0, lambda: self._apply_detected_programmers(hits))
 
         threading.Thread(target=_worker, daemon=False).start()
+
+    def _apply_detected_minipro_programmer(self, lines: list[str], hits: list[tuple[str, str]]) -> None:
+        for ln in lines[:60]:
+            self.log.append(ln)
+        if not hits:
+            self.log.append("No minipro programmer detected. Check USB cable/power and try again.")
+            return
+        for prog, label in hits:
+            self.log.append(f"  Found: {label}  →  programmer: {prog}")
+
+        existing = list(self.programmer_combo["values"])
+        for prog, _ in reversed(hits):
+            if prog not in existing:
+                existing.insert(0, prog)
+        self.programmer_combo["values"] = existing
+
+        self.programmer_var.set(_MINIPRO_PROGRAMMER_ARG)
+        self.state.programmer = _MINIPRO_PROGRAMMER_ARG
+        self._programmer_manual_override = False
+        self.log.append(f"Programmer auto-set to  {_MINIPRO_PROGRAMMER_ARG}")
 
     def _cancel_active_operations(self) -> None:
         with _ACTIVE_PROCS_LOCK:
@@ -6850,6 +7376,10 @@ class PageBase(QWidget):
             candidate = (self.state.flashrom_bin or "").strip() or "flashrom"
         elif tool == "flashprog":
             candidate = (self.state.flashprog_bin or "").strip() or "flashprog"
+        elif tool == "minipro":
+            candidate = (getattr(self.state, "minipro_bin", "") or "").strip() or "minipro"
+        elif tool == "fwinfo":
+            candidate = (getattr(self.state, "fwinfo_bin", "") or "").strip() or "fwinfo"
         else:
             candidate = tool_name
         found = shutil.which(candidate) or (candidate if os.path.isfile(candidate) else "")
@@ -7251,6 +7781,68 @@ class ChipMixin:
         app: "FlashGUIQt",
         prefer_probe_resolution: bool = False,
     ) -> None:
+        if _is_minipro_tool(state.tool, state.binary):
+            log_fn("minipro mode: autodetecting SPI chip via -a 8 (fallback -a 16)…")
+
+            def done_minipro(payload: dict) -> None:
+                raw_chips = payload.get("chips", []) or []
+                chips: list[str] = []
+                for c in raw_chips:
+                    cs = str(c).strip()
+                    if cs and cs not in chips:
+                        chips.append(cs)
+                combo.clear()
+                combo.addItems(chips)
+                if chips:
+                    chosen = chips[0]
+                    combo.setCurrentIndex(0)
+                    app.sync_chip_selection(chips, chosen)
+                    app.chip_status.setText(chosen)
+                    log_fn(f"Loaded {len(chips)} minipro part(s). Select the target chip from the dropdown.")
+                    if len(chips) > 1:
+                        combo.showPopup()
+                else:
+                    app.chip_status.setText("Not detected")
+                    hint = str(payload.get("failure_hint", "") or "").strip()
+                    if hint:
+                        log_fn(f"ERROR: {hint}")
+                    log_fn("No minipro parts detected.")
+                    app.sync_chip_selection([], "")
+
+                suggested = str(payload.get("suggested", "") or "").strip()
+                if suggested:
+                    state.programmer = suggested
+                    app.programmer_combo.setCurrentText(state.programmer)
+                    log_fn(f"Programmer set to {state.programmer}")
+
+            def worker_minipro(signals: WorkerSignals) -> None:
+                detected, label, chips, lines, bus = _autodetect_minipro_spi_devices(state.binary)
+                for line in lines[:80]:
+                    signals.line.emit(line)
+                if detected:
+                    state.programmer = _MINIPRO_PROGRAMMER_ARG
+                    if label:
+                        _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = label
+                if chips and bus:
+                    signals.line.emit(f"Autodetect matched {len(chips)} device(s) on SPI{bus}.")
+                failure_hint = None if chips else "No SPI devices matched via minipro -a 8/-a 16. Check chip seating/orientation and try again."
+                signals.done.emit(
+                    {
+                        "chips": chips,
+                        "suggested": state.programmer if detected else None,
+                        "probe_ids": [],
+                        "failure_hint": failure_hint,
+                    }
+                )
+
+            w = Worker(worker_minipro)
+            w.signals.line.connect(log_fn)
+            w.signals.done.connect(done_minipro)
+            w.signals.error.connect(lambda e: log_fn(f"ERROR: detect failed: {e}"))
+            _retain_worker(w)
+            app.thread_pool.start(w)
+            return
+
         if not state.programmer:
             log_fn("ERROR: Select a programmer first.")
             return
@@ -7396,17 +7988,23 @@ class ReadPage(OpPageBase, ChipMixin):
     def _run(self) -> None:
         fp = self.file_edit.text().strip()
         chip = self.chip_combo.currentText().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
         if not fp:
             self.log("ERROR: Select a save path first.")
             return
         if not chip:
             self.log("ERROR: Run Detect ROM to find a chip first.")
             return
-        if not self.state.programmer:
+        if not is_minipro and not self.state.programmer:
             self.log("ERROR: Select a programmer first.")
             return
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-r", fp]
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-r", fp]
+            use_progress = True
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-r", fp]
+            use_progress = True
         started = datetime.now()
         do_remove_padding = self.opt_nopad.isChecked()
 
@@ -7440,7 +8038,7 @@ class ReadPage(OpPageBase, ChipMixin):
                 if self.state.beep_on_complete:
                     _system_beep(1000, 200)
 
-        self._execute_command(cmd, started, done, use_progress=True)
+        self._execute_command(cmd, started, done, use_progress=use_progress)
 
     def _reveal(self, path: str) -> None:
         try:
@@ -7510,13 +8108,14 @@ class WritePage(OpPageBase, ChipMixin):
     def _run(self) -> None:
         fp = self.file_edit.text().strip()
         chip = self.chip_combo.currentText().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
         if not fp or not os.path.isfile(fp):
             self.log("ERROR: Select a valid ROM file.")
             return
         if not chip:
             self.log("ERROR: Run Detect ROM first.")
             return
-        if not self.state.programmer:
+        if not is_minipro and not self.state.programmer:
             self.log("ERROR: Select a programmer first.")
             return
 
@@ -7531,7 +8130,7 @@ class WritePage(OpPageBase, ChipMixin):
             return
 
         actual_fp = fp
-        if self.opt_pad.isChecked():
+        if self.opt_pad.isChecked() and not is_minipro:
             size = _get_chip_size(self.state.binary, self.state.programmer, chip)
             if size:
                 actual_fp = _pad_file(fp, size, self.state.tmpdir)
@@ -7539,8 +8138,13 @@ class WritePage(OpPageBase, ChipMixin):
             else:
                 self.log("WARNING: Could not determine chip size — skipping padding.")
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-w", actual_fp]
-        if self.opt_noverify.isChecked():
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-w", actual_fp]
+            use_progress = True
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-w", actual_fp]
+            use_progress = True
+        if self.opt_noverify.isChecked() and not is_minipro:
             cmd.append("-n")
 
         started = datetime.now()
@@ -7556,7 +8160,7 @@ class WritePage(OpPageBase, ChipMixin):
                 self.sha.setText("N/A")
                 had_error = True
 
-            if rc == 0 and os.path.isfile(actual_fp) and do_verify_hash_readback:
+            if rc == 0 and os.path.isfile(actual_fp) and do_verify_hash_readback and not is_minipro:
                 verify_tmp = os.path.join(
                     self.state.tmpdir,
                     f"verify_readback_{int(time.time() * 1000)}.bin",
@@ -7615,7 +8219,7 @@ class WritePage(OpPageBase, ChipMixin):
             if self.state.beep_on_complete:
                 _system_beep(1000 if rc == 0 else 800, 200)
 
-        self._execute_command(cmd, started, done, use_progress=True)
+        self._execute_command(cmd, started, done, use_progress=use_progress)
 
 
 class VerifyPage(OpPageBase, ChipMixin):
@@ -7670,17 +8274,23 @@ class VerifyPage(OpPageBase, ChipMixin):
     def _run(self) -> None:
         fp = self.file_edit.text().strip()
         chip = self.chip_combo.currentText().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
         if not fp or not os.path.isfile(fp):
             self.log("ERROR: Select a valid file.")
             return
         if not chip:
             self.log("ERROR: Run Detect ROM first.")
             return
-        if not self.state.programmer:
+        if not is_minipro and not self.state.programmer:
             self.log("ERROR: Select a programmer first.")
             return
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-v", fp]
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-m", fp]
+            use_progress = True
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-v", fp]
+            use_progress = True
         started = datetime.now()
 
         def done(rc: int, elapsed: float, had_error: bool) -> None:
@@ -7696,7 +8306,7 @@ class VerifyPage(OpPageBase, ChipMixin):
             if self.state.beep_on_complete:
                 _system_beep(1000 if rc == 0 else 800, 200)
 
-        self._execute_command(cmd, started, done, use_progress=True)
+        self._execute_command(cmd, started, done, use_progress=use_progress)
 
 
 class ErasePage(OpPageBase, ChipMixin):
@@ -7730,10 +8340,11 @@ class ErasePage(OpPageBase, ChipMixin):
 
     def _run(self) -> None:
         chip = self.chip_combo.currentText().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
         if not chip:
             self.log("ERROR: Run Detect ROM first.")
             return
-        if not self.state.programmer:
+        if not is_minipro and not self.state.programmer:
             self.log("ERROR: Select a programmer first.")
             return
 
@@ -7747,7 +8358,12 @@ class ErasePage(OpPageBase, ChipMixin):
         if ans != QMessageBox.StandardButton.Yes:
             return
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-E"]
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-E"]
+            use_progress = True
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-E"]
+            use_progress = True
         started = datetime.now()
 
         def done(rc: int, elapsed: float, had_error: bool) -> None:
@@ -7762,7 +8378,7 @@ class ErasePage(OpPageBase, ChipMixin):
             if self.state.beep_on_complete:
                 _system_beep(1000 if rc == 0 else 800, 200)
 
-        self._execute_command(cmd, started, done, use_progress=True)
+        self._execute_command(cmd, started, done, use_progress=use_progress)
 
 
 class WriteProtectPage(OpPageBase, ChipMixin):
@@ -7813,6 +8429,9 @@ class WriteProtectPage(OpPageBase, ChipMixin):
         b_set_region.clicked.connect(self._wp_region)
 
     def _wp(self, flag: str) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log("ERROR: Write-Protect controls are not supported in minipro mode.")
+            return
         chip = self.chip_combo.currentText().strip()
         if not chip or not self.state.programmer:
             self.log("ERROR: Select programmer and detect chip first.")
@@ -7821,6 +8440,9 @@ class WriteProtectPage(OpPageBase, ChipMixin):
         self._run_cmd(cmd)
 
     def _wp_range(self) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log("ERROR: Write-Protect controls are not supported in minipro mode.")
+            return
         chip = self.chip_combo.currentText().strip()
         rng = self.range_edit.text().strip()
         if not chip or not self.state.programmer or not rng:
@@ -7830,6 +8452,9 @@ class WriteProtectPage(OpPageBase, ChipMixin):
         self._run_cmd(cmd)
 
     def _wp_region(self) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log("ERROR: Write-Protect controls are not supported in minipro mode.")
+            return
         chip = self.chip_combo.currentText().strip()
         region = self.region_edit.text().strip()
         if not chip or not self.state.programmer or not region:
@@ -7912,8 +8537,61 @@ class InfoPage(OpPageBase, ChipMixin):
         if not chip:
             self.log("ERROR: Run Detect ROM first.")
             return
-        if not self.state.programmer:
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if not is_minipro and not self.state.programmer:
             self.log("ERROR: Select a programmer first.")
+            return
+
+        if is_minipro:
+            info_cmd = self.state.with_verbose([self.state.binary, "-d", chip])
+            self.set_command_preview(info_cmd)
+            self.progress.pulse_start()
+
+            def worker_minipro(signals: WorkerSignals) -> None:
+                proc = subprocess.run(
+                    info_cmd,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                    timeout=45,
+                )
+                out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+                signals.done.emit({"rc": proc.returncode, "output": out})
+
+            w = Worker(worker_minipro)
+
+            def done_minipro(payload: dict) -> None:
+                self.progress.stop_reset()
+                rc = int(payload.get("rc", 1))
+                out = str(payload.get("output", "") or "").strip()
+                model = chip
+                vendor = "N/A"
+                size = "N/A"
+                for ln in out.splitlines():
+                    s = (ln or "").strip()
+                    m_name = re.match(r"^Name:\s*(.+)$", s, re.IGNORECASE)
+                    if m_name:
+                        model = m_name.group(1).strip() or model
+                        vm = re.match(r"^([A-Za-z]+)", model)
+                        if vm:
+                            vendor = vm.group(1)
+                    m_mem = re.match(r"^Memory:\s*(.+)$", s, re.IGNORECASE)
+                    if m_mem:
+                        size = m_mem.group(1).strip() or size
+                self.info_text.setPlainText(
+                    f"Model: {model}\n"
+                    f"Vendor: {vendor}\n"
+                    f"Size: {size}\n"
+                    "Chip ID: N/A\n"
+                    "Write Protection:\nN/A\n\n"
+                    f"Raw Output (exit {rc}):\n{out or '(no output)'}"
+                )
+
+            w.signals.done.connect(done_minipro)
+            w.signals.error.connect(lambda e: self.log(f"ERROR: Failed to read chip info: {e}"))
+            _retain_worker(w)
+            self.app.thread_pool.start(w)
             return
 
         info_cmd = self.state.with_verbose([
@@ -8150,6 +8828,8 @@ class SettingsPage(PageBase):
         self.font_size_label = QLabel(f"Size: {max(8, self.state.font_size)}pt")
         self.flashrom_edit = QLineEdit(self.state.flashrom_bin)
         self.flashprog_edit = QLineEdit(self.state.flashprog_bin)
+        self.minipro_edit = QLineEdit(self.state.minipro_bin)
+        self.fwinfo_edit = QLineEdit(self.state.fwinfo_bin)
         self.workspace_edit = QLineEdit(self.state.workspace_dir)
         self.geometry_edit = QLineEdit(self.state.window_geometry)
         self.log_file_edit = QLineEdit(self.state.log_file_path)
@@ -8194,6 +8874,26 @@ class SettingsPage(PageBase):
         row_fp_l.addWidget(self.flashprog_edit, 1)
         row_fp_l.addWidget(self.btn_browse_flashprog)
         f_paths.addRow("Flashprog Binary:", row_fp)
+
+        self.btn_browse_minipro = QPushButton("Browse")
+        self.btn_browse_minipro.setProperty("kind", "subtle")
+        self.btn_browse_minipro.setMinimumWidth(140)
+        row_mp = QWidget(self)
+        row_mp_l = QHBoxLayout(row_mp)
+        row_mp_l.setContentsMargins(0, 0, 0, 0)
+        row_mp_l.addWidget(self.minipro_edit, 1)
+        row_mp_l.addWidget(self.btn_browse_minipro)
+        f_paths.addRow("Minipro Binary:", row_mp)
+
+        self.btn_browse_fwinfo = QPushButton("Browse")
+        self.btn_browse_fwinfo.setProperty("kind", "subtle")
+        self.btn_browse_fwinfo.setMinimumWidth(140)
+        row_fwi = QWidget(self)
+        row_fwi_l = QHBoxLayout(row_fwi)
+        row_fwi_l.setContentsMargins(0, 0, 0, 0)
+        row_fwi_l.addWidget(self.fwinfo_edit, 1)
+        row_fwi_l.addWidget(self.btn_browse_fwinfo)
+        f_paths.addRow("Fwinfo Binary:", row_fwi)
 
         self.btn_browse_workspace = QPushButton("Browse")
         self.btn_browse_workspace.setProperty("kind", "subtle")
@@ -8419,6 +9119,8 @@ class SettingsPage(PageBase):
         self.font_size_slider.valueChanged.connect(lambda val: self.font_size_label.setText(f"Size: {val}pt"))
         self.btn_browse_flashrom.clicked.connect(lambda: self._browse_line(self.flashrom_edit, "Select flashrom binary", file_mode=True))
         self.btn_browse_flashprog.clicked.connect(lambda: self._browse_line(self.flashprog_edit, "Select flashprog binary", file_mode=True))
+        self.btn_browse_minipro.clicked.connect(lambda: self._browse_line(self.minipro_edit, "Select minipro binary", file_mode=True))
+        self.btn_browse_fwinfo.clicked.connect(lambda: self._browse_line(self.fwinfo_edit, "Select fwinfo binary", file_mode=True))
         self.btn_browse_workspace.clicked.connect(lambda: self._browse_line(self.workspace_edit, "Select workspace path", file_mode=False))
         self.btn_capture_geometry.clicked.connect(self._capture_geometry)
         self.btn_browse_log.clicked.connect(self._browse_log_file)
@@ -8451,6 +9153,8 @@ class SettingsPage(PageBase):
 
         self.flashrom_edit.textChanged.connect(lambda _: self._refresh_system_fix_buttons())
         self.flashprog_edit.textChanged.connect(lambda _: self._refresh_system_fix_buttons())
+        self.minipro_edit.textChanged.connect(lambda _: self._refresh_system_fix_buttons())
+        self.fwinfo_edit.textChanged.connect(lambda _: self._refresh_system_fix_buttons())
         self._refresh_system_fix_buttons()
 
     def _normalize_settings_button_widths(self) -> None:
@@ -8467,6 +9171,8 @@ class SettingsPage(PageBase):
             self.btn_apply_font_size,
             self.btn_browse_flashrom,
             self.btn_browse_flashprog,
+            self.btn_browse_minipro,
+            self.btn_browse_fwinfo,
             self.btn_browse_workspace,
             self.btn_capture_geometry,
             self.btn_browse_log,
@@ -8535,6 +9241,8 @@ class SettingsPage(PageBase):
         checks = [
             (self.flashrom_edit.text().strip(), "flashrom"),
             (self.flashprog_edit.text().strip(), "flashprog"),
+            (self.minipro_edit.text().strip(), "minipro"),
+            (self.fwinfo_edit.text().strip(), "fwinfo"),
         ]
         for configured, fallback in checks:
             if configured:
@@ -8765,6 +9473,8 @@ class SettingsPage(PageBase):
             for label, path in [
                 ("flashrom", self.flashrom_edit.text().strip() or "flashrom"),
                 ("flashprog", self.flashprog_edit.text().strip() or "flashprog"),
+                ("minipro", self.minipro_edit.text().strip() or "minipro"),
+                ("fwinfo", self.fwinfo_edit.text().strip() or "fwinfo"),
             ]:
                 found = shutil.which(path) or shutil.which(label)
                 if found:
@@ -8795,8 +9505,13 @@ class SettingsPage(PageBase):
         self._log("=== Fix dependencies ===")
 
         missing_tools: list[str] = []
-        for tool in ("flashrom", "flashprog"):
-            configured = self.flashrom_edit.text().strip() if tool == "flashrom" else self.flashprog_edit.text().strip()
+        for tool in ("flashrom", "flashprog", "minipro", "fwinfo"):
+            configured = (
+                self.flashrom_edit.text().strip() if tool == "flashrom" else
+                self.flashprog_edit.text().strip() if tool == "flashprog" else
+                self.minipro_edit.text().strip() if tool == "minipro" else
+                self.fwinfo_edit.text().strip()
+            )
             found = shutil.which(configured) if configured else shutil.which(tool)
             if not found:
                 missing_tools.append(tool)
@@ -8875,6 +9590,8 @@ class SettingsPage(PageBase):
             for label, path in [
                 ("flashrom", self.flashrom_edit.text().strip()),
                 ("flashprog", self.flashprog_edit.text().strip()),
+                ("minipro", self.minipro_edit.text().strip()),
+                ("fwinfo", self.fwinfo_edit.text().strip()),
             ]:
                 if not path:
                     lines.append(f"  {label}: (using system PATH — skipping)")
@@ -9099,6 +9816,8 @@ class SettingsPage(PageBase):
             "console_font_size": int(getattr(self.state, "console_font_size", 0) or 0),
             "flashrom_bin": self.flashrom_edit.text().strip(),
             "flashprog_bin": self.flashprog_edit.text().strip(),
+            "minipro_bin": self.minipro_edit.text().strip(),
+            "fwinfo_bin": self.fwinfo_edit.text().strip(),
             "workspace_dir": self.workspace_edit.text().strip(),
             "window_geometry": self.geometry_edit.text().strip(),
             "log_file_path": self.log_file_edit.text().strip(),
@@ -9141,6 +9860,8 @@ class SettingsPage(PageBase):
         self.app.apply_runtime_font_preferences()
         self.flashrom_edit.setText(str(data.get("flashrom_bin", self.flashrom_edit.text())))
         self.flashprog_edit.setText(str(data.get("flashprog_bin", self.flashprog_edit.text())))
+        self.minipro_edit.setText(str(data.get("minipro_bin", self.minipro_edit.text())))
+        self.fwinfo_edit.setText(str(data.get("fwinfo_bin", self.fwinfo_edit.text())))
         self.workspace_edit.setText(str(data.get("workspace_dir", self.workspace_edit.text())))
         self.geometry_edit.setText(str(data.get("window_geometry", self.geometry_edit.text())))
         self.log_file_edit.setText(str(data.get("log_file_path", self.log_file_edit.text())))
@@ -9185,6 +9906,8 @@ class SettingsPage(PageBase):
         self.app.apply_runtime_font_preferences()
         self.flashrom_edit.setText("")
         self.flashprog_edit.setText("")
+        self.minipro_edit.setText("")
+        self.fwinfo_edit.setText("")
         self.workspace_edit.setText(script_dir)
         self.geometry_edit.setText("")
         self.log_file_edit.setText(os.path.join(script_dir, "flashgui.log"))
@@ -9207,6 +9930,8 @@ class SettingsPage(PageBase):
 
         self.state.flashrom_bin = self.flashrom_edit.text().strip()
         self.state.flashprog_bin = self.flashprog_edit.text().strip()
+        self.state.minipro_bin = self.minipro_edit.text().strip()
+        self.state.fwinfo_bin = self.fwinfo_edit.text().strip()
         self.state.workspace_dir = self.workspace_edit.text().strip() or self.state.workspace_dir
         self.state.window_geometry = self.geometry_edit.text().strip()
         self.state.log_file_path = self.log_file_edit.text().strip() or self.state.log_file_path
@@ -9262,6 +9987,7 @@ class ToolsPage(PageBase):
 
         tool_actions: list[tuple[str, Callable[[], None]]] = [
             ("Binwalk ROMs", self._binwalk_rom),
+            ("Binwalk Extract & Analize", self._binwalk_extract_analize),
             ("Calculate Hashes", self._calculate_hashes),
             ("Compare ROMs", self._compare_roms),
             ("Convert BIN To HEX", self._convert_bin_to_hex),
@@ -9269,6 +9995,9 @@ class ToolsPage(PageBase):
             ("DiffVue ROMs", self._diffvue_roms),
             ("HexView ROMs", self._hexview_rom),
             ("HexDiff ROMs", self._hexdiff_roms),
+            ("Firmware Info (fwinfo)", self._fwinfo_info),
+            ("Firmware Update", self._fwinfo_update),
+            ("Hardware Self-Test (-t)", self._minipro_self_test),
         ]
         for idx, (label, handler) in enumerate(tool_actions):
             btn = QPushButton(label)
@@ -9609,7 +10338,7 @@ class ToolsPage(PageBase):
 
     def _active_binary(self) -> str | None:
         tool = (self.state.tool or "flashrom").strip().lower()
-        if tool not in {"flashrom", "flashprog"}:
+        if tool not in {"flashrom", "flashprog", "minipro"}:
             tool = "flashrom"
         return self._resolve_tool_binary(tool)
 
@@ -9617,8 +10346,13 @@ class ToolsPage(PageBase):
         binary = self._active_binary()
         if not binary:
             return None
-        programmer = (self.state.programmer or "").strip()
         chip = (self.state.selected_chip or "").strip()
+        if _is_minipro_tool(self.state.tool, binary):
+            if not chip:
+                self.warn("Missing selection", "Detect/select chip first (from operation pages).")
+                return None
+            return [binary, "-p", chip]
+        programmer = (self.state.programmer or "").strip()
         if not programmer or not chip:
             self.warn(
                 "Missing selection",
@@ -9628,14 +10362,45 @@ class ToolsPage(PageBase):
         return [binary, "-p", programmer, "-c", chip]
 
     def _binwalk_rom(self) -> None:
-        fp = self._pick_file("Select ROM for Binwalk", "ROM/Binary Files (*.bin *.rom *.img *.hex);;All Files (*)")
+        fp = self._pick_file("Select ROM/Firmware for Binwalk", "ROM/Firmware Files (*.bin *.rom *.img *.hex *.fw);;All Files (*)")
         if not fp:
             return
         binwalk_bin = shutil.which("binwalk")
         if not binwalk_bin:
             self.warn("Binwalk not found", "Could not find 'binwalk' in PATH.")
             return
-        self._run_capture_to_dialog("Binwalk ROMs", [binwalk_bin, fp], timeout=180)
+        self._run_capture_to_dialog("Binwalk ROMs", [binwalk_bin, fp], timeout=240)
+
+    def _binwalk_extract_analize(self) -> None:
+        fp = self._pick_file("Select ROM/Firmware for Binwalk extraction", "ROM/Firmware Files (*.bin *.rom *.img *.hex *.fw);;All Files (*)")
+        if not fp:
+            return
+        binwalk_bin = shutil.which("binwalk")
+        if not binwalk_bin:
+            self.warn("Binwalk not found", "Could not find 'binwalk' in PATH.")
+            return
+
+        out_dir = QFileDialog.getExistingDirectory(
+            self,
+            "Select output folder for extracted files",
+            self.state.workspace_dir,
+        )
+        if not out_dir:
+            return
+        suggested_name = f"{os.path.splitext(os.path.basename(fp))[0]}_binwalk_extract"
+        extraction_root = os.path.join(out_dir, suggested_name)
+        try:
+            os.makedirs(extraction_root, exist_ok=True)
+        except OSError as exc:
+            self.error("Binwalk Extract & Analize", f"Could not create extraction folder:\n{exc}")
+            return
+        self.log(f"Binwalk extraction output folder: {extraction_root}")
+        self._run_capture_to_dialog(
+            "Binwalk Extract & Analize",
+            [binwalk_bin, "-e", "-M", fp],
+            timeout=600,
+            cwd=extraction_root,
+        )
 
     def _calculate_hashes(self) -> None:
         fp = self._pick_file("Select ROM for Hashes", "ROM/Binary Files (*.bin *.rom *.img *.hex);;All Files (*)")
@@ -9875,6 +10640,76 @@ class ToolsPage(PageBase):
                 body.append("... truncated ...")
         self._show_text_dialog("HexDiff ROMs", "\n".join(header + body))
 
+    def _fwinfo_info(self) -> None:
+        binary = self._resolve_tool_binary("fwinfo")
+        if not binary:
+            return
+
+        pick_mode = QMessageBox.question(
+            self,
+            "Firmware Info (fwinfo)",
+            "Select input type for fwinfo:\n\n"
+            "Yes = Choose a .dat file\n"
+            "No = Choose a folder containing .dat files\n"
+            "Cancel = Abort",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes,
+        )
+        if pick_mode == QMessageBox.StandardButton.Cancel:
+            return
+
+        if pick_mode == QMessageBox.StandardButton.Yes:
+            target, ok = QFileDialog.getOpenFileName(
+                self,
+                "Select .dat file",
+                self.state.workspace_dir,
+                "DAT Files (*.dat);;All Files (*)",
+            )
+            if not ok or not target:
+                return
+        else:
+            target = QFileDialog.getExistingDirectory(
+                self,
+                "Select folder containing .dat files",
+                self.state.workspace_dir,
+            )
+            if not target:
+                return
+            try:
+                has_dat = any(name.lower().endswith(".dat") for name in os.listdir(target))
+            except OSError as exc:
+                self.error("Firmware Info (fwinfo)", f"Could not read folder:\n{exc}")
+                return
+            if not has_dat:
+                self.warn("Firmware Info (fwinfo)", "Selected folder does not contain any *.dat files.")
+                return
+
+        self._run_capture_to_dialog("Firmware Info (fwinfo)", [binary, target], timeout=120)
+
+    def _fwinfo_update(self) -> None:
+        minipro_bin = self._resolve_tool_binary("minipro")
+        if not minipro_bin:
+            return
+        fw_path, ok = QFileDialog.getOpenFileName(
+            self,
+            "Select minipro firmware file",
+            self.state.workspace_dir,
+            "Firmware Files (*.bin *.hex *.fw *.upd);;All Files (*)",
+        )
+        if not ok or not fw_path:
+            return
+        self._run_capture_to_dialog(
+            "Firmware Update",
+            [minipro_bin, "-u", fw_path],
+            timeout=240,
+        )
+
+    def _minipro_self_test(self) -> None:
+        minipro_bin = self._resolve_tool_binary("minipro")
+        if not minipro_bin:
+            return
+        self._run_capture_to_dialog("Hardware Self-Test (-t)", [minipro_bin, "-t"], timeout=180)
+
 class HelpAboutPage(PageBase):
     title = "Help & About"
     _REPO_URL = "https://github.com/iCE-HACK3R/FlashGUI"
@@ -9948,7 +10783,8 @@ class HelpAboutPage(PageBase):
             "CH341A  [1a86:5512]  →  programmer: ch341a_spi\n"
             "EZP2020 [1a86:5722]  →  programmer: serprog:dev=/dev/ttyACM0\n"
             "BusPirate [0403:6001] → /dev/ttyUSB0  →  programmer: buspirate_spi:dev=/dev/ttyUSB0\n"
-            "HydraBus [1d50:60a7] → /dev/ttyACM0  →  programmer: serprog:dev=/dev/ttyACM0"
+            "HydraBus [1d50:60a7] → /dev/ttyACM0  →  programmer: serprog:dev=/dev/ttyACM0\n"
+            "T48 [A466:0F12] → programmer: minipro-usb"
         )
         view_prog = QPlainTextEdit()
         view_prog.setReadOnly(True)
@@ -10300,8 +11136,10 @@ class FlashGUIQt(QMainWindow):
         self.tool_combo = QComboBox()
         self.tool_combo.addItem("flashrom")
         self.tool_combo.addItem("flashprog")
+        self.tool_combo.addItem("minipro")
         self.tool_combo.setItemIcon(0, _get_icon("flashrom", 24))
         self.tool_combo.setItemIcon(1, _get_icon("flashprog", 24))
+        self.tool_combo.setItemIcon(2, _get_icon("tools", 24))
         self.tool_combo.setIconSize(QSize(20, 20))
         self.tool_combo.setCurrentText(self.state.tool)
         self.tool_combo.setMinimumWidth(140)
@@ -10531,6 +11369,7 @@ class FlashGUIQt(QMainWindow):
             "wp enable": "wp-enable",
             "wp disable": "wp-disable",
             "binwalk roms": "scan",
+            "binwalk extract & analize": "scan",
             "calculate hashes": "verify-rom",
             "compare roms": "verify-rom",
             "convert bin to hex": "write-rom",
@@ -10559,6 +11398,9 @@ class FlashGUIQt(QMainWindow):
             "search chips flashprog": "detect-rom",
             "supported programmers flashrom": "flashrom",
             "supported programmers flashprog": "flashprog",
+            "firmware info (fwinfo)": "chip",
+            "firmware update": "write-rom",
+            "hardware self-test (-t)": "check",
             "set range": "detect",
             "set region": "detect",
             "download": "download",
@@ -11198,13 +12040,16 @@ class FlashGUIQt(QMainWindow):
         self.log.append_line(f"Tool: {self.state.binary} (checking version…)")
         try:
             ver = _get_version(self.state.binary)
-            progs = _with_internal_programmer(_list_programmers(self.state.binary))
-            if sys.platform.startswith("win"):
-                win_serial = [prog for prog, _label in _detect_programmer_serial_windows()]
-                progs = _with_internal_programmer(progs + win_serial)
-            elif sys.platform == "darwin":
-                mac_serial = [prog for prog, _label in _detect_programmer_serial_posix()]
-                progs = _with_internal_programmer(progs + mac_serial)
+            if _is_minipro_tool(tool, self.state.binary):
+                progs = [_MINIPRO_PROGRAMMER_ARG]
+            else:
+                progs = _with_internal_programmer(_list_programmers(self.state.binary))
+                if sys.platform.startswith("win"):
+                    win_serial = [prog for prog, _label in _detect_programmer_serial_windows()]
+                    progs = _with_internal_programmer(progs + win_serial)
+                elif sys.platform == "darwin":
+                    mac_serial = [prog for prog, _label in _detect_programmer_serial_posix()]
+                    progs = _with_internal_programmer(progs + mac_serial)
         except Exception as exc:
             self.log.append_line(f"ERROR: refresh tool failed: {exc}")
             return
@@ -11233,6 +12078,9 @@ class FlashGUIQt(QMainWindow):
                 else:
                     self.programmer_combo.setCurrentText(current)
                 self.state.programmer = current
+            elif _is_minipro_tool(tool, self.state.binary) and progs:
+                self.programmer_combo.setCurrentText(progs[0])
+                self.state.programmer = progs[0]
             else:
                 self.programmer_combo.setCurrentIndex(-1)
                 self.programmer_combo.setEditText("")
@@ -11301,6 +12149,30 @@ class FlashGUIQt(QMainWindow):
             pass
 
     def _on_detect_programmer(self) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append_line("Probing minipro USB programmer (T48/TL866)…")
+            detected, label, lines = _detect_minipro_hardware(self.state.binary)
+            for ln in lines[:60]:
+                self.log.append_line(ln)
+            if not detected:
+                self.log.append_line("No minipro programmer detected. Check USB cable/power and try again.")
+                return
+
+            existing = [self.programmer_combo.itemText(i) for i in range(self.programmer_combo.count())]
+            if _MINIPRO_PROGRAMMER_ARG not in existing:
+                self.programmer_combo.insertItem(0, _MINIPRO_PROGRAMMER_ARG)
+            self.state.programmer = _MINIPRO_PROGRAMMER_ARG
+            self.programmer_combo.blockSignals(True)
+            try:
+                self.programmer_combo.setCurrentText(self.state.programmer)
+            finally:
+                self.programmer_combo.blockSignals(False)
+            if label:
+                _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = label
+            self.status_programmer.setText(_format_programmer_status(self.state.programmer))
+            self.log.append_line(f"Programmer set to {_MINIPRO_PROGRAMMER_ARG}")
+            return
+
         if sys.platform.startswith("win"):
             self.log.append_line("Scanning Windows serial ports for programmer devices…")
         elif sys.platform == "darwin":
