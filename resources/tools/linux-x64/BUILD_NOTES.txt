@@ -1,0 +1,12 @@
+Portable bundle contents:
+- fwinfo
+- minipro
+
+Notes:
+- fwinfo is a single executable.
+- minipro includes embedded XML databases when no override paths are supplied.
+- Static linking is requested for native toolchain/runtime libraries where supported by the host toolchain.
+- minipro static link was requested first, but the host is missing one or more static system libraries (commonly libudev.a).
+- minipro was rebuilt successfully using dynamic system libraries on Linux.
+- minipro was built with embedded infoic.xml and logicic.xml.
+- algorithm.xml was not present at build time, so only infoic.xml and logicic.xml were embedded.

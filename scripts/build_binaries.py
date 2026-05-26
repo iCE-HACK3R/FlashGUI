@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import platform
 import re
 import shutil
@@ -52,7 +53,27 @@ def _resolve_icon(root: Path) -> Path:
     raise RuntimeError(f"Icon not found: {ico}")
 
 
+def _ensure_pyinstaller_available() -> None:
+    """Fail fast with actionable guidance when PyInstaller is not installed."""
+    if importlib.util.find_spec("PyInstaller") is not None:
+        return
+
+    hints = [
+        "PyInstaller is not installed for the interpreter running this script.",
+        f"Current interpreter: {sys.executable}",
+        "Install it in this environment (for example: pip install -r requirements-build.txt).",
+    ]
+
+    if sys.platform.startswith("win") and "msys64" in str(Path(sys.executable)).lower():
+        hints.append(
+            "On Windows, 'python3' may point to MSYS Python. Prefer running this script with 'python' from your project venv."
+        )
+
+    raise RuntimeError(" ".join(hints))
+
+
 def _run_pyinstaller(root: Path, name: str, icon: Path) -> Path:
+    _ensure_pyinstaller_available()
     cmd = [
         sys.executable,
         "-m",

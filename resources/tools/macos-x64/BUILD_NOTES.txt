@@ -1,0 +1,11 @@
+Portable bundle contents:
+- fwinfo
+- minipro
+
+Notes:
+- fwinfo is a single executable.
+- minipro includes embedded XML databases when no override paths are supplied.
+- macOS does not support fully static system binaries; this build uses the system runtime.
+- Third-party dependencies may still need to be present on the build machine at link time.
+- minipro was built with embedded infoic.xml and logicic.xml.
+- algorithm.xml was not present at build time, so only infoic.xml and logicic.xml were embedded.

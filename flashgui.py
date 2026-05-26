@@ -76,7 +76,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.4"
+VERSION = "1.1.5"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -3160,6 +3160,77 @@ def _remove_padding(path: str) -> int:
     return removed
 
 
+def _extract_chip_id_from_lines(lines: list[str]) -> str:
+    """Extract chip ID text from minipro/flashrom-style probe output lines."""
+    found_ids: list[str] = []
+    seen: set[str] = set()
+
+    for raw in lines:
+        s = (raw or "").strip()
+        if not s:
+            continue
+
+        m_chip = re.search(r"\bchip\s*id\s*:\s*(0x[0-9a-fA-F]+)", s, re.IGNORECASE)
+        if m_chip:
+            chip_id = m_chip.group(1).upper()
+            if chip_id not in seen:
+                seen.add(chip_id)
+                found_ids.append(chip_id)
+
+        patterns = (
+            r"compare_id:\s*id1\s*0x([0-9a-fA-F]+),\s*id2\s*0x([0-9a-fA-F]+)",
+            r"(?:probe_spi_rdid|spi_rdid)\s*:\s*id1\s*0x([0-9a-fA-F]+),\s*id2\s*0x([0-9a-fA-F]+)",
+            r"\bid1\s*0x([0-9a-fA-F]+),\s*id2\s*0x([0-9a-fA-F]+)",
+        )
+        for pat in patterns:
+            m_id = re.search(pat, s, re.IGNORECASE)
+            if not m_id:
+                continue
+            try:
+                chip_id = f"0x{int(m_id.group(1), 16):02X}{int(m_id.group(2), 16):X}"
+            except ValueError:
+                continue
+            if chip_id not in seen:
+                seen.add(chip_id)
+                found_ids.append(chip_id)
+
+    if not found_ids:
+        return "N/A"
+    return ", ".join(found_ids)
+
+
+def _parse_minipro_device_info(lines: list[str], chip_fallback: str) -> tuple[str, str, str]:
+    """Extract (model, vendor, size) from minipro info output."""
+    model = chip_fallback or "N/A"
+    vendor = "N/A"
+    size_str = "N/A"
+
+    for raw in lines:
+        s = (raw or "").strip()
+        if not s:
+            continue
+
+        m_name = re.match(r"^Name:\s*(.+)$", s, re.IGNORECASE)
+        if m_name:
+            model = m_name.group(1).strip() or model
+
+        m_mfr = re.match(r"^Manufacturer:\s*(.+)$", s, re.IGNORECASE)
+        if m_mfr:
+            vendor = m_mfr.group(1).strip() or vendor
+
+        if size_str == "N/A":
+            m_size = re.match(r"^(?:Memory|Size):\s*(.+)$", s, re.IGNORECASE)
+            if m_size:
+                size_str = m_size.group(1).strip() or size_str
+
+    if vendor == "N/A" and model and model != "N/A":
+        vm = re.match(r"^([A-Za-z]+)", model)
+        if vm:
+            vendor = vm.group(1)
+
+    return model or "N/A", vendor or "N/A", size_str
+
+
 def _sha256_file(path: str) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -4794,7 +4865,7 @@ class PageInfo(_ChipMixin):
         self.tree.column("v", width=260)
         self.tree.grid(row=3, column=0, columnspan=3, sticky="nsew")
 
-        for prop in ("Model", "Vendor", "Size", "Write Protection"):
+        for prop in ("Model", "Vendor", "Size", "Chip ID", "Write Protection"):
             self.tree.insert("", "end", text=prop, values=("",))
 
         self.progress = _ProgressFrame(control_frame, length=300)
@@ -4958,33 +5029,30 @@ class PageInfo(_ChipMixin):
 
             try:
                 if _is_minipro_tool(tool, binary):
-                    proc = subprocess.run(
-                        [binary, "-d", chip],
+                    id_cmd = [binary, "-p", chip, "-D"]
+                    proc_id = subprocess.run(
+                        id_cmd,
                         check=False,
                         capture_output=True,
                         text=True,
                         errors="replace",
                         timeout=45,
                     )
-                    out_lines = ((proc.stdout or "") + (proc.stderr or "")).splitlines()
-                    model = chip
-                    vendor = "N/A"
-                    size_str = "N/A"
+                    info_cmd = [binary, "-d", chip]
+                    proc_info = subprocess.run(
+                        info_cmd,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        errors="replace",
+                        timeout=45,
+                    )
+                    out_id_lines = ((proc_id.stdout or "") + (proc_id.stderr or "")).splitlines()
+                    out_info_lines = ((proc_info.stdout or "") + (proc_info.stderr or "")).splitlines()
+                    out_lines = out_id_lines + [""] + out_info_lines
+                    model, vendor, size_str = _parse_minipro_device_info(out_info_lines + out_id_lines, chip)
+                    chip_id_text = _extract_chip_id_from_lines(out_id_lines + out_info_lines)
                     wp = "N/A"
-                    for ln in out_lines:
-                        s = (ln or "").strip()
-                        lo = s.lower()
-                        m_name = re.match(r"^Name:\s*(.+)$", s, re.IGNORECASE)
-                        if m_name:
-                            model = m_name.group(1).strip() or model
-                        m_mem = re.match(r"^Memory:\s*(.+)$", s, re.IGNORECASE)
-                        if m_mem:
-                            size_str = m_mem.group(1).strip() or size_str
-                        if vendor == "N/A" and (m_name or lo.startswith("name:")):
-                            name_val = (m_name.group(1).strip() if m_name else s.split(":", 1)[-1].strip())
-                            vm = re.match(r"^([A-Za-z]+)", name_val)
-                            if vm:
-                                vendor = vm.group(1)
                     for ln in out_lines[:80]:
                         _safe_after(self.root, 0, lambda l=ln: self.log.append(l))
                 elif tool != "flashprog":
@@ -5009,6 +5077,7 @@ class PageInfo(_ChipMixin):
                         out_lines = []
 
                     vendor, model, size_str = _parse_chip_info(out_lines)
+                    chip_id_text = _extract_chip_id_from_lines(out_lines)
                     wp = _parse_wp_status(out_lines)
                 else:
                     # ── flashprog: --flash-name output may include chip status/WP details ─
@@ -5032,17 +5101,19 @@ class PageInfo(_ChipMixin):
                         out_lines = []
 
                     vendor, model, size_str = _parse_chip_info(out_lines)
+                    chip_id_text = _extract_chip_id_from_lines(out_lines)
                     wp = _parse_wp_status(out_lines)
             except Exception as exc:
                 _safe_after(self.root, 0, lambda e=exc: self.log.append(f"ERROR: Failed to read chip info: {e}"))
+                chip_id_text = "N/A"
 
-            _safe_after(self.root, 0, lambda: self._fill_info(model, vendor, size_str, wp))
+            _safe_after(self.root, 0, lambda: self._fill_info(model, vendor, size_str, chip_id_text, wp))
 
         threading.Thread(target=_worker, daemon=False).start()
 
-    def _fill_info(self, model: str, vendor: str, size: str, wp: str) -> None:
+    def _fill_info(self, model: str, vendor: str, size: str, chip_id: str, wp: str) -> None:
         self.progress.stop_reset()
-        values = [model, vendor, size, wp]
+        values = [model, vendor, size, chip_id, wp]
         for i, item in enumerate(self.tree.get_children()):
             self.tree.item(item, values=(values[i],))
 
@@ -6209,6 +6280,14 @@ class PageSettings:
         minipro = self.state.minipro_bin or _resolve_binary("minipro", "FLASHGUI_MINIPRO_BIN")
         if not (shutil.which(minipro) or os.path.isfile(minipro)):
             self.app.log.append("ERROR: minipro binary not found. Set path in Settings.")
+            return
+        if not messagebox.askyesno(
+            "Hardware Self-Test (-t)",
+            "Before running self-test, remove any chip from the programmer socket.\n\n"
+            "Proceed with hardware self-test now?",
+            parent=self.frame,
+        ):
+            self.app.log.append("Self-test cancelled by user (chip-removal confirmation not accepted).")
             return
         self._run_diag_capture("Hardware Self-Test (-t)", [minipro, "-t"])
 
@@ -8543,12 +8622,21 @@ class InfoPage(OpPageBase, ChipMixin):
             return
 
         if is_minipro:
+            id_cmd = self.state.with_verbose([self.state.binary, "-p", chip, "-D"])
             info_cmd = self.state.with_verbose([self.state.binary, "-d", chip])
-            self.set_command_preview(info_cmd)
+            self.set_command_preview(id_cmd)
             self.progress.pulse_start()
 
             def worker_minipro(signals: WorkerSignals) -> None:
-                proc = subprocess.run(
+                proc_id = subprocess.run(
+                    id_cmd,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                    timeout=45,
+                )
+                proc_info = subprocess.run(
                     info_cmd,
                     check=False,
                     capture_output=True,
@@ -8556,36 +8644,43 @@ class InfoPage(OpPageBase, ChipMixin):
                     errors="replace",
                     timeout=45,
                 )
-                out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
-                signals.done.emit({"rc": proc.returncode, "output": out})
+                out_id = ((proc_id.stdout or "") + "\n" + (proc_id.stderr or "")).strip()
+                out_info = ((proc_info.stdout or "") + "\n" + (proc_info.stderr or "")).strip()
+                signals.done.emit(
+                    {
+                        "rc": proc_info.returncode,
+                        "output_id": out_id,
+                        "output_info": out_info,
+                    }
+                )
 
             w = Worker(worker_minipro)
 
             def done_minipro(payload: dict) -> None:
                 self.progress.stop_reset()
                 rc = int(payload.get("rc", 1))
-                out = str(payload.get("output", "") or "").strip()
-                model = chip
-                vendor = "N/A"
-                size = "N/A"
-                for ln in out.splitlines():
-                    s = (ln or "").strip()
-                    m_name = re.match(r"^Name:\s*(.+)$", s, re.IGNORECASE)
-                    if m_name:
-                        model = m_name.group(1).strip() or model
-                        vm = re.match(r"^([A-Za-z]+)", model)
-                        if vm:
-                            vendor = vm.group(1)
-                    m_mem = re.match(r"^Memory:\s*(.+)$", s, re.IGNORECASE)
-                    if m_mem:
-                        size = m_mem.group(1).strip() or size
+                out_id = str(payload.get("output_id", "") or "").strip()
+                out_info = str(payload.get("output_info", "") or "").strip()
+                id_lines = out_id.splitlines()
+                info_lines = out_info.splitlines()
+                model, vendor, size = _parse_minipro_device_info(info_lines + id_lines, chip)
+                chip_id_text = _extract_chip_id_from_lines(id_lines + info_lines)
+                merged_out = "\n".join(
+                    [
+                        "$ " + " ".join(id_cmd),
+                        out_id or "(no output)",
+                        "",
+                        "$ " + " ".join(info_cmd),
+                        out_info or "(no output)",
+                    ]
+                ).strip()
                 self.info_text.setPlainText(
                     f"Model: {model}\n"
                     f"Vendor: {vendor}\n"
                     f"Size: {size}\n"
-                    "Chip ID: N/A\n"
+                    f"Chip ID: {chip_id_text}\n"
                     "Write Protection:\nN/A\n\n"
-                    f"Raw Output (exit {rc}):\n{out or '(no output)'}"
+                    f"Raw Output (exit {rc}):\n{merged_out or '(no output)'}"
                 )
 
             w.signals.done.connect(done_minipro)
@@ -10707,6 +10802,17 @@ class ToolsPage(PageBase):
     def _minipro_self_test(self) -> None:
         minipro_bin = self._resolve_tool_binary("minipro")
         if not minipro_bin:
+            return
+        ans = QMessageBox.question(
+            self,
+            "Hardware Self-Test (-t)",
+            "Before running self-test, remove any chip from the programmer socket.\n\n"
+            "Proceed with hardware self-test now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            self.log("Self-test cancelled by user (chip-removal confirmation not accepted).")
             return
         self._run_capture_to_dialog("Hardware Self-Test (-t)", [minipro_bin, "-t"], timeout=180)
 

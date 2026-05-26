@@ -1,5 +1,31 @@
 # Release Notes
 
+## v1.1.5
+
+### Highlights (v1.1.5)
+
+- About ROM for Minipro now combines both command outputs:
+  - `-D` to populate **Chip ID**
+  - `-d` to populate model/vendor/size and remaining details
+- Added a remove-chip warning confirmation before Minipro hardware self-test (`-t`) in both Tk and Qt flows.
+
+### Build & Release (v1.1.5)
+
+- Hardened `scripts/build_binaries.py` with a PyInstaller preflight check and clearer interpreter guidance.
+- Updated README commands to prefer `python` on Windows, avoiding MSYS `python3` mismatches.
+
+### Version (v1.1.5)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.5"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.5"`
+
+### Build Artifact Targets (v1.1.5)
+
+- `release/flashgui-v1.1.5-windows-x64-portable.zip`
+- `release/flashgui-v1.1.5-linux-x64-portable.zip`
+- `release/flashgui-v1.1.5-macos-x64-portable.zip`
+
 ## v1.1.4
 
 ### Highlights (v1.1.4)

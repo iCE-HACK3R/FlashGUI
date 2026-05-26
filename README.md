@@ -90,7 +90,7 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 1. Install Python 3.10+
 1. Create a virtual environment:
 
-- `python3 -m venv .venv`
+- `python -m venv .venv`
 
 1. Activate the virtual environment:
 
@@ -99,18 +99,20 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 1. Install dependencies:
 
-- `python3 -m pip install -r requirements.txt`
+- `python -m pip install -r requirements.txt`
 
 1. Run:
 
-- `python3 flashgui.py`
+- `python flashgui.py`
+
+Windows note: in some setups `python3` may resolve to MSYS/MinGW Python instead of your `.venv`; prefer `python` after activating your virtual environment.
 
 If PySide6/Qt startup fails on Linux, the app will attempt a Tk fallback (`flashgui_legacy.py`).
 
 ## Usage
 
 - Launch the app:
-  - `python3 flashgui.py`
+  - `python flashgui.py`
 - Select tool/programmer, detect chip, then perform read/verify/write operations from the GUI.
 - Keep `resources/` next to the executable/script so icons, datasheets, and optional tool bundles resolve correctly.
 
@@ -187,16 +189,25 @@ Or use the cross-platform helper:
 
 - `python scripts/build_binaries.py`
 
+To create a release that triggers the Windows/Linux/macOS GitHub Actions matrix:
+
+- `python scripts/release.py`
+
+Optional flags:
+
+- `python scripts/release.py --skip-local-build` (skip the local build validation step)
+- `python scripts/release.py --allow-dirty` (allow publishing with uncommitted changes)
+
 Release bundle generated in this repo:
 
-- `release/flashgui-v1.1.4-windows-x64-portable.zip`
+- `release/flashgui-v1.1.5-windows-x64-portable.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.4`)
+- Create an annotated tag (example: `v1.1.5`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.4`
+- Create a GitHub Release from tag `v1.1.5`
 - CI will build on Windows/Linux/macOS and auto-attach generated portable artifacts to that release
 
 ## Mentions & thanks
@@ -220,5 +231,6 @@ Also worth a look from the "flashrom gui" ecosystem search:
 
 > This project is an independent frontend and is not affiliated with or endorsed by the `flashrom` or `flashprog` maintainers.
 
-## For the EZP2020 serprog FW 
-- https://github.com/iCE-HACK3R/EZP2020_CH552x-FW
+## For the EZP2020 serprog FW
+
+- [EZP2020_CH552x-FW](https://github.com/iCE-HACK3R/EZP2020_CH552x-FW)
