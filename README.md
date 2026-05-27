@@ -12,12 +12,37 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 ## What it does
 
-- Detects and uses either `flashrom` or `flashprog`
+- Detects and uses either `flashrom` or `flashprog` & `minipro` (if available) for supported operations
 - Supports `minipro` workflows (including T48/T56 class programmers)
 - Helps with programmer/chip probing and operation setup
 - Supports safer workflows (backup-first habits, explicit write actions, status logging)
 - Includes Binwalk tooling for ROM analysis and extract+analyze flows
 - Includes datasheet resolution helpers (including handling ambiguous chip-ID matches)
+
+## UI Feature Matrix (Tk vs Qt)
+
+| Feature                                                         | Tk UI | Qt UI |
+| --------------------------------------------------------------- | :---: | :---: |
+| Tool selection (`flashrom` / `flashprog` / `minipro`)           |  ✅   |  ✅   |
+| Programmer detection (including minipro hardware probe)         |  ✅   |  ✅   |
+| Chip detect / ROM autodetect                                    |  ✅   |  ✅   |
+| Read ROM workflow                                               |  ✅   |  ✅   |
+| Write ROM workflow                                              |  ✅   |  ✅   |
+| Verify ROM workflow                                             |  ✅   |  ✅   |
+| Erase ROM workflow                                              |  ✅   |  ✅   |
+| Write-Protect controls (non-minipro)                            |  ✅   |  ✅   |
+| About ROM / chip info page                                      |  ✅   |  ✅   |
+| Datasheet open + chip candidate resolution                      |  ✅   |  ✅   |
+| Progress + completion status (`SHA256`, elapsed, result)        |  ✅   |  ✅   |
+| Command preview + per-operation output log controls             |  ✅   |  ✅   |
+| Startup settings validation + first-run setup prompt            |  ✅   |  ✅   |
+| Settings page (paths, theme/font, behavior, diagnostics)        |  ✅   |  ✅   |
+| Global log panel with font/verbose controls                     |  ➖   |  ✅   |
+| Dedicated Tools page (Binwalk/hash/convert/diff/fwinfo helpers) |  ➖   |  ✅   |
+| Serial Programmer Console (connect/send/receive terminal)       |  ➖   |  ✅   |
+| Help & About page with update/help shortcuts                    |  ➖   |  ✅   |
+
+Legend: ✅ = available in this UI, ➖ = not exposed in this UI.
 
 ## Screenshots
 
@@ -170,7 +195,7 @@ MIT License — see `LICENSE` for details.
   - `chips/` — chip metadata and hint maps
   - `datasheets/` — local datasheet cache
   - `icons/` — application icons
-  - `tools/` — optional bundled tool binaries (`flashrom` / `flashprog`)
+  - `tools/` — optional bundled tool binaries (`flashrom` / `flashprog` / `minipro`)
 - `MANUAL_QA_CHECKLIST.md` — manual QA checklist used for release sanity checks
 
 ## Publishing / release notes
@@ -178,6 +203,7 @@ MIT License — see `LICENSE` for details.
 - Ensure acknowledgements and upstream links remain intact (see below).
 - If distributing bundled third-party binaries, include their required license notices in your release artifacts.
 - Use `THIRD_PARTY_NOTICES.md` as your release checklist and attribution baseline.
+- `THIRD_PARTY_NOTICES.md` currently tracks notices for `flashrom`, `flashprog`, and `minipro`.
 - Validate your release build with the checklist in `MANUAL_QA_CHECKLIST.md`.
 
 Build/publish one-file executable with icon:
@@ -200,14 +226,14 @@ Optional flags:
 
 Release bundle generated in this repo:
 
-- `release/flashgui-v1.1.5-windows-x64-portable.zip`
+- `release/flashgui-v1.1.6-windows-x64-portable.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.5`)
+- Create an annotated tag (example: `v1.1.6`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.5`
+- Create a GitHub Release from tag `v1.1.6`
 - CI will build on Windows/Linux/macOS and auto-attach generated portable artifacts to that release
 
 ## Mentions & thanks

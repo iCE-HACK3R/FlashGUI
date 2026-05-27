@@ -76,7 +76,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.5"
+VERSION = "1.1.6"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -1572,57 +1572,68 @@ def _detect_minipro_hardware(minipro_binary: str) -> tuple[bool, str, list[str]]
 
     IMPORTANT: this intentionally avoids ``-t`` (self-test), because self-test can
     require the programmer to be disconnected from an inserted chip.
+
+    ``minipro -V`` is preferred because it reports the connected programmer
+    model (for example ``Found T48 ...``) without touching the target socket.
+    A fallback to ``-l`` is kept for older builds that may not provide the same
+    hardware summary on ``-V``.
     """
-    try:
-        proc = subprocess.run(
-            [minipro_binary, "-l"],
-            check=False,
-            capture_output=True,
-            text=True,
-            errors="replace",
-            timeout=120,
+    def _run_probe(args: list[str]) -> tuple[list[str], str]:
+        try:
+            proc = subprocess.run(
+                [minipro_binary, *args],
+                check=False,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=120,
+            )
+        except Exception:
+            return [], ""
+
+        out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+        raw_lines = [ln.rstrip("\r\n") for ln in out.splitlines() if ln.strip()]
+        found_line = ""
+        for ln in raw_lines:
+            if ln.lower().startswith("found "):
+                found_line = _normalize_minipro_model_tokens(ln.strip())
+                break
+        diag_prefixes = (
+            "found ",
+            "warning:",
+            "expected",
+            "device code:",
+            "serial code:",
+            "manufactured:",
+            "usb speed:",
+            "supply voltage:",
         )
-    except Exception:
-        return False, "", []
+        lines = [
+            _normalize_minipro_model_tokens(ln)
+            for ln in raw_lines
+            if ln.lower().startswith(diag_prefixes)
+        ]
+        if not lines:
+            lines = [_normalize_minipro_model_tokens(ln) for ln in raw_lines[:20]]
+        return lines, found_line
 
-    out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
-    raw_lines = [ln.rstrip("\r\n") for ln in out.splitlines() if ln.strip()]
+    lines, found_line = _run_probe(["-V"])
+    if not found_line:
+        fallback_lines, found_line = _run_probe(["-l"])
+        if fallback_lines:
+            lines = fallback_lines
 
-    diag_prefixes = (
-        "found ",
-        "warning:",
-        "expected",
-        "device code:",
-        "serial code:",
-        "manufactured:",
-        "usb speed:",
-        "supply voltage:",
-    )
-    lines = [
-        _normalize_minipro_model_tokens(ln)
-        for ln in raw_lines
-        if ln.lower().startswith(diag_prefixes)
-    ]
-    if not lines:
-        lines = [_normalize_minipro_model_tokens(ln) for ln in raw_lines[:20]]
+    if not found_line:
+        return False, "", lines
 
-    found_line = ""
-    for ln in raw_lines:
-        if ln.lower().startswith("found "):
-            found_line = _normalize_minipro_model_tokens(ln.strip())
-            break
-
-    if found_line:
-        label = found_line
-        _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = label
-        model = ""
-        model_match = re.search(r"\b(TL866II\+|TL866A/CS|TL866|T48|T56|T76)\b", label, re.IGNORECASE)
-        if model_match:
-            model = _normalize_minipro_model_tokens(model_match.group(1))
-        _PROGRAMMER_BASE_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = f"minipro USB ({model})" if model else "minipro USB"
-        return True, label, lines
-
-    return False, "", lines
+    label = found_line
+    _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = label
+    model = ""
+    model_match = re.search(r"\b(TL866II\+|TL866A/CS|TL866|T48|T56|T76)\b", label, re.IGNORECASE)
+    if model_match:
+        model = _normalize_minipro_model_tokens(model_match.group(1))
+    _PROGRAMMER_BASE_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = f"minipro USB ({model})" if model else "minipro USB"
+    return True, label, lines
 
 
 def _list_minipro_devices(minipro_binary: str, limit: int = 8192) -> list[str]:
@@ -1749,6 +1760,11 @@ def _autodetect_minipro_spi_devices(minipro_binary: str) -> tuple[bool, str, lis
                 _PROGRAMMER_BASE_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = f"minipro USB ({model})" if model else "minipro USB"
             return bool(found_line), found_line, chips, norm_lines[:120], width
 
+    supported = _list_minipro_devices(minipro_binary)
+    if supported:
+        all_lines.append("No live SPI chip match from minipro -a 8/-a 16; listing supported minipro parts instead.")
+        return bool(found_line), found_line, supported, all_lines[:120], ""
+
     return bool(found_line), found_line, [], all_lines[:120], ""
 
 
@@ -1781,7 +1797,7 @@ _USB_PROGRAMMER_MAP: list[tuple[str, str, str, str]] = [
     ("0483", "deaf", "dediprog",      "Dediprog SF600"),
     ("0403", "6010", "ft2232_spi",    "FTDI FT2232H"),
     ("0403", "6011", "ft2232_spi",    "FTDI FT4232H"),
-    ("0403", "6014", "ft2232_spi",    "FTDI FT232H"),
+    ("0403", "6014", "ft2232_spi:divisor=4,type=232h", "FTDI FT232H"),
     ("0403", "601c", "ft4222_spi",    "FTDI FT4222H"),
     ("0403", "6001", "buspirate_spi", "Bus Pirate"),
     ("1209", "c0ca", "dirtyjtag_spi", "DirtyJTAG"),
@@ -3465,7 +3481,7 @@ class _ChipMixin:
 
     def _autodetect(self) -> None:
         if _is_minipro_tool(self.state.tool, self.state.binary):
-            self.log.append("minipro mode: autodetecting SPI chip via -a 8 (fallback -a 16)…")
+            self.log.append("minipro mode: autodetecting SPI chip via -a 8 (fallback -a 16, then supported parts)…")
             self.progress.pulse_start()
 
             def _worker_minipro() -> None:
@@ -3478,7 +3494,7 @@ class _ChipMixin:
                         _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = label
                 hint = None
                 if not chips:
-                    hint = "No SPI devices matched via minipro -a 8/-a 16. Check chip seating/orientation and try again."
+                    hint = "No SPI devices matched via minipro -a 8/-a 16; showing supported minipro parts instead."
                 elif bus:
                     _safe_after(self.root, 0, lambda b=bus: self.log.append(f"Autodetect matched {len(chips)} device(s) on SPI{b}."))
                 _safe_after(self.root, 0, lambda: self._autodetect_done(chips, self.state.programmer or None, hint))
@@ -5143,80 +5159,90 @@ class PageSettings:
         fonts = sorted(set(_tkfont.families()))
         all_fonts = [f for f in _FONT_PRESETS if f not in fonts] + fonts
 
-        # Font dropdown with Download button
-        ttk.Label(lf1, text="Font:").grid(row=0, column=0, sticky="e", pady=3)
+        # Font + Font Size in one top row
+        top_row = ttk.Frame(lf1)
+        top_row.grid(row=0, column=0, columnspan=4, sticky="ew", pady=3)
+        top_row.columnconfigure(1, weight=1)
+        top_row.columnconfigure(4, weight=1)
+
+        ttk.Label(top_row, text="Font:").grid(row=0, column=0, sticky="e", padx=(0, 6))
         self.font_var = tk.StringVar(value=self.state.preferred_font or (_FONT_PRESETS[0] if _FONT_PRESETS else ""))
-        ttk.Combobox(lf1, textvariable=self.font_var, values=all_fonts, width=30).grid(
-            row=0, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Combobox(top_row, textvariable=self.font_var, values=all_fonts, width=30).grid(
+            row=0, column=1, sticky="ew", padx=(0, 4))
         self.btn_download_font = ttk.Button(
-            lf1,
+            top_row,
             text="Download",
             width=8,
             command=self._download_font,
         )
-        self.btn_download_font.grid(row=0, column=2, pady=3)
+        self.btn_download_font.grid(row=0, column=2, padx=(0, 10))
 
-        # Font Size slider
-        ttk.Label(lf1, text="Font Size:").grid(row=1, column=0, sticky="e", pady=3)
+        ttk.Label(top_row, text="Font Size:").grid(row=0, column=3, sticky="e", padx=(0, 6))
         self.font_size_var = tk.IntVar(value=self.state.font_size)
-        size_slider_frame = ttk.Frame(lf1)
-        size_slider_frame.grid(row=1, column=1, sticky="ew", padx=(6, 4), pady=3)
+        size_slider_frame = ttk.Frame(top_row)
+        size_slider_frame.grid(row=0, column=4, sticky="ew", padx=(0, 4))
         size_slider_frame.columnconfigure(0, weight=1)
-        self.font_size_slider = tk.Scale(size_slider_frame, from_=8, to=16, orient="horizontal",
-                                          variable=self.font_size_var, bg="#f0f0f0", troughcolor="#e0e0e0")
+        self.font_size_slider = tk.Scale(
+            size_slider_frame,
+            from_=8,
+            to=16,
+            orient="horizontal",
+            variable=self.font_size_var,
+            bg="#f0f0f0",
+            troughcolor="#e0e0e0",
+        )
         self.font_size_slider.grid(row=0, column=0, sticky="ew")
         ttk.Label(size_slider_frame, text="(8–16)", foreground="#888888", width=6).grid(
             row=0, column=1, sticky="w", padx=(4, 0))
-        ttk.Button(lf1, text="Apply", width=8,
-                   command=self._apply_font_size).grid(row=1, column=2, columnspan=2, pady=3)
+        ttk.Button(top_row, text="Apply", width=8, command=self._apply_font_size).grid(row=0, column=5)
 
-        ttk.Label(lf1, text="flashrom binary:").grid(row=2, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="flashrom binary:").grid(row=1, column=0, sticky="e", pady=3)
         self.flashrom_var = tk.StringVar(value=self.state.flashrom_bin)
-        ttk.Entry(lf1, textvariable=self.flashrom_var, width=50).grid(row=2, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Entry(lf1, textvariable=self.flashrom_var, width=50).grid(row=1, column=1, sticky="ew", padx=(6, 4), pady=3)
         ttk.Button(lf1, text="Browse", width=8,
                    command=lambda: self._browse_binary(self.flashrom_var, "Select flashrom binary")
-                   ).grid(row=2, column=2, columnspan=2, pady=3)
+               ).grid(row=1, column=2, columnspan=2, pady=3)
 
-        ttk.Label(lf1, text="flashprog binary:").grid(row=3, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="flashprog binary:").grid(row=2, column=0, sticky="e", pady=3)
         self.flashprog_var = tk.StringVar(value=self.state.flashprog_bin)
-        ttk.Entry(lf1, textvariable=self.flashprog_var, width=50).grid(row=3, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Entry(lf1, textvariable=self.flashprog_var, width=50).grid(row=2, column=1, sticky="ew", padx=(6, 4), pady=3)
         ttk.Button(lf1, text="Browse", width=8,
                    command=lambda: self._browse_binary(self.flashprog_var, "Select flashprog binary")
-                   ).grid(row=3, column=2, columnspan=2, pady=3)
+               ).grid(row=2, column=2, columnspan=2, pady=3)
 
-        ttk.Label(lf1, text="minipro binary:").grid(row=4, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="minipro binary:").grid(row=3, column=0, sticky="e", pady=3)
         self.minipro_var = tk.StringVar(value=self.state.minipro_bin)
-        ttk.Entry(lf1, textvariable=self.minipro_var, width=50).grid(row=4, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Entry(lf1, textvariable=self.minipro_var, width=50).grid(row=3, column=1, sticky="ew", padx=(6, 4), pady=3)
         ttk.Button(lf1, text="Browse", width=8,
                command=lambda: self._browse_binary(self.minipro_var, "Select minipro binary")
-               ).grid(row=4, column=2, columnspan=2, pady=3)
+             ).grid(row=3, column=2, columnspan=2, pady=3)
 
-        ttk.Label(lf1, text="fwinfo binary:").grid(row=5, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="fwinfo binary:").grid(row=4, column=0, sticky="e", pady=3)
         self.fwinfo_var = tk.StringVar(value=self.state.fwinfo_bin)
-        ttk.Entry(lf1, textvariable=self.fwinfo_var, width=50).grid(row=5, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Entry(lf1, textvariable=self.fwinfo_var, width=50).grid(row=4, column=1, sticky="ew", padx=(6, 4), pady=3)
         ttk.Button(lf1, text="Browse", width=8,
                command=lambda: self._browse_binary(self.fwinfo_var, "Select fwinfo binary")
-               ).grid(row=5, column=2, columnspan=2, pady=3)
+             ).grid(row=4, column=2, columnspan=2, pady=3)
 
         self.flashrom_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
         self.flashprog_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
         self.minipro_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
         self.fwinfo_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
 
-        ttk.Label(lf1, text="Workspace path:").grid(row=6, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="Workspace path:").grid(row=5, column=0, sticky="e", pady=3)
         self.workspace_var = tk.StringVar(value=self.state.workspace_dir)
-        ttk.Entry(lf1, textvariable=self.workspace_var, width=50).grid(row=6, column=1, sticky="ew", padx=(6, 4), pady=3)
-        ttk.Button(lf1, text="Browse", width=8, command=self._browse_workspace).grid(row=6, column=2, columnspan=2, pady=3)
+        ttk.Entry(lf1, textvariable=self.workspace_var, width=50).grid(row=5, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8, command=self._browse_workspace).grid(row=5, column=2, columnspan=2, pady=3)
 
-        ttk.Label(lf1, text="Window geometry:").grid(row=7, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="Window geometry:").grid(row=6, column=0, sticky="e", pady=3)
         self.geometry_var = tk.StringVar(value=self.state.window_geometry or self.app.root.geometry())
-        ttk.Entry(lf1, textvariable=self.geometry_var, width=50).grid(row=7, column=1, sticky="ew", padx=(6, 4), pady=3)
-        ttk.Button(lf1, text="Acquire", width=8, command=self._capture_geometry).grid(row=7, column=2, columnspan=2, pady=3)
+        ttk.Entry(lf1, textvariable=self.geometry_var, width=50).grid(row=6, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Acquire", width=8, command=self._capture_geometry).grid(row=6, column=2, columnspan=2, pady=3)
 
-        ttk.Label(lf1, text="Log file path:").grid(row=8, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="Log file path:").grid(row=7, column=0, sticky="e", pady=3)
         self.log_file_var = tk.StringVar(value=self.state.log_file_path)
-        ttk.Entry(lf1, textvariable=self.log_file_var, width=50).grid(row=8, column=1, sticky="ew", padx=(6, 4), pady=3)
-        ttk.Button(lf1, text="Browse", width=8, command=self._browse_log_file).grid(row=8, column=2, columnspan=2, pady=3)
+        ttk.Entry(lf1, textvariable=self.log_file_var, width=50).grid(row=7, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8, command=self._browse_log_file).grid(row=7, column=2, columnspan=2, pady=3)
 
         # ── Behavior ─────────────────────────────────────────────────────────
         lf2 = ttk.LabelFrame(outer, text="Behavior", padding=6)
@@ -6298,6 +6324,7 @@ class AppState:
     def __init__(self) -> None:
         self.settings_path = _settings_path()
         self.settings = _load_settings(self.settings_path)
+        self._loaded_settings_were_empty = not bool(self.settings)
 
         # One-time migration from legacy location (next to script/executable)
         # to stable per-user config path.
@@ -6310,6 +6337,7 @@ class AppState:
             legacy = _load_settings(legacy_path)
             if legacy:
                 self.settings = legacy
+                self._loaded_settings_were_empty = False
                 try:
                     _save_settings(self.settings_path, legacy)
                 except OSError:
@@ -6365,13 +6393,119 @@ class AppState:
         self.tmpdir     = tempfile.mkdtemp()
         self._load_sudo_keyring()
 
-        if self._normalized_font_settings_changed:
+        (
+            self.startup_validation_lines,
+            self.startup_missing_binaries,
+            self.startup_requires_first_run,
+            self._settings_autofix_changed,
+        ) = self._validate_startup_settings()
+
+        if self._normalized_font_settings_changed or self._settings_autofix_changed:
             self.settings["preferred_font"] = self.preferred_font
             self.settings["console_font"] = self.console_font
             try:
                 self.save_settings(geometry=self.window_geometry)
             except Exception:
                 pass
+
+    def _validate_startup_settings(self) -> tuple[list[str], list[str], bool, bool]:
+        """Validate persisted settings, normalize values, and detect first-run setup needs."""
+        lines: list[str] = []
+        missing_binaries: list[str] = []
+        invalid_configured_paths: list[str] = []
+        changed = False
+
+        defaults: dict[str, object] = {
+            "tool": "flashrom",
+            "flashrom_bin": "",
+            "flashprog_bin": "",
+            "minipro_bin": "",
+            "fwinfo_bin": "",
+            "workspace_dir": _default_workspace_dir(),
+            "preferred_font": "",
+            "console_font": "",
+            "console_font_size": 0,
+            "font_size": 10,
+            "window_geometry": "",
+            "log_file_path": "",
+            "use_sudo": False,
+            "auto_detect_programmer": False,
+            "theme": "",
+            "beep_on_complete": True,
+            "layout_mode": "sidebar",
+            "verbose_level": 0,
+        }
+        missing_keys = [k for k in defaults if k not in self.settings]
+        if missing_keys:
+            for key in missing_keys:
+                self.settings[key] = defaults[key]
+            lines.append(f"Settings validation: restored missing key(s): {', '.join(sorted(missing_keys))}")
+            changed = True
+
+        if self.layout_mode not in {"sidebar", "tab"}:
+            lines.append(f"Settings validation: invalid layout_mode '{self.layout_mode}', reset to 'sidebar'.")
+            self.layout_mode = "sidebar"
+            self.settings["layout_mode"] = self.layout_mode
+            changed = True
+
+        if self.tool not in {"flashrom", "flashprog", "minipro"}:
+            lines.append(f"Settings validation: invalid tool '{self.tool}', reset to 'flashrom'.")
+            self.tool = "flashrom"
+            self.settings["tool"] = self.tool
+            changed = True
+
+        if not self.workspace_dir:
+            self.workspace_dir = _default_workspace_dir()
+            self.settings["workspace_dir"] = self.workspace_dir
+            lines.append("Settings validation: workspace_dir was empty; restored default workspace path.")
+            changed = True
+        if self.workspace_dir and not os.path.isdir(self.workspace_dir):
+            try:
+                os.makedirs(self.workspace_dir, exist_ok=True)
+                lines.append(f"Settings validation: created workspace_dir: {self.workspace_dir}")
+            except OSError as exc:
+                lines.append(f"Settings warning: failed to create workspace_dir '{self.workspace_dir}': {exc}")
+
+        if not self.log_file_path:
+            self.log_file_path = os.path.join(self.workspace_dir, "flashgui.log")
+            self.settings["log_file_path"] = self.log_file_path
+            lines.append("Settings validation: log_file_path was empty; restored default log file path.")
+            changed = True
+
+        binary_checks: list[tuple[str, str, str]] = [
+            ("flashrom", self.flashrom_bin, "flashrom"),
+            ("flashprog", self.flashprog_bin, "flashprog"),
+            ("minipro", self.minipro_bin, "minipro"),
+            ("fwinfo", self.fwinfo_bin, "fwinfo"),
+        ]
+
+        for tool_name, configured, fallback in binary_checks:
+            cfg = (configured or "").strip()
+            if cfg:
+                ok = bool(os.path.isfile(cfg) or shutil.which(cfg))
+                if not ok:
+                    invalid_configured_paths.append(tool_name)
+                    missing_binaries.append(tool_name)
+                    lines.append(
+                        f"Settings warning: {tool_name}_bin points to a missing path: {cfg}"
+                    )
+            else:
+                if shutil.which(fallback) is None:
+                    missing_binaries.append(tool_name)
+
+        # First-run setup should trigger when settings are missing/empty, paths are
+        # broken, or none of the primary flashing tools are available.
+        primary_tools = {"flashrom", "flashprog", "minipro"}
+        primary_missing = primary_tools.issubset(set(missing_binaries))
+        needs_first_run = bool(
+            self._loaded_settings_were_empty
+            or invalid_configured_paths
+            or primary_missing
+        )
+        if needs_first_run:
+            lines.append("Startup check: first-run setup required (open Settings and configure tool paths).")
+
+        return lines, missing_binaries, needs_first_run, changed
 
     def _load_sudo_keyring(self) -> None:
         """Restore sudo password from system keyring if the keyring package is available."""
@@ -6714,9 +6848,35 @@ class FlashGUI:
         self.log.append(f"flashgui {VERSION}  —  dual-tool GUI for flashrom + flashprog")
         for line in _startup_runtime_log_lines(self.state):
             self.log.append(line)
+        self._apply_startup_settings_validation()
         self._refresh_tool()
         if self.state.auto_detect_programmer:
             _safe_after(self.root, 1500, self._on_detect_programmer)
+
+    def _apply_startup_settings_validation(self) -> None:
+        lines = list(getattr(self.state, "startup_validation_lines", []) or [])
+        for line in lines:
+            self.log.append(line)
+
+        if not getattr(self.state, "startup_requires_first_run", False):
+            return
+
+        self.log.append("Startup check: opening Settings for first-run setup.")
+        self._show_page("settings")
+
+        missing = list(getattr(self.state, "startup_missing_binaries", []) or [])
+        details = f"\nMissing tools: {', '.join(missing)}" if missing else ""
+
+        def _show_prompt() -> None:
+            messagebox.showwarning(
+                "First-run setup required",
+                "Some tool paths are missing or invalid.\n"
+                "Please configure binaries in Settings, then click Apply & Save."
+                f"{details}",
+                parent=self.root,
+            )
+
+        _safe_after(self.root, 120, _show_prompt)
 
     def _rebuild_pages(self) -> None:
         for tab in self.nb.tabs():
@@ -7861,7 +8021,7 @@ class ChipMixin:
         prefer_probe_resolution: bool = False,
     ) -> None:
         if _is_minipro_tool(state.tool, state.binary):
-            log_fn("minipro mode: autodetecting SPI chip via -a 8 (fallback -a 16)…")
+            log_fn("minipro mode: autodetecting SPI chip via -a 8 (fallback -a 16, then supported parts)…")
 
             def done_minipro(payload: dict) -> None:
                 raw_chips = payload.get("chips", []) or []
@@ -7904,7 +8064,7 @@ class ChipMixin:
                         _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = label
                 if chips and bus:
                     signals.line.emit(f"Autodetect matched {len(chips)} device(s) on SPI{bus}.")
-                failure_hint = None if chips else "No SPI devices matched via minipro -a 8/-a 16. Check chip seating/orientation and try again."
+                failure_hint = None if chips else "No SPI devices matched via minipro -a 8/-a 16; showing supported minipro parts instead."
                 signals.done.emit(
                     {
                         "chips": chips,
@@ -8932,23 +9092,36 @@ class SettingsPage(PageBase):
         self.btn_download_font = QPushButton("Download")
         self.btn_download_font.setProperty("kind", "subtle")
         self.btn_download_font.setMinimumWidth(140)
-        row_font = QWidget(self)
-        row_font_l = QHBoxLayout(row_font)
-        row_font_l.setContentsMargins(0, 0, 0, 0)
-        row_font_l.addWidget(self.font_combo, 1)
-        row_font_l.addWidget(self.btn_download_font)
-        f_paths.addRow("Font:", row_font)
 
         self.btn_apply_font_size = QPushButton("Apply")
         self.btn_apply_font_size.setProperty("kind", "subtle")
         self.btn_apply_font_size.setMinimumWidth(140)
-        row_size = QWidget(self)
-        row_size_l = QHBoxLayout(row_size)
-        row_size_l.setContentsMargins(0, 0, 0, 0)
-        row_size_l.addWidget(self.font_size_slider, 1)
-        row_size_l.addWidget(self.font_size_label, 0)
-        row_size_l.addWidget(self.btn_apply_font_size)
-        f_paths.addRow("Font Size:", row_size)
+
+        row_font_size = QWidget(self)
+        row_font_size_l = QHBoxLayout(row_font_size)
+        row_font_size_l.setContentsMargins(0, 0, 0, 0)
+        row_font_size_l.setSpacing(10)
+
+        left_block = QWidget(self)
+        left_l = QHBoxLayout(left_block)
+        left_l.setContentsMargins(0, 0, 0, 0)
+        left_l.setSpacing(8)
+        left_l.addWidget(self.font_combo, 1)
+        left_l.addWidget(self.btn_download_font)
+
+        right_block = QWidget(self)
+        right_l = QHBoxLayout(right_block)
+        right_l.setContentsMargins(0, 0, 0, 0)
+        right_l.setSpacing(8)
+        right_l.addWidget(QLabel("Font Size:"))
+        right_l.addWidget(self.font_size_slider, 1)
+        right_l.addWidget(self.font_size_label)
+        right_l.addWidget(self.btn_apply_font_size)
+
+        row_font_size_l.addWidget(left_block, 1)
+        row_font_size_l.addWidget(right_block, 1)
+
+        f_paths.addRow("Font:", row_font_size)
 
         self.btn_browse_flashrom = QPushButton("Browse")
         self.btn_browse_flashrom.setProperty("kind", "subtle")
@@ -9124,11 +9297,9 @@ class SettingsPage(PageBase):
         # Systems & settings
         g_checks = QGroupBox("Systems & Settings")
         l_checks = QVBoxLayout(g_checks)
-        # l_checks.setContentsMargins(0, 0, 0, 0)
-        # l_checks.setSpacing(0)
-        r1 = QHBoxLayout()
-        # r1.setContentsMargins(0, 0, 0, 0)
-        # r1.setSpacing(0)
+        checks_grid = QGridLayout()
+        checks_grid.setHorizontalSpacing(8)
+        checks_grid.setVerticalSpacing(8)
         self.btn_check_dep = QPushButton("Check Dependencies")
         self.btn_fix_dep = QPushButton("Fix Dependencies")
         self.btn_check_perms = QPushButton("Check Binary Permissions")
@@ -9156,15 +9327,6 @@ class SettingsPage(PageBase):
         self.btn_reload_udev.setMinimumWidth(140)
         self.btn_add_plugdev.setProperty("kind", "subtle")
         self.btn_add_plugdev.setMinimumWidth(140)
-        r1.addWidget(self.btn_check_dep)
-        r1.addWidget(self.btn_fix_dep)
-        r1.addWidget(self.btn_check_perms)
-        r1.addWidget(self.btn_fix_perms)
-        r1.addWidget(self.btn_check_udev)
-        r1.addWidget(self.btn_backup_udev)
-        r1.addWidget(self.btn_fix_udev)
-        r1.addWidget(self.btn_reload_udev)
-        r1.addWidget(self.btn_add_plugdev)
 
         if self._is_windows:
             self.btn_check_perms.setEnabled(False)
@@ -9199,12 +9361,32 @@ class SettingsPage(PageBase):
         self.btn_reset_defaults.setProperty("kind", "subtle")
         self.btn_reset_defaults.setMinimumWidth(140)
         self.btn_apply.setMinimumWidth(140)
-        r1.addWidget(self.btn_load_file)
-        r1.addWidget(self.btn_save_file)
-        r1.addWidget(self.btn_reset_defaults)
-        r1.addWidget(self.btn_apply)
-        r1.addStretch(1)
-        l_checks.addLayout(r1)
+
+        check_buttons: list[QPushButton] = [
+            self.btn_check_dep,
+            self.btn_fix_dep,
+            self.btn_check_perms,
+            self.btn_fix_perms,
+            self.btn_check_udev,
+            self.btn_backup_udev,
+            self.btn_fix_udev,
+            self.btn_reload_udev,
+            self.btn_add_plugdev,
+            self.btn_load_file,
+            self.btn_save_file,
+            self.btn_reset_defaults,
+            self.btn_apply,
+        ]
+
+        visible_buttons = [b for b in check_buttons if b.isVisible()]
+        columns = 5 if self._is_linux else 4
+        for i, btn in enumerate(visible_buttons):
+            row = i // columns
+            col = i % columns
+            checks_grid.addWidget(btn, row, col)
+        checks_grid.setColumnStretch(columns, 1)
+
+        l_checks.addLayout(checks_grid)
 
         outer.addWidget(g_checks)
         outer.addStretch(1)
@@ -11194,6 +11376,7 @@ class FlashGUIQt(QMainWindow):
             self.apply_theme(self.state.theme)
         self.apply_runtime_font_preferences()
         self._log_startup_runtime_info()
+        self._apply_startup_settings_validation()
         self._log_startup_font_restore()
 
         # Start tool probing after the event loop starts; kicking off thread-pool
@@ -11201,6 +11384,42 @@ class FlashGUIQt(QMainWindow):
         QTimer.singleShot(0, self._refresh_tool)
         if self.state.auto_detect_programmer:
             QTimer.singleShot(1200, self._on_detect_programmer)
+
+    def _apply_startup_settings_validation(self) -> None:
+        lines = list(getattr(self.state, "startup_validation_lines", []) or [])
+        for line in lines:
+            self.log.append_line(line)
+
+        if not getattr(self.state, "startup_requires_first_run", False):
+            return
+
+        self.log.append_line("Startup check: opening Settings for first-run setup.")
+        self._open_settings_page()
+
+        missing = list(getattr(self.state, "startup_missing_binaries", []) or [])
+        details = f"\n\nMissing tools: {', '.join(missing)}" if missing else ""
+
+        def _show_prompt() -> None:
+            QMessageBox.warning(
+                self,
+                "First-run setup required",
+                "Some tool paths are missing or invalid.\n"
+                "Please open Settings, configure binaries, then click Apply & Save."
+                f"{details}",
+            )
+
+        QTimer.singleShot(160, _show_prompt)
+
+    def _open_settings_page(self) -> None:
+        target_index = -1
+        for i, page in enumerate(getattr(self, "pages", [])):
+            title = str(getattr(page, "title", "")).strip().lower()
+            if title == "settings":
+                target_index = i
+                break
+        if target_index >= 0:
+            self.sidebar.setCurrentRow(target_index)
+            self.stack.setCurrentIndex(target_index)
 
     def _log_startup_font_restore(self) -> None:
         log_widget = getattr(self, "log", None)

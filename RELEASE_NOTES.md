@@ -1,5 +1,26 @@
 # Release Notes
 
+## v1.1.6
+
+### Highlights (v1.1.6)
+
+- Fixed FT232H autodetect flow by mapping USB ID `0403:6014` to:
+  - `ft2232_spi:divisor=4,type=232h`
+- Fixed Settings page layout overflow on constrained displays (for example Debian KDE FHD) by changing the Qt **Systems & Settings** action area from a single long row to a wrapped grid layout.
+- Added regression coverage for FT232H mapping and Linux `lsusb` autodetect behavior.
+
+### Version (v1.1.6)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.6"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.6"`
+
+### Build Artifact Targets (v1.1.6)
+
+- `release/flashgui-v1.1.6-windows-x64-portable.zip`
+- `release/flashgui-v1.1.6-linux-x64-portable.zip`
+- `release/flashgui-v1.1.6-macos-x64-portable.zip`
+
 ## v1.1.5
 
 ### Highlights (v1.1.5)

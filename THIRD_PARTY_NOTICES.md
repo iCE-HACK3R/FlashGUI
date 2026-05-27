@@ -32,6 +32,18 @@ Include in release package:
 - Upstream license text(s)
 - Source/offer information as required by the applicable license and your distribution method
 
+### 3) minipro
+
+- Project: [minipro](https://gitlab.com/DavidGriffith/minipro)
+- Typical license: GPL-3.0-or-later (see upstream license files for exact terms)
+- How used here: external programmer utility for TL866/T48/T56-class workflows (invoked by GUI)
+- Bundled path (if included): `resources/tools/<platform>/minipro[.exe]`
+
+Include in release package:
+
+- Upstream license text(s)
+- Source/offer information as required by the applicable license and your distribution method
+
 ## Python Dependencies
 
 Python package dependencies are defined in:
@@ -75,4 +87,4 @@ Before publishing a release, confirm:
 
 ---
 
-This project is independent and is not affiliated with or endorsed by the `flashrom` or `flashprog` maintainers.
+This project is independent and is not affiliated with or endorsed by the `flashrom`, `flashprog`, or `minipro` maintainers.
