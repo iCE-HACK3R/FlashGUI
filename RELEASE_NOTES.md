@@ -1,5 +1,26 @@
 # Release Notes
 
+## v1.1.9
+
+### Highlights (v1.1.9)
+
+- Qt UI: improved **global log splitter persistence** by autosaving splitter state when handles move (debounced), in addition to close-time save.
+- Qt UI: added **Use native file dialogs** toggle in Settings → Behavior.
+  - Default: enabled (native dialogs)
+  - Optional: disable native dialogs to use Qt dialogs when mounted-drive visibility is problematic on specific host setups.
+- Routed Qt file/folder pickers through the unified dialog-mode setting for ROM read/write/verify, tools page flows, and settings load/save paths.
+
+### Version (v1.1.9)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.9"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.9"`
+
+### Issue #4 follow-up (v1.1.9)
+
+- This release addresses the remaining UX hardening items tracked in the issue #4 umbrella.
+- Reporter note: please verify behavior on the **latest release** and open a focused follow-up issue only if a specific symptom still reproduces.
+
 ## v1.1.8
 
 ### Highlights (v1.1.8)

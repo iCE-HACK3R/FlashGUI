@@ -77,7 +77,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.8"
+VERSION = "1.1.9"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -6468,6 +6468,7 @@ class AppState:
         )
         _apply_ft232h_divisor(self.ft232h_divisor)
         self.layout_mode            = str(self.settings.get("layout_mode", "sidebar")).strip()  # "sidebar" or "tab"
+        self.use_native_file_dialogs = _as_bool(self.settings.get("use_native_file_dialogs", True), True)
         try:
             self.verbose_level = max(0, min(3, int(str(self.settings.get("verbose_level", 0)).strip() or "0")))
         except (TypeError, ValueError):
@@ -6521,6 +6522,7 @@ class AppState:
             "theme": "",
             "beep_on_complete": True,
             "layout_mode": "sidebar",
+            "use_native_file_dialogs": True,
             "verbose_level": 0,
             "ft232h_divisor": _FT232H_DEFAULT_DIVISOR,
         }
@@ -6650,6 +6652,7 @@ class AppState:
             "theme":                  self.theme,
             "beep_on_complete":       self.beep_on_complete,
             "layout_mode":            self.layout_mode,
+            "use_native_file_dialogs": self.use_native_file_dialogs,
             "verbose_level":          self.verbose_level,
             "ft232h_divisor":         self.ft232h_divisor,
             # sudo_password intentionally omitted — stored in system keyring only
@@ -7332,6 +7335,64 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+def _qfiledialog_options(use_native_dialogs: bool) -> QFileDialog.Option:
+    opts = QFileDialog.Option(0)
+    if not use_native_dialogs:
+        opts |= QFileDialog.Option.DontUseNativeDialog
+    return opts
+
+
+def _qt_get_open_file_name(
+    parent: QWidget,
+    title: str,
+    start_dir: str,
+    file_filter: str,
+    *,
+    use_native_dialogs: bool,
+) -> tuple[str, bool]:
+    path, selected_filter = QFileDialog.getOpenFileName(
+        parent,
+        title,
+        start_dir,
+        file_filter,
+        options=_qfiledialog_options(use_native_dialogs),
+    )
+    return path, bool(path or selected_filter)
+
+
+def _qt_get_save_file_name(
+    parent: QWidget,
+    title: str,
+    start_path: str,
+    file_filter: str,
+    *,
+    use_native_dialogs: bool,
+) -> tuple[str, bool]:
+    path, selected_filter = QFileDialog.getSaveFileName(
+        parent,
+        title,
+        start_path,
+        file_filter,
+        options=_qfiledialog_options(use_native_dialogs),
+    )
+    return path, bool(path or selected_filter)
+
+
+def _qt_get_existing_directory(
+    parent: QWidget,
+    title: str,
+    start_dir: str,
+    *,
+    use_native_dialogs: bool,
+) -> str:
+    return QFileDialog.getExistingDirectory(
+        parent,
+        title,
+        start_dir,
+        options=_qfiledialog_options(use_native_dialogs),
+    )
 
 
 def _qt_preferred_mono_family() -> str:
@@ -8412,7 +8473,13 @@ class ReadPage(OpPageBase, ChipMixin):
             self.clear_command_preview()
 
     def _browse(self) -> None:
-        path, ok = QFileDialog.getSaveFileName(self, "Save ROM dump", os.path.expanduser("~"), "Binary Files (*.bin);;All Files (*)")
+        path, ok = _qt_get_save_file_name(
+            self,
+            "Save ROM dump",
+            os.path.expanduser("~"),
+            "Binary Files (*.bin);;All Files (*)",
+            use_native_dialogs=self.state.use_native_file_dialogs,
+        )
         if ok and path:
             self._filename_is_auto = False
             self.file_edit.setText(path)
@@ -8541,7 +8608,13 @@ class WritePage(OpPageBase, ChipMixin):
                 start_dir = cur_dir
         if not os.path.isdir(start_dir):
             start_dir = os.path.expanduser("~")
-        path, ok = QFileDialog.getOpenFileName(self, "Select ROM file", start_dir, "Binary Files (*.bin);;All Files (*)")
+        path, ok = _qt_get_open_file_name(
+            self,
+            "Select ROM file",
+            start_dir,
+            "Binary Files (*.bin);;All Files (*)",
+            use_native_dialogs=self.state.use_native_file_dialogs,
+        )
         if ok and path:
             self.file_edit.setText(path)
 
@@ -8764,7 +8837,13 @@ class VerifyPage(OpPageBase, ChipMixin):
                 start_dir = cur_dir
         if not os.path.isdir(start_dir):
             start_dir = os.path.expanduser("~")
-        path, ok = QFileDialog.getOpenFileName(self, "Select file to verify", start_dir, "Binary Files (*.bin);;All Files (*)")
+        path, ok = _qt_get_open_file_name(
+            self,
+            "Select file to verify",
+            start_dir,
+            "Binary Files (*.bin);;All Files (*)",
+            use_native_dialogs=self.state.use_native_file_dialogs,
+        )
         if ok and path:
             self.file_edit.setText(path)
 
@@ -9581,8 +9660,11 @@ class SettingsPage(PageBase):
         self.beep.setChecked(self.state.beep_on_complete)
         self.auto_detect = QCheckBox("Auto-detect programmer on startup")
         self.auto_detect.setChecked(self.state.auto_detect_programmer)
+        self.use_native_dialogs = QCheckBox("Use native file dialogs")
+        self.use_native_dialogs.setChecked(self.state.use_native_file_dialogs)
         f_behavior.addRow(self.beep)
         f_behavior.addRow(self.auto_detect)
+        f_behavior.addRow(self.use_native_dialogs)
 
         outer.addWidget(g_behavior)
 
@@ -9856,15 +9938,32 @@ class SettingsPage(PageBase):
 
     def _browse_line(self, line: QLineEdit, title: str, file_mode: bool = True) -> None:
         if file_mode:
-            path, ok = QFileDialog.getOpenFileName(self, title, os.path.expanduser("~"))
+            path, ok = _qt_get_open_file_name(
+                self,
+                title,
+                os.path.expanduser("~"),
+                "All Files (*)",
+                use_native_dialogs=self.state.use_native_file_dialogs,
+            )
         else:
-            path = QFileDialog.getExistingDirectory(self, title, os.path.expanduser("~"))
+            path = _qt_get_existing_directory(
+                self,
+                title,
+                os.path.expanduser("~"),
+                use_native_dialogs=self.state.use_native_file_dialogs,
+            )
             ok = bool(path)
         if ok and path:
             line.setText(path)
 
     def _browse_log_file(self) -> None:
-        path, ok = QFileDialog.getSaveFileName(self, "Select log file", os.path.expanduser("~"), "Log Files (*.log);;All Files (*)")
+        path, ok = _qt_get_save_file_name(
+            self,
+            "Select log file",
+            os.path.expanduser("~"),
+            "Log Files (*.log);;All Files (*)",
+            use_native_dialogs=self.state.use_native_file_dialogs,
+        )
         if ok and path:
             self.log_file_edit.setText(path)
 
@@ -10426,7 +10525,13 @@ class SettingsPage(PageBase):
         self._run_background("add plugdev", _worker, _done)
 
     def _load_from_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Load settings file", self.state.workspace_dir, "JSON (*.json);;All files (*)")
+        path, _ = _qt_get_open_file_name(
+            self,
+            "Load settings file",
+            self.state.workspace_dir,
+            "JSON (*.json);;All files (*)",
+            use_native_dialogs=self.state.use_native_file_dialogs,
+        )
         if not path:
             return
         data = _load_settings(path)
@@ -10437,7 +10542,13 @@ class SettingsPage(PageBase):
         self._log(f"Settings loaded from {path} (not yet applied — click Apply & Save)")
 
     def _save_to_file(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Save settings file", self.state.workspace_dir, "JSON (*.json);;All files (*)")
+        path, _ = _qt_get_save_file_name(
+            self,
+            "Save settings file",
+            self.state.workspace_dir,
+            "JSON (*.json);;All files (*)",
+            use_native_dialogs=self.state.use_native_file_dialogs,
+        )
         if not path:
             return
         data = {
@@ -10456,6 +10567,7 @@ class SettingsPage(PageBase):
             "auto_detect_programmer": self.auto_detect.isChecked(),
             "theme": self.theme_combo.currentText().strip(),
             "layout_mode": "sidebar",
+            "use_native_file_dialogs": self.use_native_dialogs.isChecked(),
             "beep_on_complete": self.beep.isChecked(),
             "verbose_level": int(getattr(self.state, "verbose_level", 0) or 0),
             "ft232h_divisor": _normalize_ft232h_divisor(self.app.ft232h_divisor_combo.currentData()),
@@ -10500,6 +10612,8 @@ class SettingsPage(PageBase):
         self.use_sudo.setChecked(loaded_use_sudo if self._is_linux else False)
         self.auto_detect.setChecked(bool(data.get("auto_detect_programmer", self.auto_detect.isChecked())))
         self.beep.setChecked(bool(data.get("beep_on_complete", self.beep.isChecked())))
+        self.use_native_dialogs.setChecked(bool(data.get("use_native_file_dialogs", self.use_native_dialogs.isChecked())))
+        self.state.use_native_file_dialogs = self.use_native_dialogs.isChecked()
         try:
             v_idx = int(str(data.get("verbose_level", self.state.verbose_level)).strip() or "0")
         except (TypeError, ValueError):
@@ -10547,6 +10661,8 @@ class SettingsPage(PageBase):
         self.sudo_pw.setText("")
         self.auto_detect.setChecked(False)
         self.beep.setChecked(True)
+        self.use_native_dialogs.setChecked(True)
+        self.state.use_native_file_dialogs = True
         self.state.verbose_level = 0
         verbose_combo = getattr(self.app, "verbose_combo", None)
         if verbose_combo is not None:
@@ -10573,6 +10689,7 @@ class SettingsPage(PageBase):
         self.state.sudo_password = self.sudo_pw.text()
         self.state.auto_detect_programmer = self.auto_detect.isChecked()
         self.state.beep_on_complete = self.beep.isChecked()
+        self.state.use_native_file_dialogs = self.use_native_dialogs.isChecked()
         new_divisor = _normalize_ft232h_divisor(self.app.ft232h_divisor_combo.currentData())
         if new_divisor != getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR):
             self.state.ft232h_divisor = new_divisor
@@ -10982,7 +11099,13 @@ class ToolsPage(PageBase):
 
     def _pick_file(self, title: str, flt: str = "All Files (*)") -> str | None:
         start_dir = (self.state.workspace_dir or "").strip() or os.path.expanduser("~")
-        path, ok = QFileDialog.getOpenFileName(self, title, start_dir, flt)
+        path, ok = _qt_get_open_file_name(
+            self,
+            title,
+            start_dir,
+            flt,
+            use_native_dialogs=self.state.use_native_file_dialogs,
+        )
         if ok and path:
             return path
         return None
@@ -10990,7 +11113,13 @@ class ToolsPage(PageBase):
     def _save_file(self, title: str, suggested: str, flt: str = "All Files (*)") -> str | None:
         start_dir = (self.state.workspace_dir or "").strip() or os.path.expanduser("~")
         target = os.path.join(start_dir, suggested)
-        path, ok = QFileDialog.getSaveFileName(self, title, target, flt)
+        path, ok = _qt_get_save_file_name(
+            self,
+            title,
+            target,
+            flt,
+            use_native_dialogs=self.state.use_native_file_dialogs,
+        )
         if ok and path:
             return path
         return None
@@ -11054,10 +11183,11 @@ class ToolsPage(PageBase):
             self.warn("Binwalk not found", "Could not find 'binwalk' in PATH.")
             return
 
-        out_dir = QFileDialog.getExistingDirectory(
+        out_dir = _qt_get_existing_directory(
             self,
             "Select output folder for extracted files",
             self.state.workspace_dir,
+            use_native_dialogs=self.state.use_native_file_dialogs,
         )
         if not out_dir:
             return
@@ -11333,19 +11463,21 @@ class ToolsPage(PageBase):
             return
 
         if pick_mode == QMessageBox.StandardButton.Yes:
-            target, ok = QFileDialog.getOpenFileName(
+            target, ok = _qt_get_open_file_name(
                 self,
                 "Select .dat file",
                 self.state.workspace_dir,
                 "DAT Files (*.dat);;All Files (*)",
+                use_native_dialogs=self.state.use_native_file_dialogs,
             )
             if not ok or not target:
                 return
         else:
-            target = QFileDialog.getExistingDirectory(
+            target = _qt_get_existing_directory(
                 self,
                 "Select folder containing .dat files",
                 self.state.workspace_dir,
+                use_native_dialogs=self.state.use_native_file_dialogs,
             )
             if not target:
                 return
@@ -11364,11 +11496,12 @@ class ToolsPage(PageBase):
         minipro_bin = self._resolve_tool_binary("minipro")
         if not minipro_bin:
             return
-        fw_path, ok = QFileDialog.getOpenFileName(
+        fw_path, ok = _qt_get_open_file_name(
             self,
             "Select minipro firmware file",
             self.state.workspace_dir,
             "Firmware Files (*.bin *.hex *.fw *.upd);;All Files (*)",
+            use_native_dialogs=self.state.use_native_file_dialogs,
         )
         if not ok or not fw_path:
             return
@@ -11782,6 +11915,10 @@ class FlashGUIQt(QMainWindow):
         self.themes = ["default", "dark", "light"]
         self.hsplitter = None  # Will be set in _build_central()
         self.vsplitter = None  # Will be set in _build_central()
+        self._splitter_save_timer = QTimer(self)
+        self._splitter_save_timer.setSingleShot(True)
+        self._splitter_save_timer.setInterval(300)
+        self._splitter_save_timer.timeout.connect(self._persist_splitter_state)
 
         self._build_toolbar()
         self._build_central()
@@ -12025,6 +12162,7 @@ class FlashGUIQt(QMainWindow):
         split.setHandleWidth(8)
         split.setCollapsible(0, False)
         split.setCollapsible(1, False)
+        split.splitterMoved.connect(lambda *_: self._schedule_splitter_state_save())
 
         vsplit.addWidget(split)
 
@@ -12091,6 +12229,7 @@ class FlashGUIQt(QMainWindow):
         vsplit.setHandleWidth(8)
         vsplit.setCollapsible(0, False)
         vsplit.setCollapsible(1, False)
+        vsplit.splitterMoved.connect(lambda *_: self._schedule_splitter_state_save())
 
         self.pages: list[PageBase] = [
             InfoPage(self),
@@ -12248,11 +12387,12 @@ class FlashGUIQt(QMainWindow):
         if not content.strip():
             self.log.append_line("ERROR: No log content to save.")
             return
-        path, _ = QFileDialog.getSaveFileName(
+        path, _ = _qt_get_save_file_name(
             self,
             "Save log",
             self.state.workspace_dir,
             "Text (*.txt);;All files (*)",
+            use_native_dialogs=self.state.use_native_file_dialogs,
         )
         if not path:
             return
@@ -12262,6 +12402,24 @@ class FlashGUIQt(QMainWindow):
             self.log.append_line(f"Log saved to: {path}")
         except Exception as exc:
             self.log.append_line(f"ERROR: Failed to save log: {exc}")
+
+    def _schedule_splitter_state_save(self) -> None:
+        timer = getattr(self, "_splitter_save_timer", None)
+        if isinstance(timer, QTimer):
+            timer.start()
+
+    def _persist_splitter_state(self) -> None:
+        try:
+            if self.hsplitter:
+                h_state = self.hsplitter.saveState()
+                self.state.settings["hsplitter_state"] = h_state.toHex().data().decode()  # type: ignore[attr-defined]
+            if self.vsplitter:
+                v_state = self.vsplitter.saveState()
+                self.state.settings["vsplitter_state"] = v_state.toHex().data().decode()  # type: ignore[attr-defined]
+            self.state.window_geometry = f"{self.width()}x{self.height()}"
+            self.state.save_settings(geometry=self.state.window_geometry)
+        except Exception:
+            pass
 
     def _build_statusbar(self) -> None:
         sb = QStatusBar()
@@ -13111,15 +13269,7 @@ class FlashGUIQt(QMainWindow):
                     pass
         _terminate_active_processes()
         try:
-            self.state.window_geometry = f"{self.width()}x{self.height()}"
-            # Store splitter states as hex strings
-            if self.hsplitter:
-                h_state = self.hsplitter.saveState()
-                self.state.settings["hsplitter_state"] = h_state.toHex().data().decode()  # type: ignore[attr-defined]
-            if self.vsplitter:
-                v_state = self.vsplitter.saveState()
-                self.state.settings["vsplitter_state"] = v_state.toHex().data().decode()  # type: ignore[attr-defined]
-            self.state.save_settings(geometry=self.state.window_geometry)
+            self._persist_splitter_state()
         except Exception:
             pass
         try:

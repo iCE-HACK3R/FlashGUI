@@ -4,6 +4,12 @@ Desktop GUI for `flashrom`, `flashprog` & `minipro` focused on safer firmware op
 
 This repository currently ships as a Python desktop app (`flashgui.py`) with a Qt UI and a Tk fallback path.
 
+## Latest release (v1.1.9)
+
+- Added robust **global log pane splitter persistence** in Qt (autosaves on drag + on close).
+- Added **Use native file dialogs** setting (Settings → Behavior) for systems where non-native dialogs improve mounted-drive visibility.
+- Kept issue #4 stabilization flow: please re-test on the latest release and report any remaining symptom as a separate issue.
+
 ## Platform status
 
 - Windows: tested
