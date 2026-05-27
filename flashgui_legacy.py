@@ -48,7 +48,7 @@ except ImportError:
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.7"
+VERSION = "1.1.8"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -645,6 +645,39 @@ def _list_programmers(binary: str) -> list[str]:
 
 # ── USB programmer detection ───────────────────────────────────────────────────
 
+# FT232H SPI clock divisor — user-tunable via settings / env override.
+# divisor=4 works for both 1.8 V and 3.3 V targets (safe default, slightly slower).
+# divisor=2 is faster but only reliable on 3.3 V targets.
+_FT232H_VALID_DIVISORS: tuple[str, ...] = ("2", "4")
+_FT232H_DEFAULT_DIVISOR: str = "4"
+_FT232H_DIVISOR: str = _FT232H_DEFAULT_DIVISOR
+
+
+def _ft232h_programmer_arg(divisor: str | int | None = None) -> str:
+    raw = str(divisor if divisor is not None else _FT232H_DIVISOR).strip()
+    if raw not in _FT232H_VALID_DIVISORS:
+        raw = _FT232H_DEFAULT_DIVISOR
+    return f"ft2232_spi:divisor={raw},type=232h"
+
+
+def _normalize_ft232h_divisor(value: object) -> str:
+    raw = str(value if value is not None else "").strip()
+    return raw if raw in _FT232H_VALID_DIVISORS else _FT232H_DEFAULT_DIVISOR
+
+
+def _apply_ft232h_divisor(divisor: str | int | None) -> str:
+    global _FT232H_DIVISOR
+    normalized = _normalize_ft232h_divisor(divisor)
+    _FT232H_DIVISOR = normalized
+    new_arg = _ft232h_programmer_arg(normalized)
+    for idx, entry in enumerate(_USB_PROGRAMMER_MAP):
+        vid, pid, _prog, label = entry
+        if vid == "0403" and pid == "6014":
+            _USB_PROGRAMMER_MAP[idx] = (vid, pid, new_arg, label)
+            break
+    return new_arg
+
+
 # (vendor_id, product_id, programmer_arg, human label)
 _USB_PROGRAMMER_MAP: list[tuple[str, str, str, str]] = [
     ("1a86", "5512", "ch341a_spi",    "CH341A"),
@@ -654,7 +687,7 @@ _USB_PROGRAMMER_MAP: list[tuple[str, str, str, str]] = [
     ("0483", "deaf", "dediprog",      "Dediprog SF600"),
     ("0403", "6010", "ft2232_spi",    "FTDI FT2232H"),
     ("0403", "6011", "ft2232_spi",    "FTDI FT4232H"),
-    ("0403", "6014", "ft2232_spi",    "FTDI FT232H"),
+    ("0403", "6014", _ft232h_programmer_arg(_FT232H_DEFAULT_DIVISOR), "FTDI FT232H"),
     ("0403", "601c", "ft4222_spi",    "FTDI FT4222H"),
     ("0403", "6001", "buspirate_spi", "Bus Pirate"),
     ("1209", "c0ca", "dirtyjtag_spi", "DirtyJTAG"),
@@ -2779,6 +2812,21 @@ class PageSettings:
             variable=self.auto_detect_var,
         ).grid(row=4, column=0, columnspan=6, sticky="w", padx=(6, 0), pady=3)
 
+        ttk.Label(lf2, text="FT232H SPI clock divisor:").grid(
+            row=5, column=0, sticky="e", padx=(0, 4), pady=3)
+        self.ft232h_divisor_var = tk.StringVar(
+            value=_normalize_ft232h_divisor(getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR))
+        )
+        ttk.Combobox(
+            lf2, textvariable=self.ft232h_divisor_var,
+            values=list(_FT232H_VALID_DIVISORS), width=4, state="readonly",
+        ).grid(row=5, column=1, sticky="w", padx=(6, 0), pady=3)
+        ttk.Label(
+            lf2,
+            text="4 = safe for 1.8 V & 3.3 V (default). 2 = faster, 3.3 V only.",
+            font=("", 8, "italic"), foreground="#888888",
+        ).grid(row=5, column=2, columnspan=4, sticky="w", padx=(6, 0), pady=3)
+
         # ── Elevation / sudo ─────────────────────────────────────────────────
         lf3 = ttk.LabelFrame(outer, text="Elevation / sudo", padding=6)
         lf3.grid(row=2, column=0, sticky="ew", pady=(0, 6))
@@ -3530,6 +3578,7 @@ class PageSettings:
             "theme": self.theme_var.get(),
             "layout_mode": "tab" if self.tab_mode_var.get() else "sidebar",
             "beep_on_complete": self.beep_var.get(),
+            "ft232h_divisor": _normalize_ft232h_divisor(self.ft232h_divisor_var.get()),
         }
         try:
             with open(path, "w") as f:
@@ -3568,6 +3617,8 @@ class PageSettings:
         self.auto_detect_var.set(_as_bool(data.get("auto_detect_programmer", False), False))
         self.beep_var.set(_as_bool(data.get("beep_on_complete", self.beep_var.get()), self.beep_var.get()))
         self.tab_mode_var.set(str(data.get("layout_mode", "sidebar")).strip() == "tab")
+        loaded_div = _normalize_ft232h_divisor(data.get("ft232h_divisor", _FT232H_DEFAULT_DIVISOR))
+        self.ft232h_divisor_var.set(loaded_div)
         theme = str(data.get("theme", ""))
         if theme:
             self.theme_var.set(theme)
@@ -3591,6 +3642,7 @@ class PageSettings:
         self.use_sudo_var.set(False)
         self.sudo_pw_var.set("")
         self.auto_detect_var.set(False)
+        self.ft232h_divisor_var.set(_FT232H_DEFAULT_DIVISOR)
         themes = list(self.app.style.theme_names())
         self.theme_var.set(themes[0] if themes else "")
         self._refresh_system_fix_buttons()
@@ -3630,6 +3682,14 @@ class PageSettings:
             self.state.use_sudo               = self.use_sudo_var.get()
             self.state.sudo_password          = self.sudo_pw_var.get()  # in-memory
             self.state.auto_detect_programmer = self.auto_detect_var.get()
+
+            new_divisor = _normalize_ft232h_divisor(self.ft232h_divisor_var.get())
+            if new_divisor != getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR):
+                self.state.ft232h_divisor = new_divisor
+                _apply_ft232h_divisor(new_divisor)
+                self.app.log.append(
+                    f"FT232H SPI clock divisor set to {new_divisor} \u2192 {_ft232h_programmer_arg(new_divisor)}"
+                )
 
             # Apply tab mode toggle
             new_tab_mode = self.tab_mode_var.get()
@@ -3697,6 +3757,11 @@ class AppState:
         self.theme                  = str(self.settings.get("theme", "")).strip()
         self.beep_on_complete       = _as_bool(self.settings.get("beep_on_complete", True), True)
         self.layout_mode            = str(self.settings.get("layout_mode", "sidebar")).strip()  # "sidebar" or "tab"
+        env_ft232h_divisor = os.getenv("FLASHGUI_FT232H_DIVISOR", "").strip()
+        self.ft232h_divisor = _normalize_ft232h_divisor(
+            env_ft232h_divisor or self.settings.get("ft232h_divisor", _FT232H_DEFAULT_DIVISOR)
+        )
+        _apply_ft232h_divisor(self.ft232h_divisor)
         self.sudo_password: str     = ""  # in-memory only — never written to JSON
 
         self.binary     = self.resolve_tool_binary(self.tool)
@@ -3734,6 +3799,7 @@ class AppState:
             "theme":                  self.theme,
             "beep_on_complete":       self.beep_on_complete,
             "layout_mode":            self.layout_mode,
+            "ft232h_divisor":         self.ft232h_divisor,
             # sudo_password intentionally omitted — stored in system keyring only
         }
         _save_settings(self.settings_path, data)

@@ -1,6 +1,6 @@
 # flashgui
 
-Desktop GUI for `flashrom` and `flashprog`, focused on safer firmware operations and practical chip/datasheet workflows.
+Desktop GUI for `flashrom`, `flashprog` & `minipro` focused on safer firmware operations and practical chip/datasheet workflows.
 
 This repository currently ships as a Python desktop app (`flashgui.py`) with a Qt UI and a Tk fallback path.
 

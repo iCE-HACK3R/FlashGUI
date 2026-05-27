@@ -76,7 +76,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.7"
+VERSION = "1.1.8"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -1788,6 +1788,42 @@ def _with_internal_programmer(programmers: list[str]) -> list[str]:
 
 # ── USB programmer detection ───────────────────────────────────────────────────
 
+# FT232H SPI clock divisor — user-tunable via settings / env override.
+# divisor=4 works for both 1.8 V and 3.3 V targets (safe default, slightly slower).
+# divisor=2 is faster but only reliable on 3.3 V targets.
+_FT232H_VALID_DIVISORS: tuple[str, ...] = ("2", "4")
+_FT232H_DEFAULT_DIVISOR: str = "4"
+_FT232H_DIVISOR: str = _FT232H_DEFAULT_DIVISOR
+
+
+def _ft232h_programmer_arg(divisor: str | int | None = None) -> str:
+    """Return the flashrom programmer arg for the FT232H using the given divisor."""
+    raw = str(divisor if divisor is not None else _FT232H_DIVISOR).strip()
+    if raw not in _FT232H_VALID_DIVISORS:
+        raw = _FT232H_DEFAULT_DIVISOR
+    return f"ft2232_spi:divisor={raw},type=232h"
+
+
+def _normalize_ft232h_divisor(value: object) -> str:
+    """Coerce arbitrary input to a supported FT232H divisor string."""
+    raw = str(value if value is not None else "").strip()
+    return raw if raw in _FT232H_VALID_DIVISORS else _FT232H_DEFAULT_DIVISOR
+
+
+def _apply_ft232h_divisor(divisor: str | int | None) -> str:
+    """Update the FT232H entry of _USB_PROGRAMMER_MAP in place and return the new arg."""
+    global _FT232H_DIVISOR
+    normalized = _normalize_ft232h_divisor(divisor)
+    _FT232H_DIVISOR = normalized
+    new_arg = _ft232h_programmer_arg(normalized)
+    for idx, entry in enumerate(_USB_PROGRAMMER_MAP):
+        vid, pid, _prog, label = entry
+        if vid == "0403" and pid == "6014":
+            _USB_PROGRAMMER_MAP[idx] = (vid, pid, new_arg, label)
+            break
+    return new_arg
+
+
 # (vendor_id, product_id, programmer_arg, human label)
 _USB_PROGRAMMER_MAP: list[tuple[str, str, str, str]] = [
     ("1a86", "5512", "ch341a_spi",    "CH341A"),
@@ -1797,7 +1833,7 @@ _USB_PROGRAMMER_MAP: list[tuple[str, str, str, str]] = [
     ("0483", "deaf", "dediprog",      "Dediprog SF600"),
     ("0403", "6010", "ft2232_spi",    "FTDI FT2232H"),
     ("0403", "6011", "ft2232_spi",    "FTDI FT4232H"),
-    ("0403", "6014", "ft2232_spi:divisor=4,type=232h", "FTDI FT232H"),
+    ("0403", "6014", _ft232h_programmer_arg(_FT232H_DEFAULT_DIVISOR), "FTDI FT232H"),
     ("0403", "601c", "ft4222_spi",    "FTDI FT4222H"),
     ("0403", "6001", "buspirate_spi", "Bus Pirate"),
     ("1209", "c0ca", "dirtyjtag_spi", "DirtyJTAG"),
@@ -6380,6 +6416,11 @@ class AppState:
         self.auto_detect_programmer = _as_bool(self.settings.get("auto_detect_programmer", False), False)
         self.theme                  = str(self.settings.get("theme", "")).strip()
         self.beep_on_complete       = _as_bool(self.settings.get("beep_on_complete", True), True)
+        env_ft232h_divisor = os.getenv("FLASHGUI_FT232H_DIVISOR", "").strip()
+        self.ft232h_divisor = _normalize_ft232h_divisor(
+            env_ft232h_divisor or self.settings.get("ft232h_divisor", _FT232H_DEFAULT_DIVISOR)
+        )
+        _apply_ft232h_divisor(self.ft232h_divisor)
         self.layout_mode            = str(self.settings.get("layout_mode", "sidebar")).strip()  # "sidebar" or "tab"
         try:
             self.verbose_level = max(0, min(3, int(str(self.settings.get("verbose_level", 0)).strip() or "0")))
@@ -6435,6 +6476,7 @@ class AppState:
             "beep_on_complete": True,
             "layout_mode": "sidebar",
             "verbose_level": 0,
+            "ft232h_divisor": _FT232H_DEFAULT_DIVISOR,
         }
         missing_keys = [k for k in defaults if k not in self.settings]
         if missing_keys:
@@ -6563,6 +6605,7 @@ class AppState:
             "beep_on_complete":       self.beep_on_complete,
             "layout_mode":            self.layout_mode,
             "verbose_level":          self.verbose_level,
+            "ft232h_divisor":         self.ft232h_divisor,
             # sudo_password intentionally omitted — stored in system keyring only
         }
         # Preserve splitter states if they exist
@@ -9252,6 +9295,18 @@ class SettingsPage(PageBase):
         self.auto_detect.setChecked(self.state.auto_detect_programmer)
         f_behavior.addRow(self.beep)
         f_behavior.addRow(self.auto_detect)
+
+        self.ft232h_divisor_combo = QComboBox()
+        self.ft232h_divisor_combo.addItem(
+            "4 — safe for 1.8 V and 3.3 V (default, slightly slower)", "4"
+        )
+        self.ft232h_divisor_combo.addItem(
+            "2 — faster, 3.3 V targets only", "2"
+        )
+        current_div = _normalize_ft232h_divisor(getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR))
+        idx = self.ft232h_divisor_combo.findData(current_div)
+        self.ft232h_divisor_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        f_behavior.addRow("FT232H SPI clock divisor:", self.ft232h_divisor_combo)
         outer.addWidget(g_behavior)
 
         # Elevation / sudo
@@ -10105,6 +10160,7 @@ class SettingsPage(PageBase):
             "layout_mode": "sidebar",
             "beep_on_complete": self.beep.isChecked(),
             "verbose_level": int(getattr(self.state, "verbose_level", 0) or 0),
+            "ft232h_divisor": _normalize_ft232h_divisor(self.ft232h_divisor_combo.currentData()),
         }
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -10159,6 +10215,10 @@ class SettingsPage(PageBase):
         theme = str(data.get("theme", "")).strip()
         if theme:
             self.theme_combo.setCurrentText(theme)
+        loaded_div = _normalize_ft232h_divisor(data.get("ft232h_divisor", _FT232H_DEFAULT_DIVISOR))
+        idx = self.ft232h_divisor_combo.findData(loaded_div)
+        if idx >= 0:
+            self.ft232h_divisor_combo.setCurrentIndex(idx)
         self._refresh_system_fix_buttons()
 
     def _reset_defaults(self) -> None:
@@ -10198,6 +10258,9 @@ class SettingsPage(PageBase):
         if verbose_combo is not None:
             verbose_combo.setCurrentIndex(0)
         self.theme_combo.setCurrentText("default")
+        default_idx = self.ft232h_divisor_combo.findData(_FT232H_DEFAULT_DIVISOR)
+        if default_idx >= 0:
+            self.ft232h_divisor_combo.setCurrentIndex(default_idx)
         self._refresh_system_fix_buttons()
         self._log("Fields reset to defaults — click Apply & Save to persist.")
 
@@ -10219,6 +10282,11 @@ class SettingsPage(PageBase):
         self.state.sudo_password = self.sudo_pw.text()
         self.state.auto_detect_programmer = self.auto_detect.isChecked()
         self.state.beep_on_complete = self.beep.isChecked()
+        new_divisor = _normalize_ft232h_divisor(self.ft232h_divisor_combo.currentData())
+        if new_divisor != getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR):
+            self.state.ft232h_divisor = new_divisor
+            _apply_ft232h_divisor(new_divisor)
+            self._log(f"FT232H SPI clock divisor set to {new_divisor} → {_ft232h_programmer_arg(new_divisor)}")
         # Verbose level is controlled from the main window log toolbar (no Settings field).
 
         # Keep main window verbose selector in sync

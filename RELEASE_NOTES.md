@@ -1,5 +1,32 @@
 # Release Notes
 
+## v1.1.8
+
+### Highlights (v1.1.8)
+
+- Added a user-tunable **FT232H SPI clock divisor** setting (Settings → Behavior). Default `4` (safe for both 1.8 V and 3.3 V targets); choose `2` for faster reads on 3.3 V-only setups.
+- Honored on every flashrom probe / detect / read / write that uses the autodetected FT232H entry — the `_USB_PROGRAMMER_MAP` row for `0403:6014` is updated in place when the setting changes.
+- New environment override `FLASHGUI_FT232H_DIVISOR=2|4` for power users and CI.
+- Mirrored the same setting + UI control into the legacy Tk app (`flashgui_legacy.py`); the legacy FT232H entry now also emits `ft2232_spi:divisor=4,type=232h` instead of bare `ft2232_spi`.
+- Added `macos-13` (Intel x64) build matrix entry so v1.1.8 ships both `macos-arm64` and `macos-x64` portable artifacts.
+
+### Tests (v1.1.8)
+
+- Added `tests/test_ft232h_divisor.py` with regression coverage for divisor normalization, in-place map mutation, and fallback behavior.
+
+### Version (v1.1.8)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.8"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.8"`
+
+### Build Artifact Targets (v1.1.8)
+
+- `release/flashgui-v1.1.8-windows-x64-portable.zip`
+- `release/flashgui-v1.1.8-linux-x64-portable.zip`
+- `release/flashgui-v1.1.8-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.8-macos-x64-portable.zip`
+
 ## v1.1.7
 
 ### Highlights (v1.1.7)
