@@ -20,3 +20,8 @@ publish/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Generated release artifacts (keep docs in release/ tracked)
+release/flashgui-v*-*-portable.zip
+release/flashgui-v*-*-portable/
+release/release_v*.7z
