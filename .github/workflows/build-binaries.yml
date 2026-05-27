@@ -29,9 +29,6 @@ jobs:
           - os: macos-latest
             target: macos
             arch: arm64
-          - os: macos-13
-            target: macos
-            arch: x64
 
     steps:
       - name: Checkout
