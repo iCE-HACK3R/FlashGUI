@@ -1,5 +1,30 @@
 # Release Notes
 
+## v1.1.7
+
+### Highlights (v1.1.7)
+
+- Hardened flashrom chip-detect parser to accept single-quoted chip names and lowercase detection keywords (`found` / `multiple` / `match`). Resolves "No chip detected" on FT232H probes that emit `'W25Q64JVSIQ'`-style names.
+- Applied the same parser hardening to the legacy Tk path (`flashgui_legacy.py::_detect_chips`).
+- CI: install `libegl1` / `libgl1` on Linux so PySide6 imports succeed during tests.
+- README: re-added `python3 ...` workflow notes for Linux/macOS.
+
+### Tests (v1.1.7)
+
+- Added `tests/test_chip_detection.py` regression coverage for single-quoted chip names + FT232H hint parsing.
+
+### Version (v1.1.7)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.7"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.7"`
+
+### Build Artifact Targets (v1.1.7)
+
+- `release/flashgui-v1.1.7-windows-x64-portable.zip`
+- `release/flashgui-v1.1.7-linux-x64-portable.zip`
+- `release/flashgui-v1.1.7-macos-x64-portable.zip`
+
 ## v1.1.6
 
 ### Highlights (v1.1.6)
