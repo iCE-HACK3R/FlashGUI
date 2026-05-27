@@ -2812,21 +2812,6 @@ class PageSettings:
             variable=self.auto_detect_var,
         ).grid(row=4, column=0, columnspan=6, sticky="w", padx=(6, 0), pady=3)
 
-        ttk.Label(lf2, text="FT232H SPI clock divisor:").grid(
-            row=5, column=0, sticky="e", padx=(0, 4), pady=3)
-        self.ft232h_divisor_var = tk.StringVar(
-            value=_normalize_ft232h_divisor(getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR))
-        )
-        ttk.Combobox(
-            lf2, textvariable=self.ft232h_divisor_var,
-            values=list(_FT232H_VALID_DIVISORS), width=4, state="readonly",
-        ).grid(row=5, column=1, sticky="w", padx=(6, 0), pady=3)
-        ttk.Label(
-            lf2,
-            text="4 = safe for 1.8 V & 3.3 V (default). 2 = faster, 3.3 V only.",
-            font=("", 8, "italic"), foreground="#888888",
-        ).grid(row=5, column=2, columnspan=4, sticky="w", padx=(6, 0), pady=3)
-
         # ── Elevation / sudo ─────────────────────────────────────────────────
         lf3 = ttk.LabelFrame(outer, text="Elevation / sudo", padding=6)
         lf3.grid(row=2, column=0, sticky="ew", pady=(0, 6))
@@ -3578,7 +3563,7 @@ class PageSettings:
             "theme": self.theme_var.get(),
             "layout_mode": "tab" if self.tab_mode_var.get() else "sidebar",
             "beep_on_complete": self.beep_var.get(),
-            "ft232h_divisor": _normalize_ft232h_divisor(self.ft232h_divisor_var.get()),
+            "ft232h_divisor": _normalize_ft232h_divisor(self.app.ft232h_divisor_var.get()),
         }
         try:
             with open(path, "w") as f:
@@ -3618,7 +3603,7 @@ class PageSettings:
         self.beep_var.set(_as_bool(data.get("beep_on_complete", self.beep_var.get()), self.beep_var.get()))
         self.tab_mode_var.set(str(data.get("layout_mode", "sidebar")).strip() == "tab")
         loaded_div = _normalize_ft232h_divisor(data.get("ft232h_divisor", _FT232H_DEFAULT_DIVISOR))
-        self.ft232h_divisor_var.set(loaded_div)
+        self.app._set_ft232h_divisor_toolbar_value(loaded_div)
         theme = str(data.get("theme", ""))
         if theme:
             self.theme_var.set(theme)
@@ -3642,7 +3627,7 @@ class PageSettings:
         self.use_sudo_var.set(False)
         self.sudo_pw_var.set("")
         self.auto_detect_var.set(False)
-        self.ft232h_divisor_var.set(_FT232H_DEFAULT_DIVISOR)
+        self.app._set_ft232h_divisor_toolbar_value(_FT232H_DEFAULT_DIVISOR)
         themes = list(self.app.style.theme_names())
         self.theme_var.set(themes[0] if themes else "")
         self._refresh_system_fix_buttons()
@@ -3683,12 +3668,12 @@ class PageSettings:
             self.state.sudo_password          = self.sudo_pw_var.get()  # in-memory
             self.state.auto_detect_programmer = self.auto_detect_var.get()
 
-            new_divisor = _normalize_ft232h_divisor(self.ft232h_divisor_var.get())
+            new_divisor = _normalize_ft232h_divisor(self.app.ft232h_divisor_var.get())
             if new_divisor != getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR):
                 self.state.ft232h_divisor = new_divisor
                 _apply_ft232h_divisor(new_divisor)
                 self.app.log.append(
-                    f"FT232H SPI clock divisor set to {new_divisor} \u2192 {_ft232h_programmer_arg(new_divisor)}"
+                    f"FT232H SPI Clock Divisor set to {new_divisor} \u2192 {_ft232h_programmer_arg(new_divisor)}"
                 )
 
             # Apply tab mode toggle
@@ -3882,8 +3867,34 @@ class FlashGUI:
             row=0, column=5, padx=(4, 0))
         ttk.Button(bar, text="Cancel", command=self._cancel_active_operations).grid(
             row=0, column=6, padx=(4, 0))
+        ttk.Label(bar, text="FT232H SPI Clock Divisor:").grid(row=0, column=7, sticky="e", padx=(12, 4))
+        self.ft232h_divisor_var = tk.StringVar(value=self.state.ft232h_divisor)
+        self.ft232h_divisor_combo = ttk.Combobox(
+            bar,
+            textvariable=self.ft232h_divisor_var,
+            values=list(_FT232H_VALID_DIVISORS),
+            width=4,
+            state="readonly",
+        )
+        self.ft232h_divisor_combo.grid(row=0, column=8, sticky="w")
+        self.ft232h_divisor_combo.bind("<<ComboboxSelected>>", self._on_ft232h_divisor_change)
         ttk.Button(bar, text="🗂️", command=self._toggle_sidebar, width=3).grid(
-            row=0, column=7, padx=(4, 0))
+            row=0, column=9, padx=(4, 0))
+
+    def _set_ft232h_divisor_toolbar_value(self, divisor: object) -> None:
+        self.ft232h_divisor_var.set(_normalize_ft232h_divisor(divisor))
+
+    def _on_ft232h_divisor_change(self, _event: object = None) -> None:
+        new_divisor = _normalize_ft232h_divisor(self.ft232h_divisor_var.get())
+        self._set_ft232h_divisor_toolbar_value(new_divisor)
+        if new_divisor == getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR):
+            return
+        self.state.ft232h_divisor = new_divisor
+        _apply_ft232h_divisor(new_divisor)
+        self.state.save_settings(geometry=self.state.window_geometry)
+        self.log.append(
+            f"FT232H SPI Clock Divisor set to {new_divisor} → {_ft232h_programmer_arg(new_divisor)}"
+        )
 
     def _build_main_content(self) -> None:
         """Create sidebar + notebook layout."""
