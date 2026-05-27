@@ -116,6 +116,7 @@ Legend: ✅ = available in this UI, ➖ = not exposed in this UI.
 1. Create a virtual environment:
 
 - `python -m venv .venv`
+- Linux/macOS alternative: `python3 -m venv .venv`
 
 1. Activate the virtual environment:
 
@@ -125,10 +126,12 @@ Legend: ✅ = available in this UI, ➖ = not exposed in this UI.
 1. Install dependencies:
 
 - `python -m pip install -r requirements.txt`
+- Linux/macOS alternative: `python3 -m pip install -r requirements.txt`
 
 1. Run:
 
 - `python flashgui.py`
+- Linux/macOS alternative: `python3 flashgui.py`
 
 Windows note: in some setups `python3` may resolve to MSYS/MinGW Python instead of your `.venv`; prefer `python` after activating your virtual environment.
 
