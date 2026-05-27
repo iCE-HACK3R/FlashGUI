@@ -810,11 +810,12 @@ def _detect_chips(
         seen: set[str] = set()
         suggested: str | None = None
         for line in combined.splitlines():
+            lo = line.lower()
             # "Found GigaDevice flash chip \"GD25Q32(B)\" ..."
             # "Multiple flash chip definitions match ... \"A\", \"B\""
-            if "Found" in line or "Multiple" in line or "match" in line.lower():
-                for m in re.finditer(r'"([^"]+)"', line):
-                    name = m.group(1)
+            if "found" in lo or "multiple" in lo or "match" in lo:
+                for m in re.finditer(r'"([^"]+)"|\'([^\']+)\'', line):
+                    name = m.group(1) or m.group(2)
                     if name not in seen:
                         chips.append(name)
                         seen.add(name)
