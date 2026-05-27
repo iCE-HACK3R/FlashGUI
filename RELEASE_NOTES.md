@@ -23,7 +23,7 @@
 
 - `release/flashgui-v1.1.7-windows-x64-portable.zip`
 - `release/flashgui-v1.1.7-linux-x64-portable.zip`
-- `release/flashgui-v1.1.7-macos-x64-portable.zip`
+- `release/flashgui-v1.1.7-macos-arm64-portable.zip` (note: `macos-latest` runner is now Apple Silicon; an Intel `macos-x64` build is added from v1.1.8 onward via a `macos-13` matrix entry)
 
 ## v1.1.6
 

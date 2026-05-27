@@ -20,4 +20,6 @@
 
 - `flashgui-v1.1.7-windows-x64-portable.zip`
 - `flashgui-v1.1.7-linux-x64-portable.zip`
-- `flashgui-v1.1.7-macos-x64-portable.zip`
+- `flashgui-v1.1.7-macos-arm64-portable.zip`
+
+> Note: starting with v1.1.7, the macOS bundle on this release is **arm64** (Apple Silicon) because GitHub's `macos-latest` runner is now ARM64. An additional `macos-x64` (Intel) build will be added in v1.1.8 via a `macos-13` matrix entry.

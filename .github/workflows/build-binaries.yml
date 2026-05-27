@@ -22,10 +22,16 @@ jobs:
         include:
           - os: windows-latest
             target: windows
+            arch: x64
           - os: ubuntu-latest
             target: linux
+            arch: x64
           - os: macos-latest
             target: macos
+            arch: arm64
+          - os: macos-13
+            target: macos
+            arch: x64
 
     steps:
       - name: Checkout
@@ -56,13 +62,13 @@ jobs:
       - name: Upload portable artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: flashgui-${{ matrix.target }}
-          path: release/flashgui-v*-${{ matrix.target }}-*-portable.zip
+          name: flashgui-${{ matrix.target }}-${{ matrix.arch }}
+          path: release/flashgui-v*-${{ matrix.target }}-${{ matrix.arch }}-portable.zip
           if-no-files-found: error
 
       - name: Attach artifacts to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: release/flashgui-v*-${{ matrix.target }}-*-portable.zip
+          files: release/flashgui-v*-${{ matrix.target }}-${{ matrix.arch }}-portable.zip
           fail_on_unmatched_files: false
