@@ -27,3 +27,25 @@ Per the issue #1 reporter, divisor=4 works at both 1.8 V and 3.3 V, while diviso
 - `flashgui-v1.1.8-linux-x64-portable.zip`
 - `flashgui-v1.1.8-macos-arm64-portable.zip`
 - `flashgui-v1.1.8-macos-x64-portable.zip`
+
+## Issue #4 stabilization checkpoint
+
+Issue #4 currently contains multiple independent reports in one thread. We are publishing this build as a **stabilization checkpoint** and asking for re-test feedback on latest `main`.
+
+### Reported in #4 and status
+
+- ✅ Path fields are editable (manual paste/edit supported).
+- ✅ Operation timing/completion lines are present (`TimeTaken`, `Completed`).
+- ✅ FT232H divisor setting is exposed and persisted (`2` / `4`).
+- ✅ Detect ROM actions are blocked while a flash operation is active (prevents race/device-busy confusion).
+- ✅ Oversized-image writes are blocked by preflight with explicit image/chip size messaging.
+- ⚠️ Additional UX polish items may remain (log visibility emphasis, verify visibility preferences).
+
+### Re-test request
+
+Please re-test with this build and open one issue per remaining symptom with:
+
+1. Tool + programmer + chip used.
+2. Exact steps to reproduce.
+3. Full `Commands:` line shown in UI.
+4. Relevant global log excerpt.

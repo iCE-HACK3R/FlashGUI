@@ -195,5 +195,77 @@ Notes: \_\_**
 - Layout persistence: PASS / FAIL
 - Overall: PASS / FAIL
 
-Tester: ****\_\_****  
-Date: ****\_\_****
+Tester: \***\*\_\_\*\***  
+Date: \***\*\_\_\*\***
+
+---
+
+## E. Issue #4 stabilization re-test (release gate)
+
+### E1. Editable path + command visibility
+
+1. Open **Read ROM** and **Write ROM** pages.
+2. Paste a full absolute path into file fields.
+3. Verify `Commands:` auto-populates and can be edited.
+
+Expected:
+
+- Path fields accept manual paste/edit.
+- `Commands:` remains editable and reflects operation context.
+
+Pass/Fail: \_**\_  
+Notes: \_\_**
+
+### E2. Completion clarity and timing
+
+1. Run one successful operation (read or verify).
+2. Confirm final status fields/log entries.
+
+Expected:
+
+- `TimeTaken: ...` appears.
+- `Completed: Ok` (or error state) appears clearly.
+
+Pass/Fail: \_**\_  
+Notes: \_\_**
+
+### E3. Oversized image write behavior
+
+1. Choose a ROM image larger than target chip.
+2. Run **Write ROM**.
+
+Expected:
+
+- Write is blocked by preflight before flashing starts.
+- Error clearly reports image size and chip size.
+- Completion state is fail/error with no ambiguity.
+
+Pass/Fail: \_**\_  
+Notes: \_\_**
+
+### E4. Detect during active write (race check)
+
+1. Start a write operation.
+2. While write is active, trigger detect chip.
+
+Expected:
+
+- Detect action is blocked while write is active (no misleading mid-write probe result).
+- Log/status clearly instructs user to wait until operation completes.
+
+Pass/Fail: \_**\_  
+Notes: \_\_**
+
+### E5. FT232H divisor persistence
+
+1. Set divisor to `2`.
+2. Detect programmer and run an operation.
+3. Restart app and verify saved value.
+
+Expected:
+
+- Selected divisor remains applied/persisted.
+- No unexpected reset to `4` unless invalid value is provided.
+
+Pass/Fail: \_**\_  
+Notes: \_\_**

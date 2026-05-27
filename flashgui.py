@@ -21,6 +21,7 @@ import os
 import platform
 import queue
 import re
+import shlex
 import webbrowser
 import shutil
 import subprocess
@@ -950,6 +951,15 @@ def _terminate_active_processes() -> None:
                     proc.kill()
         except Exception:
             pass
+
+
+def _active_operation_count() -> int:
+    with _ACTIVE_PROCS_LOCK:
+        return len(_ACTIVE_PROCS)
+
+
+def _has_active_operations() -> bool:
+    return _active_operation_count() > 0
 
 
 def _ui_alive(root: object) -> bool:
@@ -3296,6 +3306,18 @@ def _fmt_elapsed(seconds: float) -> str:
     return f"{seconds:.1f}s"
 
 
+def _fmt_bytes(size: int) -> str:
+    value = float(max(0, int(size)))
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    unit_idx = 0
+    while value >= 1024.0 and unit_idx < len(units) - 1:
+        value /= 1024.0
+        unit_idx += 1
+    if unit_idx == 0:
+        return f"{int(value)} {units[unit_idx]}"
+    return f"{value:.1f} {units[unit_idx]}"
+
+
 def _fmt_eta(seconds: float) -> str:
     if seconds < 0:
         seconds = 0
@@ -4108,6 +4130,31 @@ class PageWrite(_ChipMixin):
             self.log.append("ERROR: Select a programmer first.")
             return
 
+        chip_size: int | None = None
+        if not is_minipro:
+            chip_size = _get_chip_size(self.state.binary, self.state.programmer, chip)
+            if chip_size:
+                file_size = os.path.getsize(fp)
+                if file_size > chip_size:
+                    self.sha256_var.set("N/A")
+                    self.elapsed_var.set(_fmt_elapsed(0.0))
+                    self.completed_var.set("Fail")
+                    self.log.append("ERROR: Selected image is larger than the detected chip size.")
+                    self.log.append(
+                        "ERROR: "
+                        f"Image size {_fmt_bytes(file_size)} ({file_size} B) > "
+                        f"chip size {_fmt_bytes(chip_size)} ({chip_size} B)."
+                    )
+                    self.log.append("Write aborted before flashing. Choose a smaller image or a larger chip.")
+                    messagebox.showerror(
+                        "Image too large",
+                        "Selected image is larger than target chip capacity.\n\n"
+                        f"Image: {_fmt_bytes(file_size)} ({file_size} B)\n"
+                        f"Chip: {_fmt_bytes(chip_size)} ({chip_size} B)\n\n"
+                        "Write was aborted before flashing.",
+                    )
+                    return
+
         if not messagebox.askyesno(
             "Confirm Write",
             "Are you sure you want to write this ROM?\n"
@@ -4118,10 +4165,9 @@ class PageWrite(_ChipMixin):
 
         actual_fp = fp
         if self.opt_pad.get() and not is_minipro:
-            size = _get_chip_size(self.state.binary, self.state.programmer, chip)
-            if size:
-                actual_fp = _pad_file(fp, size, self.state.tmpdir)
-                self.log.append(f"Padded file to {size} bytes.")
+            if chip_size:
+                actual_fp = _pad_file(fp, chip_size, self.state.tmpdir)
+                self.log.append(f"Padded file to {chip_size} bytes.")
             else:
                 self.log.append("WARNING: Could not determine chip size — skipping padding.")
 
@@ -6712,11 +6758,37 @@ class FlashGUI:
             bar,
             text="Auto-switches only if selection wasn't manually overridden",
             style="Status.TLabel",
-        ).grid(row=0, column=8, sticky="w", padx=(10, 0))
+        ).grid(row=0, column=10, sticky="w", padx=(10, 0))
         ttk.Button(bar, text="Cancel", command=self._cancel_active_operations).grid(
             row=0, column=6, padx=(4, 0))
+        ttk.Label(bar, text="FT232H SPI Clock Divisor:").grid(row=0, column=7, sticky="e", padx=(12, 4))
+        self.ft232h_divisor_var = tk.StringVar(value=self.state.ft232h_divisor)
+        self.ft232h_divisor_combo = ttk.Combobox(
+            bar,
+            textvariable=self.ft232h_divisor_var,
+            values=list(_FT232H_VALID_DIVISORS),
+            width=4,
+            state="readonly",
+        )
+        self.ft232h_divisor_combo.grid(row=0, column=8, sticky="w")
+        self.ft232h_divisor_combo.bind("<<ComboboxSelected>>", self._on_ft232h_divisor_change)
         ttk.Button(bar, text="🗂️", command=self._toggle_sidebar, width=3).grid(
-            row=0, column=7, padx=(4, 0))
+            row=0, column=9, padx=(4, 0))
+
+    def _set_ft232h_divisor_toolbar_value(self, divisor: object) -> None:
+        self.ft232h_divisor_var.set(_normalize_ft232h_divisor(divisor))
+
+    def _on_ft232h_divisor_change(self, _event: object = None) -> None:
+        new_divisor = _normalize_ft232h_divisor(self.ft232h_divisor_var.get())
+        self._set_ft232h_divisor_toolbar_value(new_divisor)
+        if new_divisor == getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR):
+            return
+        self.state.ft232h_divisor = new_divisor
+        _apply_ft232h_divisor(new_divisor)
+        self.state.save_settings(geometry=self.state.window_geometry)
+        self.log.append(
+            f"FT232H SPI Clock Divisor set to {new_divisor} → {_ft232h_programmer_arg(new_divisor)}"
+        )
 
     def _build_main_content(self) -> None:
         """Create sidebar + notebook layout."""
@@ -7224,7 +7296,7 @@ if sys.platform.startswith("linux"):
 
 faulthandler.enable(all_threads=True)
 
-from PySide6.QtCore import QByteArray, QObject, QRunnable, Qt, QSize, QThreadPool, QTimer, Signal
+from PySide6.QtCore import QByteArray, QObject, QRunnable, Qt, QSize, QThreadPool, QTimer, Signal, QEvent
 from PySide6.QtGui import QAction, QColor, QIcon, QPixmap, QPainter, QLinearGradient, QPainterPath, QImage, QTextCharFormat, QTextCursor, QFontDatabase
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtGui import QFont
@@ -7249,6 +7321,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QProgressBar,
     QPlainTextEdit,
+    QScrollArea,
     QSlider,
     QSplitter,
     QStackedWidget,
@@ -7895,10 +7968,12 @@ class OpPageBase(PageBase):
 
         # Row 1 — Command : [cmd_preview spanning cols 1..5]
         self.cmd_preview = QLineEdit("")
-        self.cmd_preview.setReadOnly(True)
+        self.cmd_preview.setReadOnly(False)
         self.cmd_preview.setPlaceholderText("—")
         self.cmd_preview.setMinimumHeight(24)
         self.cmd_preview.setMaximumHeight(24)
+        self._command_user_edited = False
+        self.cmd_preview.textEdited.connect(self._on_command_preview_text_edited)
         grid.addWidget(_caption("Commands :"), 1, 0)
         grid.addWidget(self.cmd_preview,      1, 1, 1, 5)
 
@@ -7918,8 +7993,44 @@ class OpPageBase(PageBase):
     def append_output(self, line: str) -> None:
         self.log(line)
 
-    def set_command_preview(self, cmd: list[str]) -> None:
+    def _on_command_preview_text_edited(self, _text: str) -> None:
+        self._command_user_edited = True
+
+    def set_command_preview(self, cmd: list[str], *, force: bool = False) -> None:
+        if self._command_user_edited and not force:
+            return
         self.cmd_preview.setText(" ".join(cmd))
+        self._command_user_edited = False
+
+    def clear_command_preview(self, *, force: bool = False) -> None:
+        if self._command_user_edited and not force:
+            return
+        self.cmd_preview.clear()
+        self._command_user_edited = False
+
+    def _parse_command_preview(self) -> list[str] | None:
+        raw = self.cmd_preview.text().strip()
+        if not raw:
+            return None
+        try:
+            parsed = shlex.split(raw, posix=not sys.platform.startswith("win"))
+        except ValueError as exc:
+            self.log(f"WARNING: Invalid command syntax in Commands field: {exc}. Using generated command.")
+            return None
+        return parsed or None
+
+    def get_effective_command(self, default_cmd: list[str]) -> tuple[list[str], bool]:
+        parsed = self._parse_command_preview() if self._command_user_edited else None
+        if parsed:
+            return parsed, True
+        return self.state.with_verbose(default_cmd), False
+
+    @staticmethod
+    def _arg_after(cmd: list[str], *flags: str) -> str | None:
+        for i, token in enumerate(cmd):
+            if token in flags and i + 1 < len(cmd):
+                return str(cmd[i + 1]).strip()
+        return None
 
     def _execute_command(
         self,
@@ -7927,8 +8038,9 @@ class OpPageBase(PageBase):
         started: datetime,
         on_done: Callable[[int, float, bool], None],
         use_progress: bool = True,
+        apply_verbose: bool = True,
     ) -> None:
-        cmd = self.state.with_verbose(cmd)
+        cmd = self.state.with_verbose(cmd) if apply_verbose else list(cmd)
         run_cmd, _ = _with_optional_sudo_for_internal(
             cmd,
             use_sudo=self.state.use_sudo,
@@ -8064,6 +8176,19 @@ class ChipMixin:
         app: "FlashGUIQt",
         prefer_probe_resolution: bool = False,
     ) -> None:
+        if _has_active_operations():
+            count = _active_operation_count()
+            plural = "s" if count != 1 else ""
+            log_fn(
+                f"INFO: Detect ROM is disabled while {count} active operation{plural} is running. "
+                "Wait for completion, then try Detect ROM again."
+            )
+            try:
+                app.statusBar().showMessage("Detect ROM is disabled while an operation is running", 3000)
+            except Exception:
+                pass
+            return
+
         if _is_minipro_tool(state.tool, state.binary):
             log_fn("minipro mode: autodetecting SPI chip via -a 8 (fallback -a 16, then supported parts)…")
 
@@ -8251,6 +8376,11 @@ class ReadPage(OpPageBase, ChipMixin):
         self.file_edit.textEdited.connect(
             lambda text: setattr(self, "_filename_is_auto", not bool(text.strip()))
         )
+        self.file_edit.textChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.chip_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.app.programmer_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.app.tool_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self._refresh_command_preview()
 
     def _refresh_auto_filename(self) -> None:
         """Auto-populate the save path unless the user has manually entered one."""
@@ -8261,6 +8391,25 @@ class ReadPage(OpPageBase, ChipMixin):
         if not chip or not prog:
             return
         self.file_edit.setText(_build_rom_filename(self.state.workspace_dir, chip, prog, self.state.tool))
+
+    def _default_cmd(self) -> list[str] | None:
+        fp = self.file_edit.text().strip()
+        chip = self.chip_combo.currentText().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if not fp or not chip:
+            return None
+        if is_minipro:
+            return [self.state.binary, "-p", chip, "-r", fp]
+        if not self.state.programmer:
+            return None
+        return [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-r", fp]
+
+    def _refresh_command_preview(self) -> None:
+        cmd = self._default_cmd()
+        if cmd:
+            self.set_command_preview(cmd)
+        else:
+            self.clear_command_preview()
 
     def _browse(self) -> None:
         path, ok = QFileDialog.getSaveFileName(self, "Save ROM dump", os.path.expanduser("~"), "Binary Files (*.bin);;All Files (*)")
@@ -8283,29 +8432,31 @@ class ReadPage(OpPageBase, ChipMixin):
             return
 
         if is_minipro:
-            cmd = [self.state.binary, "-p", chip, "-r", fp]
+            default_cmd = [self.state.binary, "-p", chip, "-r", fp]
             use_progress = True
         else:
-            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-r", fp]
+            default_cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-r", fp]
             use_progress = True
+        cmd, _ = self.get_effective_command(default_cmd)
+        target_fp = self._arg_after(cmd, "-r") or fp
         started = datetime.now()
         do_remove_padding = self.opt_nopad.isChecked()
 
         def done(rc: int, elapsed: float, had_error: bool) -> None:
             digest = "N/A"
-            file_exists = os.path.isfile(fp)
+            file_exists = os.path.isfile(target_fp)
             if rc == 0 and file_exists:
                 if do_remove_padding:
-                    removed = _remove_padding(fp)
+                    removed = _remove_padding(target_fp)
                     self.log(f"Removed {removed} bytes of 0xFF padding.")
-                digest = _sha256_file(fp)
+                digest = _sha256_file(target_fp)
                 self.sha.setText(digest)
                 self.log(f"SHA256SUM: {digest}")
                 self.log(f"TimeTaken: {_fmt_elapsed(elapsed)}")
                 self.completed.setText("Ok")
                 self.log("Completed: Ok")
                 if self.opt_reveal.isChecked():
-                    self._reveal(fp)
+                    self._reveal(target_fp)
                 if self.state.beep_on_complete:
                     _system_beep(1000, 200)
             elif not file_exists:
@@ -8321,7 +8472,7 @@ class ReadPage(OpPageBase, ChipMixin):
                 if self.state.beep_on_complete:
                     _system_beep(1000, 200)
 
-        self._execute_command(cmd, started, done, use_progress=use_progress)
+        self._execute_command(cmd, started, done, use_progress=use_progress, apply_verbose=False)
 
     def _reveal(self, path: str) -> None:
         try:
@@ -8374,6 +8525,12 @@ class WritePage(OpPageBase, ChipMixin):
         b_browse.clicked.connect(self._browse)
         b_detect.clicked.connect(lambda: self.autodetect(self.chip_combo, self.log, self.state, self.app))
         self.run_btn.clicked.connect(self._run)
+        self.file_edit.textChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.chip_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.app.programmer_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.app.tool_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.opt_noverify.toggled.connect(lambda _=None: self._refresh_command_preview())
+        self._refresh_command_preview()
 
     def _browse(self) -> None:
         start_dir = (self.state.workspace_dir or "").strip() or os.path.expanduser("~")
@@ -8387,6 +8544,29 @@ class WritePage(OpPageBase, ChipMixin):
         path, ok = QFileDialog.getOpenFileName(self, "Select ROM file", start_dir, "Binary Files (*.bin);;All Files (*)")
         if ok and path:
             self.file_edit.setText(path)
+
+    def _default_cmd(self) -> list[str] | None:
+        fp = self.file_edit.text().strip()
+        chip = self.chip_combo.currentText().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if not fp or not chip:
+            return None
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-w", fp]
+        else:
+            if not self.state.programmer:
+                return None
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-w", fp]
+            if self.opt_noverify.isChecked():
+                cmd.append("-n")
+        return cmd
+
+    def _refresh_command_preview(self) -> None:
+        cmd = self._default_cmd()
+        if cmd:
+            self.set_command_preview(cmd)
+        else:
+            self.clear_command_preview()
 
     def _run(self) -> None:
         fp = self.file_edit.text().strip()
@@ -8402,6 +8582,32 @@ class WritePage(OpPageBase, ChipMixin):
             self.log("ERROR: Select a programmer first.")
             return
 
+        chip_size: int | None = None
+        if not is_minipro:
+            chip_size = _get_chip_size(self.state.binary, self.state.programmer, chip)
+            if chip_size:
+                file_size = os.path.getsize(fp)
+                if file_size > chip_size:
+                    self.sha.setText("N/A")
+                    self.elapsed.setText(_fmt_elapsed(0.0))
+                    self.completed.setText("Fail")
+                    self.log("ERROR: Selected image is larger than the detected chip size.")
+                    self.log(
+                        "ERROR: "
+                        f"Image size {_fmt_bytes(file_size)} ({file_size} B) > "
+                        f"chip size {_fmt_bytes(chip_size)} ({chip_size} B)."
+                    )
+                    self.log("Write aborted before flashing. Choose a smaller image or a larger chip.")
+                    QMessageBox.warning(
+                        self,
+                        "Image too large",
+                        "Selected image is larger than target chip capacity.\n\n"
+                        f"Image: {_fmt_bytes(file_size)} ({file_size} B)\n"
+                        f"Chip: {_fmt_bytes(chip_size)} ({chip_size} B)\n\n"
+                        "Write was aborted before flashing.",
+                    )
+                    return
+
         ans = QMessageBox.question(
             self,
             "Confirm Write",
@@ -8414,21 +8620,24 @@ class WritePage(OpPageBase, ChipMixin):
 
         actual_fp = fp
         if self.opt_pad.isChecked() and not is_minipro:
-            size = _get_chip_size(self.state.binary, self.state.programmer, chip)
-            if size:
-                actual_fp = _pad_file(fp, size, self.state.tmpdir)
-                self.log(f"Padded file to {size} bytes.")
+            if chip_size:
+                actual_fp = _pad_file(fp, chip_size, self.state.tmpdir)
+                self.log(f"Padded file to {chip_size} bytes.")
             else:
                 self.log("WARNING: Could not determine chip size — skipping padding.")
 
         if is_minipro:
-            cmd = [self.state.binary, "-p", chip, "-w", actual_fp]
+            default_cmd = [self.state.binary, "-p", chip, "-w", actual_fp]
             use_progress = True
         else:
-            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-w", actual_fp]
+            default_cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-w", actual_fp]
             use_progress = True
         if self.opt_noverify.isChecked() and not is_minipro:
-            cmd.append("-n")
+            default_cmd.append("-n")
+
+        cmd, user_override = self.get_effective_command(default_cmd)
+        if user_override:
+            actual_fp = self._arg_after(cmd, "-w") or fp
 
         started = datetime.now()
         do_verify_hash_readback = self.opt_verify_hash_readback.isChecked()
@@ -8502,7 +8711,7 @@ class WritePage(OpPageBase, ChipMixin):
             if self.state.beep_on_complete:
                 _system_beep(1000 if rc == 0 else 800, 200)
 
-        self._execute_command(cmd, started, done, use_progress=use_progress)
+        self._execute_command(cmd, started, done, use_progress=use_progress, apply_verbose=False)
 
 
 class VerifyPage(OpPageBase, ChipMixin):
@@ -8540,6 +8749,11 @@ class VerifyPage(OpPageBase, ChipMixin):
         b_browse.clicked.connect(self._browse)
         b_detect.clicked.connect(lambda: self.autodetect(self.chip_combo, self.log, self.state, self.app))
         self.run_btn.clicked.connect(self._run)
+        self.file_edit.textChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.chip_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.app.programmer_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.app.tool_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self._refresh_command_preview()
 
     def _browse(self) -> None:
         start_dir = (self.state.workspace_dir or "").strip() or os.path.expanduser("~")
@@ -8553,6 +8767,25 @@ class VerifyPage(OpPageBase, ChipMixin):
         path, ok = QFileDialog.getOpenFileName(self, "Select file to verify", start_dir, "Binary Files (*.bin);;All Files (*)")
         if ok and path:
             self.file_edit.setText(path)
+
+    def _default_cmd(self) -> list[str] | None:
+        fp = self.file_edit.text().strip()
+        chip = self.chip_combo.currentText().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if not fp or not chip:
+            return None
+        if is_minipro:
+            return [self.state.binary, "-p", chip, "-m", fp]
+        if not self.state.programmer:
+            return None
+        return [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-v", fp]
+
+    def _refresh_command_preview(self) -> None:
+        cmd = self._default_cmd()
+        if cmd:
+            self.set_command_preview(cmd)
+        else:
+            self.clear_command_preview()
 
     def _run(self) -> None:
         fp = self.file_edit.text().strip()
@@ -8569,15 +8802,17 @@ class VerifyPage(OpPageBase, ChipMixin):
             return
 
         if is_minipro:
-            cmd = [self.state.binary, "-p", chip, "-m", fp]
+            default_cmd = [self.state.binary, "-p", chip, "-m", fp]
             use_progress = True
         else:
-            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-v", fp]
+            default_cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-v", fp]
             use_progress = True
+        cmd, user_override = self.get_effective_command(default_cmd)
+        target_fp = self._arg_after(cmd, "-v", "-m") or fp
         started = datetime.now()
 
         def done(rc: int, elapsed: float, had_error: bool) -> None:
-            digest = _sha256_file(fp)
+            digest = _sha256_file(target_fp)
             self.sha.setText(digest)
             self.log(f"SHA256SUM: {digest}")
             self.log(f"TimeTaken: {_fmt_elapsed(elapsed)}")
@@ -8589,7 +8824,7 @@ class VerifyPage(OpPageBase, ChipMixin):
             if self.state.beep_on_complete:
                 _system_beep(1000 if rc == 0 else 800, 200)
 
-        self._execute_command(cmd, started, done, use_progress=use_progress)
+        self._execute_command(cmd, started, done, use_progress=use_progress, apply_verbose=False)
 
 
 class ErasePage(OpPageBase, ChipMixin):
@@ -8620,6 +8855,28 @@ class ErasePage(OpPageBase, ChipMixin):
 
         b_detect.clicked.connect(lambda: self.autodetect(self.chip_combo, self.log, self.state, self.app))
         self.run_btn.clicked.connect(self._run)
+        self.chip_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.app.programmer_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self.app.tool_combo.currentTextChanged.connect(lambda _=None: self._refresh_command_preview())
+        self._refresh_command_preview()
+
+    def _default_cmd(self) -> list[str] | None:
+        chip = self.chip_combo.currentText().strip()
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if not chip:
+            return None
+        if is_minipro:
+            return [self.state.binary, "-p", chip, "-E"]
+        if not self.state.programmer:
+            return None
+        return [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-E"]
+
+    def _refresh_command_preview(self) -> None:
+        cmd = self._default_cmd()
+        if cmd:
+            self.set_command_preview(cmd)
+        else:
+            self.clear_command_preview()
 
     def _run(self) -> None:
         chip = self.chip_combo.currentText().strip()
@@ -8642,11 +8899,12 @@ class ErasePage(OpPageBase, ChipMixin):
             return
 
         if is_minipro:
-            cmd = [self.state.binary, "-p", chip, "-E"]
+            default_cmd = [self.state.binary, "-p", chip, "-E"]
             use_progress = True
         else:
-            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-E"]
+            default_cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-E"]
             use_progress = True
+        cmd, _ = self.get_effective_command(default_cmd)
         started = datetime.now()
 
         def done(rc: int, elapsed: float, had_error: bool) -> None:
@@ -8661,7 +8919,7 @@ class ErasePage(OpPageBase, ChipMixin):
             if self.state.beep_on_complete:
                 _system_beep(1000 if rc == 0 else 800, 200)
 
-        self._execute_command(cmd, started, done, use_progress=use_progress)
+        self._execute_command(cmd, started, done, use_progress=use_progress, apply_verbose=False)
 
 
 class WriteProtectPage(OpPageBase, ChipMixin):
@@ -9110,7 +9368,21 @@ class SettingsPage(PageBase):
         self._is_windows = sys.platform.startswith("win")
         self._is_macos = sys.platform == "darwin"
 
-        outer = QVBoxLayout(self)
+        root_lay = QVBoxLayout(self)
+        root_lay.setContentsMargins(0, 0, 0, 0)
+        root_lay.setSpacing(0)
+
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        self._settings_scroll = scroll
+        self._settings_viewport = scroll.viewport()
+        self._settings_viewport.installEventFilter(self)
+        root_lay.addWidget(scroll)
+
+        content = QWidget(self)
+        scroll.setWidget(content)
+
+        outer = QVBoxLayout(content)
 
         # Paths & Appearance
         g_paths = QGroupBox("Paths && Appearance")
@@ -9118,6 +9390,9 @@ class SettingsPage(PageBase):
         f_paths.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         f_paths.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         f_paths.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        f_paths.setContentsMargins(8, 8, 8, 8)
+        f_paths.setHorizontalSpacing(0)
+        f_paths.setVerticalSpacing(8)
         self.font_combo = QComboBox()
         self._populate_font_combo(preferred=self.state.preferred_font)
         self.font_size_slider = QSlider(Qt.Orientation.Horizontal)
@@ -9130,7 +9405,6 @@ class SettingsPage(PageBase):
         self.minipro_edit = QLineEdit(self.state.minipro_bin)
         self.fwinfo_edit = QLineEdit(self.state.fwinfo_bin)
         self.workspace_edit = QLineEdit(self.state.workspace_dir)
-        self.geometry_edit = QLineEdit(self.state.window_geometry)
         self.log_file_edit = QLineEdit(self.state.log_file_path)
 
         self.btn_download_font = QPushButton("Download")
@@ -9141,23 +9415,34 @@ class SettingsPage(PageBase):
         self.btn_apply_font_size.setProperty("kind", "subtle")
         self.btn_apply_font_size.setMinimumWidth(140)
 
+        label_width = 130
+
         row_font_size = QWidget(self)
         row_font_size_l = QHBoxLayout(row_font_size)
         row_font_size_l.setContentsMargins(0, 0, 0, 0)
-        row_font_size_l.setSpacing(10)
+        row_font_size_l.setSpacing(8)
 
         left_block = QWidget(self)
         left_l = QHBoxLayout(left_block)
         left_l.setContentsMargins(0, 0, 0, 0)
-        left_l.setSpacing(8)
+        left_l.setSpacing(6)
+        lbl_font = QLabel("Font:")
+        lbl_font.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lbl_font.setMinimumWidth(label_width)
+        lbl_font.setMaximumWidth(label_width)
+        left_l.addWidget(lbl_font)
         left_l.addWidget(self.font_combo, 1)
         left_l.addWidget(self.btn_download_font)
 
         right_block = QWidget(self)
         right_l = QHBoxLayout(right_block)
         right_l.setContentsMargins(0, 0, 0, 0)
-        right_l.setSpacing(8)
-        right_l.addWidget(QLabel("Font Size:"))
+        right_l.setSpacing(6)
+        lbl_font_size = QLabel("Font Size:")
+        lbl_font_size.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lbl_font_size.setMinimumWidth(label_width)
+        lbl_font_size.setMaximumWidth(label_width)
+        right_l.addWidget(lbl_font_size)
         right_l.addWidget(self.font_size_slider, 1)
         right_l.addWidget(self.font_size_label)
         right_l.addWidget(self.btn_apply_font_size)
@@ -9165,77 +9450,80 @@ class SettingsPage(PageBase):
         row_font_size_l.addWidget(left_block, 1)
         row_font_size_l.addWidget(right_block, 1)
 
-        f_paths.addRow("Font:", row_font_size)
+        f_paths.addRow("", row_font_size)
 
         self.btn_browse_flashrom = QPushButton("Browse")
         self.btn_browse_flashrom.setProperty("kind", "subtle")
         self.btn_browse_flashrom.setMinimumWidth(140)
-        row_fr = QWidget(self)
-        row_fr_l = QHBoxLayout(row_fr)
-        row_fr_l.setContentsMargins(0, 0, 0, 0)
-        row_fr_l.addWidget(self.flashrom_edit, 1)
-        row_fr_l.addWidget(self.btn_browse_flashrom)
-        f_paths.addRow("Flashrom Binary:", row_fr)
-
         self.btn_browse_flashprog = QPushButton("Browse")
         self.btn_browse_flashprog.setProperty("kind", "subtle")
         self.btn_browse_flashprog.setMinimumWidth(140)
-        row_fp = QWidget(self)
-        row_fp_l = QHBoxLayout(row_fp)
-        row_fp_l.setContentsMargins(0, 0, 0, 0)
-        row_fp_l.addWidget(self.flashprog_edit, 1)
-        row_fp_l.addWidget(self.btn_browse_flashprog)
-        f_paths.addRow("Flashprog Binary:", row_fp)
-
         self.btn_browse_minipro = QPushButton("Browse")
         self.btn_browse_minipro.setProperty("kind", "subtle")
         self.btn_browse_minipro.setMinimumWidth(140)
-        row_mp = QWidget(self)
-        row_mp_l = QHBoxLayout(row_mp)
-        row_mp_l.setContentsMargins(0, 0, 0, 0)
-        row_mp_l.addWidget(self.minipro_edit, 1)
-        row_mp_l.addWidget(self.btn_browse_minipro)
-        f_paths.addRow("Minipro Binary:", row_mp)
-
         self.btn_browse_fwinfo = QPushButton("Browse")
         self.btn_browse_fwinfo.setProperty("kind", "subtle")
         self.btn_browse_fwinfo.setMinimumWidth(140)
-        row_fwi = QWidget(self)
-        row_fwi_l = QHBoxLayout(row_fwi)
-        row_fwi_l.setContentsMargins(0, 0, 0, 0)
-        row_fwi_l.addWidget(self.fwinfo_edit, 1)
-        row_fwi_l.addWidget(self.btn_browse_fwinfo)
-        f_paths.addRow("Fwinfo Binary:", row_fwi)
-
         self.btn_browse_workspace = QPushButton("Browse")
         self.btn_browse_workspace.setProperty("kind", "subtle")
         self.btn_browse_workspace.setMinimumWidth(140)
-        row_ws = QWidget(self)
-        row_ws_l = QHBoxLayout(row_ws)
-        row_ws_l.setContentsMargins(0, 0, 0, 0)
-        row_ws_l.addWidget(self.workspace_edit, 1)
-        row_ws_l.addWidget(self.btn_browse_workspace)
-        f_paths.addRow("Workspace Path:", row_ws)
-
-        self.btn_capture_geometry = QPushButton("Acquire")
-        self.btn_capture_geometry.setProperty("kind", "subtle")
-        self.btn_capture_geometry.setMinimumWidth(140)
-        row_geo = QWidget(self)
-        row_geo_l = QHBoxLayout(row_geo)
-        row_geo_l.setContentsMargins(0, 0, 0, 0)
-        row_geo_l.addWidget(self.geometry_edit, 1)
-        row_geo_l.addWidget(self.btn_capture_geometry)
-        f_paths.addRow("Window Geometry:", row_geo)
-
         self.btn_browse_log = QPushButton("Browse")
         self.btn_browse_log.setProperty("kind", "subtle")
         self.btn_browse_log.setMinimumWidth(140)
-        row_log = QWidget(self)
-        row_log_l = QHBoxLayout(row_log)
-        row_log_l.setContentsMargins(0, 0, 0, 0)
-        row_log_l.addWidget(self.log_file_edit, 1)
-        row_log_l.addWidget(self.btn_browse_log)
-        f_paths.addRow("Log File Path:", row_log)
+
+        def _pair_path_row(
+            left_label: str,
+            left_edit: QLineEdit,
+            left_btn: QPushButton,
+            right_label: str,
+            right_edit: QLineEdit,
+            right_btn: QPushButton,
+        ) -> QWidget:
+            row = QWidget(self)
+            row_l = QHBoxLayout(row)
+            row_l.setContentsMargins(0, 0, 0, 0)
+            row_l.setSpacing(8)
+
+            left = QWidget(self)
+            left_l = QHBoxLayout(left)
+            left_l.setContentsMargins(0, 0, 0, 0)
+            left_l.setSpacing(6)
+            left_lbl = QLabel(left_label)
+            left_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            left_lbl.setMinimumWidth(label_width)
+            left_lbl.setMaximumWidth(label_width)
+            left_l.addWidget(left_lbl)
+            left_l.addWidget(left_edit, 1)
+            left_l.addWidget(left_btn)
+
+            right = QWidget(self)
+            right_l = QHBoxLayout(right)
+            right_l.setContentsMargins(0, 0, 0, 0)
+            right_l.setSpacing(6)
+            right_lbl = QLabel(right_label)
+            right_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            right_lbl.setMinimumWidth(label_width)
+            right_lbl.setMaximumWidth(label_width)
+            right_l.addWidget(right_lbl)
+            right_l.addWidget(right_edit, 1)
+            right_l.addWidget(right_btn)
+
+            row_l.addWidget(left, 1)
+            row_l.addWidget(right, 1)
+            return row
+
+        f_paths.addRow("", _pair_path_row(
+            "Flashrom Binary:", self.flashrom_edit, self.btn_browse_flashrom,
+            "Flashprog Binary:", self.flashprog_edit, self.btn_browse_flashprog,
+        ))
+        f_paths.addRow("", _pair_path_row(
+            "Minipro Binary:", self.minipro_edit, self.btn_browse_minipro,
+            "Fwinfo Binary:", self.fwinfo_edit, self.btn_browse_fwinfo,
+        ))
+        f_paths.addRow("", _pair_path_row(
+            "Workspace Path:", self.workspace_edit, self.btn_browse_workspace,
+            "Log File Path:", self.log_file_edit, self.btn_browse_log,
+        ))
         outer.addWidget(g_paths)
 
         # Behavior
@@ -9296,17 +9584,6 @@ class SettingsPage(PageBase):
         f_behavior.addRow(self.beep)
         f_behavior.addRow(self.auto_detect)
 
-        self.ft232h_divisor_combo = QComboBox()
-        self.ft232h_divisor_combo.addItem(
-            "4 — safe for 1.8 V and 3.3 V (default, slightly slower)", "4"
-        )
-        self.ft232h_divisor_combo.addItem(
-            "2 — faster, 3.3 V targets only", "2"
-        )
-        current_div = _normalize_ft232h_divisor(getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR))
-        idx = self.ft232h_divisor_combo.findData(current_div)
-        self.ft232h_divisor_combo.setCurrentIndex(idx if idx >= 0 else 0)
-        f_behavior.addRow("FT232H SPI clock divisor:", self.ft232h_divisor_combo)
         outer.addWidget(g_behavior)
 
         # Elevation / sudo
@@ -9351,11 +9628,16 @@ class SettingsPage(PageBase):
             self.btn_clear_keyring.setEnabled(False)
 
         # Systems & settings
-        g_checks = QGroupBox("Systems & Settings")
+        g_checks = QGroupBox("Systems && Settings")
+        self._checks_group = g_checks
         l_checks = QVBoxLayout(g_checks)
+        l_checks.setContentsMargins(4, 4, 4, 4)
+        l_checks.setSpacing(6)
         checks_grid = QGridLayout()
-        checks_grid.setHorizontalSpacing(8)
-        checks_grid.setVerticalSpacing(8)
+        checks_grid.setContentsMargins(2, 2, 2, 2)
+        checks_grid.setHorizontalSpacing(6)
+        checks_grid.setVerticalSpacing(6)
+        checks_grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.btn_check_dep = QPushButton("Check Dependencies")
         self.btn_fix_dep = QPushButton("Fix Dependencies")
         self.btn_check_perms = QPushButton("Check Binary Permissions")
@@ -9383,27 +9665,6 @@ class SettingsPage(PageBase):
         self.btn_reload_udev.setMinimumWidth(140)
         self.btn_add_plugdev.setProperty("kind", "subtle")
         self.btn_add_plugdev.setMinimumWidth(140)
-
-        if self._is_windows:
-            self.btn_check_perms.setEnabled(False)
-            self.btn_fix_perms.setEnabled(False)
-
-        # Linux-only maintenance actions should not appear on macOS/Windows.
-        if not self._is_linux:
-            self.btn_check_udev.setEnabled(False)
-            self.btn_backup_udev.setEnabled(False)
-            self.btn_fix_udev.setEnabled(False)
-            self.btn_reload_udev.setEnabled(False)
-            self.btn_add_plugdev.setEnabled(False)
-            self.btn_check_udev.setVisible(False)
-            self.btn_backup_udev.setVisible(False)
-            self.btn_fix_udev.setVisible(False)
-            self.btn_reload_udev.setVisible(False)
-            self.btn_add_plugdev.setVisible(False)
-            if self._is_macos:
-                g_checks.setTitle("Systems & Settings (macOS)")
-            elif self._is_windows:
-                g_checks.setTitle("Systems & Settings (Windows)")
 
         # Settings management (merged into Systems & Settings)
         self.btn_load_file = QPushButton("Load From File…")
@@ -9434,13 +9695,10 @@ class SettingsPage(PageBase):
             self.btn_apply,
         ]
 
-        visible_buttons = [b for b in check_buttons if b.isVisible()]
-        columns = 5 if self._is_linux else 4
-        for i, btn in enumerate(visible_buttons):
-            row = i // columns
-            col = i % columns
-            checks_grid.addWidget(btn, row, col)
-        checks_grid.setColumnStretch(columns, 1)
+        self._checks_grid = checks_grid
+        self._checks_buttons = check_buttons
+        self._checks_grid_columns = 0
+        self._relayout_system_buttons()
 
         l_checks.addLayout(checks_grid)
 
@@ -9455,7 +9713,6 @@ class SettingsPage(PageBase):
         self.btn_browse_minipro.clicked.connect(lambda: self._browse_line(self.minipro_edit, "Select minipro binary", file_mode=True))
         self.btn_browse_fwinfo.clicked.connect(lambda: self._browse_line(self.fwinfo_edit, "Select fwinfo binary", file_mode=True))
         self.btn_browse_workspace.clicked.connect(lambda: self._browse_line(self.workspace_edit, "Select workspace path", file_mode=False))
-        self.btn_capture_geometry.clicked.connect(self._capture_geometry)
         self.btn_browse_log.clicked.connect(self._browse_log_file)
 
         self.btn_theme_preview.clicked.connect(self._preview_theme)
@@ -9489,16 +9746,62 @@ class SettingsPage(PageBase):
         self.minipro_edit.textChanged.connect(lambda _: self._refresh_system_fix_buttons())
         self.fwinfo_edit.textChanged.connect(lambda _: self._refresh_system_fix_buttons())
         self._refresh_system_fix_buttons()
+        QTimer.singleShot(0, self._relayout_system_buttons)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        QTimer.singleShot(0, self._relayout_system_buttons)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # type: ignore[override]
+        if watched is getattr(self, "_settings_viewport", None) and event.type() == QEvent.Type.Resize:
+            QTimer.singleShot(0, self._relayout_system_buttons)
+        return super().eventFilter(watched, event)
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._relayout_system_buttons()
+
+    def _relayout_system_buttons(self) -> None:
+        grid = getattr(self, "_checks_grid", None)
+        buttons = getattr(self, "_checks_buttons", None)
+        if grid is None or not buttons:
+            return
+
+        viewport = getattr(self, "_settings_viewport", None)
+        if viewport is not None:
+            width = max(0, viewport.width())
+        else:
+            group = getattr(self, "_checks_group", None)
+            if group is not None:
+                width = max(0, group.contentsRect().width())
+            else:
+                container = grid.parentWidget()
+                width = max(0, container.width() if container is not None else self.width())
+        margins = grid.contentsMargins()
+        usable = max(0, width - margins.left() - margins.right() - 24)
+
+        spacing = grid.horizontalSpacing()
+        if spacing < 0:
+            spacing = 4
+
+        item_w = max(int(btn.minimumWidth()) for btn in buttons)
+        denom = max(1, item_w + spacing)
+        columns = max(1, min(len(buttons), (usable + spacing) // denom))
+
+        if columns == self._checks_grid_columns:
+            return
+
+        self._checks_grid_columns = columns
+        while grid.count():
+            grid.takeAt(0)
+
+        for i, btn in enumerate(buttons):
+            row = i // columns
+            col = i % columns
+            grid.addWidget(btn, row, col)
 
     def _normalize_settings_button_widths(self) -> None:
-        """Apply uniform action-button widths for cleaner Settings row alignment.
-
-        Qt/macOS style metrics can produce uneven size-hints; pinning to a
-        consistent width improves scanability and parity with Windows layout.
-        """
-        if not self._is_macos:
-            return
-        width = 140
+        """Clear hard max width so buttons can size naturally per layout/style."""
         buttons: list[QPushButton] = [
             self.btn_download_font,
             self.btn_apply_font_size,
@@ -9507,7 +9810,6 @@ class SettingsPage(PageBase):
             self.btn_browse_minipro,
             self.btn_browse_fwinfo,
             self.btn_browse_workspace,
-            self.btn_capture_geometry,
             self.btn_browse_log,
             self.btn_theme_preview,
             self.btn_theme_revert,
@@ -9530,8 +9832,7 @@ class SettingsPage(PageBase):
             self.btn_apply,
         ]
         for btn in buttons:
-            btn.setMinimumWidth(width)
-            btn.setMaximumWidth(width)
+            btn.setMaximumWidth(16777215)
 
     def _log(self, text: str) -> None:
         self.log(text)
@@ -9561,9 +9862,6 @@ class SettingsPage(PageBase):
             ok = bool(path)
         if ok and path:
             line.setText(path)
-
-    def _capture_geometry(self) -> None:
-        self.geometry_edit.setText(f"{self.app.width()}x{self.app.height()}")
 
     def _browse_log_file(self) -> None:
         path, ok = QFileDialog.getSaveFileName(self, "Select log file", os.path.expanduser("~"), "Log Files (*.log);;All Files (*)")
@@ -10152,7 +10450,7 @@ class SettingsPage(PageBase):
             "minipro_bin": self.minipro_edit.text().strip(),
             "fwinfo_bin": self.fwinfo_edit.text().strip(),
             "workspace_dir": self.workspace_edit.text().strip(),
-            "window_geometry": self.geometry_edit.text().strip(),
+            "window_geometry": f"{self.app.width()}x{self.app.height()}",
             "log_file_path": self.log_file_edit.text().strip(),
             "use_sudo": self.use_sudo.isChecked(),
             "auto_detect_programmer": self.auto_detect.isChecked(),
@@ -10160,7 +10458,7 @@ class SettingsPage(PageBase):
             "layout_mode": "sidebar",
             "beep_on_complete": self.beep.isChecked(),
             "verbose_level": int(getattr(self.state, "verbose_level", 0) or 0),
-            "ft232h_divisor": _normalize_ft232h_divisor(self.ft232h_divisor_combo.currentData()),
+            "ft232h_divisor": _normalize_ft232h_divisor(self.app.ft232h_divisor_combo.currentData()),
         }
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -10197,7 +10495,6 @@ class SettingsPage(PageBase):
         self.minipro_edit.setText(str(data.get("minipro_bin", self.minipro_edit.text())))
         self.fwinfo_edit.setText(str(data.get("fwinfo_bin", self.fwinfo_edit.text())))
         self.workspace_edit.setText(str(data.get("workspace_dir", self.workspace_edit.text())))
-        self.geometry_edit.setText(str(data.get("window_geometry", self.geometry_edit.text())))
         self.log_file_edit.setText(str(data.get("log_file_path", self.log_file_edit.text())))
         loaded_use_sudo = bool(data.get("use_sudo", self.use_sudo.isChecked()))
         self.use_sudo.setChecked(loaded_use_sudo if self._is_linux else False)
@@ -10216,9 +10513,7 @@ class SettingsPage(PageBase):
         if theme:
             self.theme_combo.setCurrentText(theme)
         loaded_div = _normalize_ft232h_divisor(data.get("ft232h_divisor", _FT232H_DEFAULT_DIVISOR))
-        idx = self.ft232h_divisor_combo.findData(loaded_div)
-        if idx >= 0:
-            self.ft232h_divisor_combo.setCurrentIndex(idx)
+        self.app._set_ft232h_divisor_toolbar_value(loaded_div)
         self._refresh_system_fix_buttons()
 
     def _reset_defaults(self) -> None:
@@ -10247,7 +10542,6 @@ class SettingsPage(PageBase):
         self.minipro_edit.setText("")
         self.fwinfo_edit.setText("")
         self.workspace_edit.setText(script_dir)
-        self.geometry_edit.setText("")
         self.log_file_edit.setText(os.path.join(script_dir, "flashgui.log"))
         self.use_sudo.setChecked(False)
         self.sudo_pw.setText("")
@@ -10258,9 +10552,7 @@ class SettingsPage(PageBase):
         if verbose_combo is not None:
             verbose_combo.setCurrentIndex(0)
         self.theme_combo.setCurrentText("default")
-        default_idx = self.ft232h_divisor_combo.findData(_FT232H_DEFAULT_DIVISOR)
-        if default_idx >= 0:
-            self.ft232h_divisor_combo.setCurrentIndex(default_idx)
+        self.app._set_ft232h_divisor_toolbar_value(_FT232H_DEFAULT_DIVISOR)
         self._refresh_system_fix_buttons()
         self._log("Fields reset to defaults — click Apply & Save to persist.")
 
@@ -10274,7 +10566,6 @@ class SettingsPage(PageBase):
         self.state.minipro_bin = self.minipro_edit.text().strip()
         self.state.fwinfo_bin = self.fwinfo_edit.text().strip()
         self.state.workspace_dir = self.workspace_edit.text().strip() or self.state.workspace_dir
-        self.state.window_geometry = self.geometry_edit.text().strip()
         self.state.log_file_path = self.log_file_edit.text().strip() or self.state.log_file_path
 
         self.state.theme = self.theme_combo.currentText().strip()
@@ -10282,11 +10573,11 @@ class SettingsPage(PageBase):
         self.state.sudo_password = self.sudo_pw.text()
         self.state.auto_detect_programmer = self.auto_detect.isChecked()
         self.state.beep_on_complete = self.beep.isChecked()
-        new_divisor = _normalize_ft232h_divisor(self.ft232h_divisor_combo.currentData())
+        new_divisor = _normalize_ft232h_divisor(self.app.ft232h_divisor_combo.currentData())
         if new_divisor != getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR):
             self.state.ft232h_divisor = new_divisor
             _apply_ft232h_divisor(new_divisor)
-            self._log(f"FT232H SPI clock divisor set to {new_divisor} → {_ft232h_programmer_arg(new_divisor)}")
+            self._log(f"FT232H SPI Clock Divisor set to {new_divisor} → {_ft232h_programmer_arg(new_divisor)}")
         # Verbose level is controlled from the main window log toolbar (no Settings field).
 
         # Keep main window verbose selector in sync
@@ -10303,14 +10594,7 @@ class SettingsPage(PageBase):
             size=max(8, int(self.state.font_size)),
         )
 
-        geo = self.geometry_edit.text().strip()
-        if geo and "x" in geo:
-            try:
-                w, h = geo.lower().split("x", 1)
-                self.app.resize(int(w), int(h))
-                self.state.window_geometry = geo
-            except Exception:
-                self._log(f"WARNING: Invalid geometry '{geo}'.")
+        self.state.window_geometry = f"{self.app.width()}x{self.app.height()}"
 
         self.state.save_settings(geometry=self.state.window_geometry)
         self._log("Settings saved.")
@@ -10327,9 +10611,11 @@ class ToolsPage(PageBase):
         outer.setSpacing(10)
 
         g_tools = QGroupBox("Tools")
+        self._tools_group = g_tools
         l_tools = QGridLayout(g_tools)
-        l_tools.setHorizontalSpacing(8)
-        l_tools.setVerticalSpacing(8)
+        l_tools.setHorizontalSpacing(6)
+        l_tools.setVerticalSpacing(6)
+        l_tools.setContentsMargins(4, 4, 4, 4)
 
         tool_actions: list[tuple[str, Callable[[], None]]] = [
             ("Binwalk ROMs", self._binwalk_rom),
@@ -10345,14 +10631,16 @@ class ToolsPage(PageBase):
             ("Firmware Update", self._fwinfo_update),
             ("Hardware Self-Test (-t)", self._minipro_self_test),
         ]
-        for idx, (label, handler) in enumerate(tool_actions):
+        self._tools_grid = l_tools
+        self._tools_buttons: list[QPushButton] = []
+        self._tools_grid_columns = 0
+        for label, handler in tool_actions:
             btn = QPushButton(label)
             btn.setProperty("kind", "subtle")
             btn.setMinimumWidth(220)
             btn.clicked.connect(handler)
-            r = idx // 2
-            c = idx % 2
-            l_tools.addWidget(btn, r, c)
+            self._tools_buttons.append(btn)
+        self._relayout_tools_buttons()
         outer.addWidget(g_tools)
 
         g_console = QGroupBox("Programmer Console")
@@ -10446,6 +10734,46 @@ class ToolsPage(PageBase):
         self._console_poll_timer.start()
 
         self._refresh_serial_ports(silent=True)
+        QTimer.singleShot(0, self._relayout_tools_buttons)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        QTimer.singleShot(0, self._relayout_tools_buttons)
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._relayout_tools_buttons()
+
+    def _relayout_tools_buttons(self) -> None:
+        grid = getattr(self, "_tools_grid", None)
+        buttons = getattr(self, "_tools_buttons", None)
+        if grid is None or not buttons:
+            return
+
+        group = getattr(self, "_tools_group", None)
+        width = max(0, group.contentsRect().width() if group is not None else self.width())
+        margins = grid.contentsMargins()
+        usable = max(0, width - margins.left() - margins.right() - 8)
+
+        spacing = grid.horizontalSpacing()
+        if spacing < 0:
+            spacing = 8
+
+        item_w = max(max(int(btn.minimumWidth()), int(btn.sizeHint().width())) for btn in buttons)
+        denom = max(1, item_w + spacing)
+        columns = max(1, min(len(buttons), (usable + spacing) // denom))
+
+        if columns == self._tools_grid_columns:
+            return
+
+        self._tools_grid_columns = columns
+        while grid.count():
+            grid.takeAt(0)
+
+        for i, btn in enumerate(buttons):
+            row = i // columns
+            col = i % columns
+            grid.addWidget(btn, row, col)
 
     @staticmethod
     def _serial_newline_bytes(mode: str) -> bytes:
@@ -11110,10 +11438,12 @@ class HelpAboutPage(PageBase):
         l_about.addRow("Actions", row_update)
         outer.addWidget(g_about)
 
-        g_help = QGroupBox("Help & Supported Lists")
+        g_help = QGroupBox("Help && Supported Lists")
+        self._help_group = g_help
         l_help = QGridLayout(g_help)
-        l_help.setHorizontalSpacing(8)
-        l_help.setVerticalSpacing(8)
+        l_help.setHorizontalSpacing(6)
+        l_help.setVerticalSpacing(6)
+        l_help.setContentsMargins(4, 4, 4, 4)
 
         help_actions: list[tuple[str, Callable[[], None]]] = [
             ("Manual flashrom", lambda: self._run_tool_manual("flashrom", "Manual flashrom")),
@@ -11127,11 +11457,16 @@ class HelpAboutPage(PageBase):
             ("Supported Programmers flashrom", lambda: self._run_tool_help("flashrom", ["-p", "-h"], "Supported Programmers flashrom")),
             ("Supported Programmers flashprog", lambda: self._run_tool_help("flashprog", ["-p", "-h"], "Supported Programmers flashprog")),
         ]
-        for idx, (label, handler) in enumerate(help_actions):
+        self._help_grid = l_help
+        self._help_buttons: list[QPushButton] = []
+        self._help_grid_columns = 0
+        for label, handler in help_actions:
             btn = QPushButton(label)
             btn.setProperty("kind", "subtle")
+            btn.setMinimumWidth(220)
             btn.clicked.connect(handler)
-            l_help.addWidget(btn, idx // 2, idx % 2)
+            self._help_buttons.append(btn)
+        self._relayout_help_buttons()
         outer.addWidget(g_help)
 
         g_tested_prog = QGroupBox("Tested Programmers")
@@ -11160,6 +11495,46 @@ class HelpAboutPage(PageBase):
         outer.addWidget(g_tested_chip)
 
         outer.addStretch(1)
+        QTimer.singleShot(0, self._relayout_help_buttons)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        QTimer.singleShot(0, self._relayout_help_buttons)
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._relayout_help_buttons()
+
+    def _relayout_help_buttons(self) -> None:
+        grid = getattr(self, "_help_grid", None)
+        buttons = getattr(self, "_help_buttons", None)
+        if grid is None or not buttons:
+            return
+
+        group = getattr(self, "_help_group", None)
+        width = max(0, group.contentsRect().width() if group is not None else self.width())
+        margins = grid.contentsMargins()
+        usable = max(0, width - margins.left() - margins.right() - 8)
+
+        spacing = grid.horizontalSpacing()
+        if spacing < 0:
+            spacing = 8
+
+        item_w = max(max(int(btn.minimumWidth()), int(btn.sizeHint().width())) for btn in buttons)
+        denom = max(1, item_w + spacing)
+        columns = max(1, min(len(buttons), (usable + spacing) // denom))
+
+        if columns == self._help_grid_columns:
+            return
+
+        self._help_grid_columns = columns
+        while grid.count():
+            grid.takeAt(0)
+
+        for i, btn in enumerate(buttons):
+            row = i // columns
+            col = i % columns
+            grid.addWidget(btn, row, col)
 
     def _open_link(self) -> None:
         webbrowser.open(self._REPO_URL)
@@ -11579,6 +11954,20 @@ class FlashGUIQt(QMainWindow):
         self.cancel_btn.clicked.connect(self._cancel_active_operations)
         tb.addWidget(self.cancel_btn)
 
+        self.ft232h_divisor_container = QWidget()
+        ft232h_lay = QHBoxLayout(self.ft232h_divisor_container)
+        ft232h_lay.setContentsMargins(0, 0, 0, 0)
+        ft232h_lay.setSpacing(6)
+        ft232h_lay.addWidget(_icon_text_label("tools", "FT232H SPI Clock Divisor:", object_name="toolbarLabel", icon_size=16))
+        self.ft232h_divisor_combo = QComboBox()
+        self.ft232h_divisor_combo.addItem("4 — safe/default", "4")
+        self.ft232h_divisor_combo.addItem("2 — faster/3.3 V", "2")
+        self.ft232h_divisor_combo.setMinimumWidth(170)
+        self._set_ft232h_divisor_toolbar_value(self.state.ft232h_divisor)
+        self.ft232h_divisor_combo.currentIndexChanged.connect(self._on_ft232h_divisor_change)
+        ft232h_lay.addWidget(self.ft232h_divisor_combo)
+        tb.addWidget(self.ft232h_divisor_container)
+
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         tb.addWidget(spacer)
@@ -11587,6 +11976,8 @@ class FlashGUIQt(QMainWindow):
         quit_btn.setMinimumWidth(140)
         quit_btn.clicked.connect(self.close)
         tb.addWidget(quit_btn)
+
+        self._update_ft232h_toolbar_visibility()
 
     def _build_central(self) -> None:
         root = QWidget()
@@ -12487,6 +12878,7 @@ class FlashGUIQt(QMainWindow):
             self.status_programmer.setText(_format_programmer_status(self.state.programmer))
         else:
             self.status_programmer.setText(" Programmer: — ")
+        self._update_ft232h_toolbar_visibility()
 
     def _on_tool_change(self, _: str) -> None:
         self._refresh_tool()
@@ -12506,6 +12898,7 @@ class FlashGUIQt(QMainWindow):
             self.status_programmer.setText(_format_programmer_status(self.state.programmer))
         else:
             self.status_programmer.setText(" Programmer: — ")
+        self._update_ft232h_toolbar_visibility()
 
     def sync_chip_selection(self, chips: list[str], chosen: str) -> None:
         """Propagate chip candidates/selection to all pages that expose a chip combobox."""
@@ -12542,7 +12935,64 @@ class FlashGUIQt(QMainWindow):
         except Exception:
             pass
 
+    def _set_ft232h_divisor_toolbar_value(self, divisor: object) -> None:
+        combo = getattr(self, "ft232h_divisor_combo", None)
+        if not isinstance(combo, QComboBox):
+            return
+        normalized = _normalize_ft232h_divisor(divisor)
+        idx = combo.findData(normalized)
+        combo.blockSignals(True)
+        try:
+            combo.setCurrentIndex(idx if idx >= 0 else 0)
+        finally:
+            combo.blockSignals(False)
+
+    def _is_ft232h_programmer(self, prog: str | None = None) -> bool:
+        value = (prog or getattr(self.state, "programmer", "") or "").strip()
+        if not value:
+            return False
+        lo = value.lower()
+        if "ft232h" in lo:
+            return True
+        if "type=232h" in lo or ("ft2232_spi" in lo and "divisor=" in lo):
+            return True
+        friendly = _programmer_friendly_name(value).lower()
+        return "ft232h" in friendly
+
+    def _update_ft232h_toolbar_visibility(self) -> None:
+        container = getattr(self, "ft232h_divisor_container", None)
+        if container is None:
+            return
+        container.setVisible(self._is_ft232h_programmer())
+
+    def _on_ft232h_divisor_change(self, _index: int) -> None:
+        combo = getattr(self, "ft232h_divisor_combo", None)
+        if not isinstance(combo, QComboBox):
+            return
+        new_divisor = _normalize_ft232h_divisor(combo.currentData())
+        if new_divisor == getattr(self.state, "ft232h_divisor", _FT232H_DEFAULT_DIVISOR):
+            return
+        self.state.ft232h_divisor = new_divisor
+        _apply_ft232h_divisor(new_divisor)
+        try:
+            self.state.save_settings(geometry=self.state.window_geometry)
+        except Exception:
+            pass
+        if hasattr(self, "log"):
+            self.log.append_line(
+                f"FT232H SPI Clock Divisor set to {new_divisor} → {_ft232h_programmer_arg(new_divisor)}"
+            )
+
     def _on_detect_programmer(self) -> None:
+        if _has_active_operations():
+            count = _active_operation_count()
+            plural = "s" if count != 1 else ""
+            self.log.append_line(
+                f"INFO: Programmer detection is disabled while {count} active operation{plural} is running."
+            )
+            self.statusBar().showMessage("Programmer detect disabled while operation is running", 3000)
+            return
+
         if _is_minipro_tool(self.state.tool, self.state.binary):
             self.log.append_line("Probing minipro USB programmer (T48/TL866)…")
             detected, label, lines = _detect_minipro_hardware(self.state.binary)
@@ -12640,8 +13090,7 @@ class FlashGUIQt(QMainWindow):
         self.status_programmer.setText(_format_programmer_status(self.state.programmer))
 
     def _cancel_active_operations(self) -> None:
-        with _ACTIVE_PROCS_LOCK:
-            count = len(_ACTIVE_PROCS)
+        count = _active_operation_count()
         if count == 0:
             self.log.append_line("No active operation to cancel.")
             self.statusBar().showMessage("No active operation", 2500)

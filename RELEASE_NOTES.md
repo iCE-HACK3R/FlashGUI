@@ -27,6 +27,20 @@
 - `release/flashgui-v1.1.8-macos-arm64-portable.zip`
 - `release/flashgui-v1.1.8-macos-x64-portable.zip`
 
+### Issue #4 checkpoint and follow-up flow (v1.1.8)
+
+- Treat GitHub issue `#4` as a multi-topic umbrella report.
+- Publish current code to `main` as a stabilization checkpoint.
+- Keep `#4` open while follow-up symptoms are split into focused issues.
+- Implemented in this checkpoint:
+  - Detect ROM actions are blocked during active flash operations.
+  - Oversized image writes are rejected in preflight with explicit size details.
+- Ask reporter(s) to file one issue per remaining symptom with:
+  - tool/programmer/chip details,
+  - exact reproduction steps,
+  - `Commands:` line from UI,
+  - relevant global log excerpt.
+
 ## v1.1.7
 
 ### Highlights (v1.1.7)
