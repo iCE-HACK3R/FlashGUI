@@ -48,7 +48,7 @@ except ImportError:
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.9"
+VERSION = "1.1.10"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -766,6 +766,41 @@ _UDEV_RULES: dict[str, tuple[str, str]] = {
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5722", MODE="0660", GROUP="plugdev"',
     ),
 }
+
+
+def _is_kde_desktop() -> bool:
+    xdg = (os.environ.get("XDG_CURRENT_DESKTOP") or "").lower()
+    sess = (os.environ.get("DESKTOP_SESSION") or "").lower()
+    kde_flag = (os.environ.get("KDE_FULL_SESSION") or "").strip()
+    return ("kde" in xdg) or ("plasma" in xdg) or ("kde" in sess) or (kde_flag not in {"", "0", "false", "False"})
+
+
+def _preferred_keyring_manager_candidates() -> tuple[str, ...]:
+    if _is_kde_desktop():
+        return ("kwalletmanager5", "kwalletmanager", "seahorse")
+    return ("seahorse", "kwalletmanager5", "kwalletmanager")
+
+
+def _configured_udev_group() -> str:
+    group = (os.environ.get("FLASHGUI_UDEV_GROUP") or "plugdev").strip()
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_-]*$", group):
+        return "plugdev"
+    return group
+
+
+def _apply_udev_group(rule_content: str) -> str:
+    group = _configured_udev_group()
+    return re.sub(r'GROUP="[^"]+"', f'GROUP="{group}"', rule_content)
+
+
+def _udev_group_hint_text() -> str:
+    group = _configured_udev_group()
+    raw = (os.environ.get("FLASHGUI_UDEV_GROUP") or "").strip()
+    if not raw:
+        return f"Udev target group: {group} (default)"
+    if group != raw:
+        return f"Udev target group: {group} (invalid FLASHGUI_UDEV_GROUP={raw!r}; using default)"
+    return f"Udev target group: {group} (from FLASHGUI_UDEV_GROUP)"
 
 
 # Programmers that need a serial device path appended (programmer_arg → param key)
@@ -2831,14 +2866,24 @@ class PageSettings:
             row=1, column=2, padx=(6, 2), pady=3)
         ttk.Button(lf3, text="Clear keyring", command=self._clear_sudo_keyring).grid(
             row=1, column=3, pady=3)
+        ttk.Button(lf3, text="🟢 Keyring Self-Check", command=self._run_keyring_self_check).grid(
+            row=1, column=4, padx=(6, 0), pady=3)
+        self.keyring_status_var = tk.StringVar(value="")
+        ttk.Label(lf3, text="Keyring status:").grid(
+            row=2, column=0, sticky="e", padx=(0, 4)
+        )
+        ttk.Label(lf3, textvariable=self.keyring_status_var, wraplength=460, justify="left").grid(
+            row=2, column=1, columnspan=3, sticky="w", pady=(2, 0)
+        )
         ttk.Label(
             lf3,
             text="Password is never written to disk unless you click 'Save to keyring'.",
             foreground="#888888",
-        ).grid(row=2, column=0, columnspan=4, sticky="w", pady=(2, 0))
+        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(2, 0))
 
         if sys.platform.startswith("win"):
             lf3.grid_remove()  # sudo not applicable on Windows
+        self._refresh_keyring_status()
 
         # ── System Check & Fixes ────────────────────────────────────────────────
         lf4 = ttk.LabelFrame(outer, text="System Check & Fixes", padding=6)
@@ -2855,38 +2900,46 @@ class PageSettings:
         col += 1
 
         # Binary permissions (disabled on Windows)
-        btn_check_perms = ttk.Button(lf4, text="Check Perms", width=13,
-                   command=self._check_binary_perms)
-        btn_check_perms.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
+        self.btn_check_perms = ttk.Button(lf4, text="Check Perms", width=13,
+               command=self._check_binary_perms)
+        self.btn_check_perms.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
         col += 1
-        btn_fix_perms = ttk.Button(lf4, text="Fix Perms", width=11,
-                   command=self._fix_binary_perms)
-        btn_fix_perms.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
+        self.btn_fix_perms = ttk.Button(lf4, text="Fix Perms", width=11,
+               command=self._fix_binary_perms)
+        self.btn_fix_perms.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
         col += 1
         self.btn_install_guide = ttk.Button(lf4, text="Install Guide", width=14,
                    command=self._download_binaries)
         self.btn_install_guide.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
         col += 1
         
-        if sys.platform.startswith("win"):
-            btn_check_perms.config(state="disabled")
-            btn_fix_perms.config(state="disabled")
-        else:
-            # udev rules (Linux/Unix only)
-            ttk.Button(lf4, text="Check udev", width=12,
-                       command=self._check_udev).grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
-            col += 1
-            ttk.Button(lf4, text="Fix udev", width=10,
-                       command=self._fix_udev).grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
-            col += 1
-            ttk.Button(lf4, text="Backup udev", width=13,
-                       command=self._backup_udev).grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
-            col += 1
-            ttk.Button(lf4, text="Add to plugdev", width=15,
-                       command=self._add_plugdev).grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
-            col += 1
-            ttk.Button(lf4, text="Reload udev", width=13,
-                       command=self._reload_udev).grid(row=0, column=col, pady=3, sticky="w")
+        # udev rules (Linux-only actions; shown for consistency and disabled off Linux)
+        self.btn_check_udev = ttk.Button(lf4, text="🔍 Check udev", width=12,
+                   command=self._check_udev)
+        self.btn_check_udev.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
+        col += 1
+        self.btn_fix_udev = ttk.Button(lf4, text="🛠️ Fix udev", width=10,
+                   command=self._fix_udev)
+        self.btn_fix_udev.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
+        col += 1
+        self.btn_backup_udev = ttk.Button(lf4, text="💾 Backup udev", width=13,
+                   command=self._backup_udev)
+        self.btn_backup_udev.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
+        col += 1
+        self.btn_add_plugdev = ttk.Button(lf4, text="👥 Add to plugdev", width=15,
+                   command=self._add_plugdev)
+        self.btn_add_plugdev.grid(row=0, column=col, padx=(0, 2), pady=3, sticky="w")
+        col += 1
+        self.btn_reload_udev = ttk.Button(lf4, text="🔄 Reload udev", width=13,
+                   command=self._reload_udev)
+        self.btn_reload_udev.grid(row=0, column=col, pady=3, sticky="w")
+
+        self.udev_group_hint_var = tk.StringVar(value="")
+        ttk.Label(
+            lf4,
+            textvariable=self.udev_group_hint_var,
+            foreground="#666666",
+        ).grid(row=1, column=0, columnspan=32, sticky="w", pady=(2, 0))
 
         # ── Settings Management ───────────────────────────────────────────────
         lf5 = ttk.LabelFrame(outer, text="Settings Management", padding=6)
@@ -3065,6 +3118,8 @@ class PageSettings:
         checks = [
             (self.flashrom_var.get().strip(), "flashrom"),
             (self.flashprog_var.get().strip(), "flashprog"),
+            (str(getattr(self.state, "minipro_bin", "") or "").strip(), "minipro"),
+            (str(getattr(self.state, "fwinfo_bin", "") or "").strip(), "fwinfo"),
         ]
         for configured, fallback in checks:
             if configured:
@@ -3078,7 +3133,23 @@ class PageSettings:
     def _refresh_system_fix_buttons(self) -> None:
         should_enable_fix_dep = self._has_missing_core_binaries()
         self.btn_fix_dep.config(state="normal" if should_enable_fix_dep else "disabled")
+        is_windows = sys.platform.startswith("win")
+        is_linux = sys.platform.startswith("linux")
+        self.btn_check_perms.config(state="disabled" if is_windows else "normal")
+        self.btn_fix_perms.config(state="disabled" if is_windows else "normal")
+        self.btn_check_udev.config(state="normal" if is_linux else "disabled")
+        self.btn_fix_udev.config(state="normal" if is_linux else "disabled")
+        self.btn_backup_udev.config(state="normal" if is_linux else "disabled")
+        self.btn_add_plugdev.config(state="normal" if is_linux else "disabled")
+        self.btn_reload_udev.config(state="normal" if is_linux else "disabled")
         self.btn_install_guide.config(state="normal")
+        if hasattr(self, "udev_group_hint_var"):
+            if is_linux:
+                self.udev_group_hint_var.set(_udev_group_hint_text())
+            elif sys.platform == "darwin":
+                self.udev_group_hint_var.set(f"Linux-only action. {_udev_group_hint_text()}")
+            else:
+                self.udev_group_hint_var.set("")
 
     def _fix_dependencies(self) -> None:
         """Attempt to fix dependencies with safe, user-confirmed actions."""
@@ -3086,9 +3157,13 @@ class PageSettings:
         log.append("=== Fix dependencies ===")
 
         missing_tools: list[str] = []
-        for tool in ("flashrom", "flashprog"):
-            configured = self.state.flashrom_bin if tool == "flashrom" else self.state.flashprog_bin
-            found = shutil.which(configured) if configured else shutil.which(tool)
+        for tool, configured in (
+            ("flashrom", self.flashrom_var.get().strip()),
+            ("flashprog", self.flashprog_var.get().strip()),
+            ("minipro", str(getattr(self.state, "minipro_bin", "") or "").strip()),
+            ("fwinfo", str(getattr(self.state, "fwinfo_bin", "") or "").strip()),
+        ):
+            found = configured if configured and os.path.isfile(configured) else shutil.which(tool)
             if not found:
                 missing_tools.append(tool)
 
@@ -3156,40 +3231,6 @@ class PageSettings:
             log.append("=== end ===")
 
         self._run_background("fix dependencies", _worker, _done)
-
-    def _fix_binary_perms(self) -> None:
-        """Fix binary file permissions (same as check but applies fixes)."""
-        log = self.app.log
-        log.append("=== Fix binary permissions ===")
-        lines: list[str] = []
-
-        def _worker() -> None:
-            changed = 0
-            for label, path in [
-                ("flashrom",  self.state.flashrom_bin),
-                ("flashprog", self.state.flashprog_bin),
-            ]:
-                if not path or not os.path.isfile(path):
-                    continue
-                if sys.platform.startswith("win"):
-                    continue
-                if not os.access(path, os.X_OK):
-                    lines.append(f"  {label}: {path} — applying chmod +x…")
-                    ok, msg = self._sudo_run(["chmod", "+x", path])
-                    if ok:
-                        lines.append("    ✓ Fixed")
-                        changed += 1
-                    else:
-                        lines.append(f"    ✗ Failed: {msg}")
-            if changed:
-                lines.append(f"  Fixed {changed} permission(s).")
-
-        def _done() -> None:
-            for line in lines:
-                log.append(line)
-            log.append("=== end ===")
-
-        self._run_background("fix binary permissions", _worker, _done)
 
     def _download_binaries(self) -> None:
         """Show platform-specific install guidance for flashrom/flashprog binaries."""
@@ -3292,12 +3333,49 @@ class PageSettings:
             )
         except Exception as exc:
             self.state.sudo_password = pw
-            messagebox.showwarning(
-                "Keyring unavailable",
-                f"Could not save password to keyring: {exc}\n\n"
-                "Password kept in memory for this session only.",
-                parent=self.frame,
-            )
+            self.app.log.append(f"WARNING: Keyring save failed: {exc}")
+            err_text = str(exc).lower()
+            if sys.platform.startswith("linux") and "unlock the collection" in err_text:
+                launched = self._launch_keyring_manager()
+                if launched:
+                    messagebox.showwarning(
+                        "Keyring locked",
+                        "System keyring appears locked. Opened keyring manager — unlock/sign in there,\n"
+                        "then click 'Save to keyring' again.",
+                        parent=self.frame,
+                    )
+                else:
+                    messagebox.showwarning(
+                        "Keyring locked",
+                        "System keyring appears locked. Unlock/sign in to GNOME Keyring or KWallet,\n"
+                        "then click 'Save to keyring' again.",
+                        parent=self.frame,
+                    )
+            else:
+                messagebox.showwarning(
+                    "Keyring unavailable",
+                    "Could not access an unlocked system keyring.\n\n"
+                    "Password kept in memory for this session only.\n"
+                    "Unlock/sign in to your desktop keyring (GNOME Keyring/KWallet) and try again.",
+                    parent=self.frame,
+                )
+        self._refresh_keyring_status()
+
+    def _launch_keyring_manager(self) -> bool:
+        for exe in _preferred_keyring_manager_candidates():
+            if shutil.which(exe):
+                try:
+                    subprocess.Popen(
+                        [exe],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True,
+                    )
+                    self.app.log.append(f"INFO: Opened keyring manager: {exe}")
+                    return True
+                except Exception as exc:
+                    self.app.log.append(f"WARNING: Failed to open {exe}: {exc}")
+        return False
 
     def _clear_sudo_keyring(self) -> None:
         self.sudo_pw_var.set("")
@@ -3308,6 +3386,79 @@ class PageSettings:
         except Exception:
             pass
         messagebox.showinfo("Keyring", "sudo password cleared.", parent=self.frame)
+        self._refresh_keyring_status()
+
+    def _run_keyring_self_check(self) -> None:
+        log = self.app.log
+        log.append("=== Keyring self-check ===")
+        lines: list[str] = []
+
+        def _worker() -> None:
+            lines.append(f"  Platform: {sys.platform}")
+            lines.append(f"  Python: {sys.version.split()[0]}")
+            for env_name in ("DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DESKTOP_SESSION", "XDG_CURRENT_DESKTOP", "KDE_FULL_SESSION"):
+                value = (os.environ.get(env_name) or "").strip()
+                lines.append(f"  env[{env_name}]: {'set' if value else 'missing'}")
+            lines.append(f"  desktop[kde-detected]: {'yes' if _is_kde_desktop() else 'no'}")
+            lines.append(f"  keyring manager priority: {', '.join(_preferred_keyring_manager_candidates())}")
+            for exe in ("seahorse", "kwalletmanager5", "kwalletmanager", "gnome-keyring-daemon", "secret-tool"):
+                lines.append(f"  tool[{exe}]: {shutil.which(exe) or 'NOT FOUND'}")
+
+            try:
+                import keyring  # type: ignore[import]
+            except ImportError:
+                lines.append("  keyring: NOT INSTALLED")
+                return
+
+            backend = "unknown backend"
+            try:
+                backend = type(keyring.get_keyring()).__name__
+            except Exception as exc:
+                lines.append(f"  keyring backend inspect failed: {exc}")
+            lines.append(f"  keyring backend: {backend}")
+
+            probe_user = f"__flashgui_diag_{os.getpid()}_{int(datetime.now().timestamp())}__"
+            probe_value = "ok"
+            try:
+                keyring.set_password("flashgui", probe_user, probe_value)
+                got = keyring.get_password("flashgui", probe_user)
+                lines.append(f"  keyring write/read: {'OK' if got == probe_value else 'MISMATCH'}")
+                try:
+                    keyring.delete_password("flashgui", probe_user)
+                    lines.append("  keyring cleanup: OK")
+                except Exception as exc:
+                    lines.append(f"  keyring cleanup: FAILED ({exc})")
+            except Exception as exc:
+                lines.append(f"  keyring write/read: FAILED ({exc})")
+
+        def _done() -> None:
+            for line in lines:
+                log.append(line)
+            log.append("=== end ===")
+
+        self._run_background("keyring self-check", _worker, _done)
+
+    def _refresh_keyring_status(self) -> None:
+        if sys.platform.startswith("win"):
+            self.keyring_status_var.set("Not used on this platform")
+            return
+        try:
+            import keyring  # type: ignore[import]
+        except ImportError:
+            self.keyring_status_var.set("Unavailable: keyring package missing (session-only)")
+            return
+
+        backend = "unknown backend"
+        try:
+            backend = type(keyring.get_keyring()).__name__
+        except Exception:
+            pass
+
+        try:
+            _ = keyring.get_password("flashgui", "sudo")
+            self.keyring_status_var.set(f"Available ({backend})")
+        except Exception:
+            self.keyring_status_var.set("Locked/Unavailable — session-only")
 
     def _sudo_run(self, cmd: list[str], stdin_data: str = "") -> tuple[bool, str]:
         """Run *cmd*, optionally via `sudo -S`.  Returns (success, trimmed output).
@@ -3353,17 +3504,33 @@ class PageSettings:
 
         def _worker() -> None:
             lines.append(f"  Python {sys.version.split()[0]}  ({sys.platform})")
-            for label, path in [
-                ("flashrom",  self.state.flashrom_bin  or "flashrom"),
-                ("flashprog", self.state.flashprog_bin or "flashprog"),
+            for label, configured in [
+                ("flashrom", self.flashrom_var.get().strip()),
+                ("flashprog", self.flashprog_var.get().strip()),
+                ("minipro", str(getattr(self.state, "minipro_bin", "") or "").strip()),
+                ("fwinfo", str(getattr(self.state, "fwinfo_bin", "") or "").strip()),
             ]:
-                found = shutil.which(path) or shutil.which(label)
+                if configured:
+                    found = configured if os.path.isfile(configured) else None
+                else:
+                    found = shutil.which(label)
                 if found:
                     ver = _get_version(found) or "unknown version"
                     lines.append(f"  {label}: {found}  ({ver})")
                 else:
-                    lines.append(f"  {label}: NOT FOUND")
-            for name in ("lsusb", "udevadm", "dmesg", "tee", "sudo"):
+                    if configured:
+                        lines.append(f"  {label}: {configured}  (FILE NOT FOUND)")
+                    else:
+                        lines.append(f"  {label}: NOT FOUND")
+            if sys.platform.startswith("linux"):
+                platform_tools = ("lsusb", "udevadm", "dmesg", "tee", "sudo")
+            elif sys.platform == "darwin":
+                platform_tools = ("ioreg", "system_profiler", "brew")
+            elif sys.platform.startswith("win"):
+                platform_tools = ("where", "powershell")
+            else:
+                platform_tools = ("sudo",)
+            for name in platform_tools:
                 loc = shutil.which(name)
                 lines.append(f"  {name}: {loc or 'NOT FOUND'}")
             try:
@@ -3386,30 +3553,31 @@ class PageSettings:
         lines: list[str] = []
 
         def _worker() -> None:
-            changed = 0
-            for label, path in [
-                ("flashrom",  self.state.flashrom_bin),
-                ("flashprog", self.state.flashprog_bin),
+            if sys.platform.startswith("win"):
+                lines.append("  Permission checks are not required on Windows.")
+                return
+
+            for label, configured, fallback in [
+                ("flashrom", self.flashrom_var.get().strip(), "flashrom"),
+                ("flashprog", self.flashprog_var.get().strip(), "flashprog"),
+                ("minipro", str(getattr(self.state, "minipro_bin", "") or "").strip(), "minipro"),
+                ("fwinfo", str(getattr(self.state, "fwinfo_bin", "") or "").strip(), "fwinfo"),
             ]:
-                if not path:
-                    lines.append(f"  {label}: (using system PATH — skipping)")
-                    continue
-                if not os.path.isfile(path):
-                    lines.append(f"  {label}: {path} — FILE NOT FOUND")
-                    continue
-                if sys.platform.startswith("win"):
-                    lines.append(f"  {label}: {path} — OK (Windows)")
-                    continue
-                if os.access(path, os.X_OK):
-                    lines.append(f"  {label}: {path} — executable \u2713")
+                if configured:
+                    path = configured
+                    if not os.path.isfile(path):
+                        lines.append(f"  {label}: {path} — FILE NOT FOUND")
+                        continue
                 else:
-                    lines.append(f"  {label}: {path} — NOT executable, applying chmod +x\u2026")
-                    ok, msg = self._sudo_run(["chmod", "+x", path])
-                    lines.append(f"    \u2192 {'OK' if ok else 'FAILED'}: {msg}")
-                    if ok:
-                        changed += 1
-            if changed:
-                lines.append(f"  Fixed {changed} permission(s).")
+                    path = shutil.which(fallback)
+                    if not path:
+                        lines.append(f"  {label}: NOT FOUND")
+                        continue
+
+                if os.access(path, os.X_OK):
+                    lines.append(f"  {label}: {path} — executable ✓")
+                else:
+                    lines.append(f"  {label}: {path} — NOT executable")
 
         def _done() -> None:
             for line in lines:
@@ -3417,6 +3585,61 @@ class PageSettings:
             log.append("=== end ===")
 
         self._run_background("binary permission check", _worker, _done)
+
+    def _fix_binary_perms(self) -> None:
+        """Fix binary file permissions by applying chmod to non-executable binaries."""
+        log = self.app.log
+        log.append("=== Fix binary permissions ===")
+        lines: list[str] = []
+
+        def _worker() -> None:
+            if sys.platform.startswith("win"):
+                lines.append("  Permission fixes are not required on Windows.")
+                return
+
+            changed = 0
+            for label, configured, fallback in [
+                ("flashrom", self.flashrom_var.get().strip(), "flashrom"),
+                ("flashprog", self.flashprog_var.get().strip(), "flashprog"),
+                ("minipro", str(getattr(self.state, "minipro_bin", "") or "").strip(), "minipro"),
+                ("fwinfo", str(getattr(self.state, "fwinfo_bin", "") or "").strip(), "fwinfo"),
+            ]:
+                if configured:
+                    path = configured
+                    if not os.path.isfile(path):
+                        lines.append(f"  {label}: {path} — FILE NOT FOUND")
+                        continue
+                else:
+                    path = shutil.which(fallback)
+                    if not path:
+                        lines.append(f"  {label}: NOT FOUND")
+                        continue
+
+                if os.access(path, os.X_OK):
+                    lines.append(f"  {label}: {path} — already executable")
+                    continue
+
+                lines.append(f"  {label}: {path} — applying chmod +x…")
+                ok, msg = self._sudo_run(["chmod", "+x", path])
+                if ok:
+                    lines.append("    ✓ Fixed")
+                    changed += 1
+                else:
+                    lines.append(f"    ✗ Failed: {msg}")
+                    if sys.platform.startswith("linux") and not self.use_sudo_var.get():
+                        lines.append("    Hint: enable 'Use sudo' and retry if this path requires elevated permissions.")
+
+            if changed:
+                lines.append(f"  Fixed {changed} permission(s).")
+            else:
+                lines.append("  No permission changes were required.")
+
+        def _done() -> None:
+            for line in lines:
+                log.append(line)
+            log.append("=== end ===")
+
+        self._run_background("fix binary permissions", _worker, _done)
 
     def _check_udev(self) -> None:
         log = self.app.log
@@ -3435,8 +3658,11 @@ class PageSettings:
                 return
 
             rule_file, rule_content = _UDEV_RULES[prog_key]
+            group_name = _configured_udev_group()
+            rule_content = _apply_udev_group(rule_content)
             rule_path = f"/etc/udev/rules.d/{rule_file}"
             lines.append(f"=== udev: {prog_key} \u2192 {rule_path} ===")
+            lines.append(f"  target group: {group_name}")
 
             first_line = rule_content.splitlines()[0].strip()
             already_ok = False
@@ -3470,11 +3696,11 @@ class PageSettings:
             try:
                 import grp
                 _getgrnam = getattr(grp, "getgrnam")
-                members: list[str] = _getgrnam("plugdev").gr_mem
+                members: list[str] = _getgrnam(group_name).gr_mem
                 if user in members:
-                    lines.append(f"  \u2713 {user} is in the plugdev group.")
+                    lines.append(f"  \u2713 {user} is in the {group_name} group.")
                 else:
-                    lines.append(f"  \u2717 {user} is NOT in plugdev — click 'Add user to plugdev'.")
+                    lines.append(f"  \u2717 {user} is NOT in {group_name} — click 'Add to plugdev'.")
             except (KeyError, ImportError):
                 pass
 
@@ -3506,12 +3732,13 @@ class PageSettings:
     def _add_plugdev(self) -> None:
         import getpass
         user = getpass.getuser()
+        group_name = _configured_udev_group()
         log = self.app.log
-        log.append(f"=== Add {user} to plugdev ===")
+        log.append(f"=== Add {user} to {group_name} ===")
         result: dict[str, object] = {"ok": False, "msg": "not run"}
 
         def _worker() -> None:
-            ok, msg = self._sudo_run(["usermod", "-aG", "plugdev", user])
+            ok, msg = self._sudo_run(["usermod", "-aG", group_name, user])
             result["ok"] = ok
             result["msg"] = msg
 

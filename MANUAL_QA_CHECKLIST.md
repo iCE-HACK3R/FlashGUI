@@ -3,6 +3,23 @@
 Date: 2026-05-18  
 Scope: `flashgui.py` desktop UI behaviors around theme preview/apply/revert, settings load/save, and tab/sidebar mode persistence.
 
+## Automation status (as of 2026-05-28)
+
+The following checklist coverage is now automated in `pytest`:
+
+- `tests/test_theme_automation.py`
+  - A1, A2, A3, A4
+- `tests/test_settings_layout_automation.py`
+  - B1, B2, B3, C1, C2, E5
+- `tests/test_issue4_release_gate_automation.py`
+  - D, E1, E2, E3, E4
+
+Notes:
+
+- Current automation is deterministic regression coverage focused on behavior contracts in code paths and persistence flow.
+- Keep manual execution for subjective visual checks (exact color/contrast/look-and-feel), platform UX polish, and end-to-end hardware validation.
+- Run automation with: `pytest -q`
+
 ## Pre-check
 
 - Launch app from `flashgui/`.

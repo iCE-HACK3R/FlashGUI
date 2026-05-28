@@ -135,3 +135,76 @@ def test_detect_programmer_usb_maps_ft232h_from_lsusb(monkeypatch) -> None:
         ("ft2232_spi:divisor=4,type=232h", "FTDI FT232H  [0403:6014]"),
     ]
     assert calls[0] == ["lsusb"]
+
+
+def test_extract_windows_vid_pid_pairs_parses_unique_pairs() -> None:
+    sample = (
+        "USB\\VID_1A86&PID_5512\\ABC\n"
+        "USB\\VID_1A86&PID_5512\\DEF\n"
+        "USB\\VID_0403&PID_6014\\XYZ\n"
+    )
+
+    pairs = flashgui._extract_windows_vid_pid_pairs(sample)
+
+    assert pairs == [("1a86", "5512"), ("0403", "6014")]
+
+
+def test_detect_programmer_usb_windows_maps_ch341a_vid_pid(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(list(cmd))
+        assert kwargs["check"] is False
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        assert kwargs["errors"] == "replace"
+        assert kwargs["timeout"] == 12
+        if cmd[0] == "powershell":
+            return SimpleNamespace(stdout="USB\\VID_1A86&PID_5512\\5&ABC&0&1\n", stderr="")
+        if cmd == ["pnputil", "/enum-devices", "/connected"]:
+            return SimpleNamespace(stdout="", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(flashgui.sys, "platform", "win32")
+    monkeypatch.setattr(flashgui.subprocess, "run", fake_run)
+    monkeypatch.setattr(flashgui, "_detect_programmer_serial_windows", lambda: [])
+
+    detected = flashgui._detect_programmer_usb()
+
+    assert detected == [("ch341a_spi", "CH341A  [1a86:5512]")]
+    assert len(calls) == 3
+
+
+def test_detect_programmer_usb_windows_merges_usb_and_serial(monkeypatch) -> None:
+    def fake_run(cmd, **kwargs):
+        assert kwargs["check"] is False
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        assert kwargs["errors"] == "replace"
+        assert kwargs["timeout"] == 12
+        if cmd[0] == "powershell":
+            return SimpleNamespace(
+                stdout=(
+                    "USB\\VID_1A86&PID_5512\\A\n"
+                    "USB\\VID_1A86&PID_5512\\B\n"
+                ),
+                stderr="",
+            )
+        if cmd == ["pnputil", "/enum-devices", "/connected"]:
+            return SimpleNamespace(stdout="", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(flashgui.sys, "platform", "win32")
+    monkeypatch.setattr(flashgui.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        flashgui,
+        "_detect_programmer_serial_windows",
+        lambda: [("serprog:dev=COM7", "USB Serial Device → COM7")],
+    )
+
+    detected = flashgui._detect_programmer_usb()
+
+    assert detected == [
+        ("ch341a_spi", "CH341A  [1a86:5512]"),
+        ("serprog:dev=COM7", "USB Serial Device → COM7"),
+    ]

@@ -1,5 +1,30 @@
 # Release Notes
 
+## v1.1.10
+
+### Highlights (v1.1.10)
+
+- Qt UI: added **KDE/Plasma native file dialog support** using `kdialog` for open/save/folder pickers when native dialogs are enabled.
+- Qt UI: kept dialog behavior **KDE-only and Linux-only**, preserving existing behavior on Windows, macOS, and non-KDE Linux desktops.
+- Qt UI: added **cancel-safe fallback handling** so canceling a KDE native picker does not open a second Qt dialog.
+- Tests: added automated regression coverage for KDE dialog gating and expanded automated checklist coverage for theme/settings/layout and release-gate issue checks.
+
+### Version (v1.1.10)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.10"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.10"`
+
+### Issue #5 closeout target (v1.1.10)
+
+- Addresses GitHub issue `#5` requesting native file dialogs on KDE desktop environments.
+- Native dialog flow now prefers KDE `kdialog` when available and falls back to the Qt dialog path if KDE-native integration is unavailable at runtime.
+- Recommended reporter validation on KDE/Plasma:
+  - open file picker,
+  - save file picker,
+  - existing-directory picker,
+  - confirm cancel does not trigger a second dialog.
+
 ## v1.1.9
 
 ### Highlights (v1.1.9)

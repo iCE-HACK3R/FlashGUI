@@ -77,7 +77,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.9"
+VERSION = "1.1.10"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -1922,6 +1922,41 @@ _UDEV_RULES: dict[str, tuple[str, str]] = {
 }
 
 
+def _is_kde_desktop() -> bool:
+    xdg = (os.environ.get("XDG_CURRENT_DESKTOP") or "").lower()
+    sess = (os.environ.get("DESKTOP_SESSION") or "").lower()
+    kde_flag = (os.environ.get("KDE_FULL_SESSION") or "").strip()
+    return ("kde" in xdg) or ("plasma" in xdg) or ("kde" in sess) or (kde_flag not in {"", "0", "false", "False"})
+
+
+def _preferred_keyring_manager_candidates() -> tuple[str, ...]:
+    if _is_kde_desktop():
+        return ("kwalletmanager5", "kwalletmanager", "seahorse")
+    return ("seahorse", "kwalletmanager5", "kwalletmanager")
+
+
+def _configured_udev_group() -> str:
+    group = (os.environ.get("FLASHGUI_UDEV_GROUP") or "plugdev").strip()
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_-]*$", group):
+        return "plugdev"
+    return group
+
+
+def _apply_udev_group(rule_content: str) -> str:
+    group = _configured_udev_group()
+    return re.sub(r'GROUP="[^"]+"', f'GROUP="{group}"', rule_content)
+
+
+def _udev_group_hint_text() -> str:
+    group = _configured_udev_group()
+    raw = (os.environ.get("FLASHGUI_UDEV_GROUP") or "").strip()
+    if not raw:
+        return f"Udev target group: {group} (default)"
+    if group != raw:
+        return f"Udev target group: {group} (invalid FLASHGUI_UDEV_GROUP={raw!r}; using default)"
+    return f"Udev target group: {group} (from FLASHGUI_UDEV_GROUP)"
+
+
 # Programmers that need a serial device path appended (programmer_arg → param key)
 _SERIAL_PROGRAMMER_PARAMS: dict[str, str] = {
     "buspirate_spi": "dev",
@@ -2028,6 +2063,63 @@ def _detect_programmer_serial_windows() -> list[tuple[str, str]]:
             _PROGRAMMER_BASE_LABEL_HINTS["serprog"] = label
 
     return results
+
+
+def _extract_windows_vid_pid_pairs(text: str) -> list[tuple[str, str]]:
+    """Extract USB VID:PID pairs from Windows device listing output."""
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for match in re.finditer(r"VID_([0-9A-Fa-f]{4})&PID_([0-9A-Fa-f]{4})", text or ""):
+        pair = (match.group(1).lower(), match.group(2).lower())
+        if pair in seen:
+            continue
+        seen.add(pair)
+        pairs.append(pair)
+    return pairs
+
+
+def _enumerate_windows_usb_vid_pid_pairs() -> list[tuple[str, str]]:
+    """Return connected Windows USB VID:PID pairs from built-in OS tooling."""
+    collected: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    commands: list[list[str]] = [
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "Get-CimInstance Win32_PnPEntity | Select-Object -ExpandProperty PNPDeviceID",
+        ],
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "Get-PnpDevice -PresentOnly | Select-Object -ExpandProperty InstanceId",
+        ],
+        ["pnputil", "/enum-devices", "/connected"],
+    ]
+
+    for cmd in commands:
+        try:
+            proc = subprocess.run(
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=12,
+            )
+        except Exception:
+            continue
+
+        pairs = _extract_windows_vid_pid_pairs((proc.stdout or "") + "\n" + (proc.stderr or ""))
+        for pair in pairs:
+            if pair in seen:
+                continue
+            seen.add(pair)
+            collected.append(pair)
+
+    return collected
 
 
 def _detect_programmer_serial_posix() -> list[tuple[str, str]]:
@@ -2725,8 +2817,35 @@ def _detect_programmer_usb() -> list[tuple[str, str]]:
     Duplicate programmer_args are suppressed (first match wins).
     """
     if sys.platform.startswith("win"):
-        # On Windows, use COM-port metadata instead of lsusb/dmesg.
-        return _detect_programmer_serial_windows()
+        # On Windows, merge USB VID:PID detection with serial-port metadata.
+        _PROGRAMMER_LABEL_HINTS.clear()
+        _PROGRAMMER_BASE_LABEL_HINTS.clear()
+        results: list[tuple[str, str]] = []
+        seen: set[str] = set()
+
+        for vid, pid in _enumerate_windows_usb_vid_pid_pairs():
+            for (v, p, prog, label) in _USB_PROGRAMMER_MAP:
+                if v != vid or p != pid:
+                    continue
+                if prog in _SERIAL_PROGRAMMER_PARAMS:
+                    # Serial backends on Windows should be exposed with explicit COM paths.
+                    break
+                if prog in seen:
+                    break
+                full_label = f"{label}  [{vid}:{pid}]"
+                results.append((prog, full_label))
+                _PROGRAMMER_LABEL_HINTS[prog] = full_label
+                _PROGRAMMER_BASE_LABEL_HINTS[prog] = label
+                seen.add(prog)
+                break
+
+        for prog, label in _detect_programmer_serial_windows():
+            if prog in seen:
+                continue
+            results.append((prog, label))
+            seen.add(prog)
+
+        return results
     if sys.platform == "darwin":
         # On macOS, lsusb may be unavailable; rely on serial metadata.
         return _detect_programmer_serial_posix()
@@ -5479,6 +5598,13 @@ class PageSettings:
             ttk.Button(lf4, text="Reload udev", width=13,
                        command=self._reload_udev).grid(row=0, column=col, pady=3, sticky="w")
 
+        self.udev_group_hint_var = tk.StringVar(value="")
+        ttk.Label(
+            lf4,
+            textvariable=self.udev_group_hint_var,
+            foreground="#666666",
+        ).grid(row=1, column=0, columnspan=32, sticky="w", pady=(2, 0))
+
         # ── Settings Management ───────────────────────────────────────────────
         lf5 = ttk.LabelFrame(outer, text="Settings Management", padding=6)
         lf5.grid(row=4, column=0, sticky="ew", pady=(0, 6))
@@ -5664,6 +5790,13 @@ class PageSettings:
         should_enable_fix_dep = self._has_missing_core_binaries()
         self.btn_fix_dep.config(state="normal" if should_enable_fix_dep else "disabled")
         self.btn_install_guide.config(state="normal")
+        if hasattr(self, "udev_group_hint_var"):
+            if sys.platform.startswith("linux"):
+                self.udev_group_hint_var.set(_udev_group_hint_text())
+            elif sys.platform == "darwin":
+                self.udev_group_hint_var.set(f"Linux-only action. {_udev_group_hint_text()}")
+            else:
+                self.udev_group_hint_var.set("")
 
     def _fix_dependencies(self) -> None:
         """Attempt to fix dependencies with safe, user-confirmed actions."""
@@ -5884,10 +6017,12 @@ class PageSettings:
             )
         except Exception as exc:
             self.state.sudo_password = pw
+            self.app.log.append(f"WARNING: Keyring save failed: {exc}")
             messagebox.showwarning(
                 "Keyring unavailable",
-                f"Could not save password to keyring: {exc}\n\n"
-                "Password kept in memory for this session only.",
+                "Could not access an unlocked system keyring.\n\n"
+                "Password kept in memory for this session only.\n"
+                "Unlock/sign in to your desktop keyring (GNOME Keyring/KWallet) and try again.",
                 parent=self.frame,
             )
 
@@ -6031,8 +6166,11 @@ class PageSettings:
                 return
 
             rule_file, rule_content = _UDEV_RULES[prog_key]
+            group_name = _configured_udev_group()
+            rule_content = _apply_udev_group(rule_content)
             rule_path = f"/etc/udev/rules.d/{rule_file}"
             lines.append(f"=== udev: {prog_key} \u2192 {rule_path} ===")
+            lines.append(f"  target group: {group_name}")
 
             first_line = rule_content.splitlines()[0].strip()
             already_ok = False
@@ -6066,11 +6204,11 @@ class PageSettings:
             try:
                 import grp
                 _getgrnam = getattr(grp, "getgrnam")
-                members: list[str] = _getgrnam("plugdev").gr_mem
+                members: list[str] = _getgrnam(group_name).gr_mem
                 if user in members:
-                    lines.append(f"  \u2713 {user} is in the plugdev group.")
+                    lines.append(f"  \u2713 {user} is in the {group_name} group.")
                 else:
-                    lines.append(f"  \u2717 {user} is NOT in plugdev — click 'Add user to plugdev'.")
+                    lines.append(f"  \u2717 {user} is NOT in {group_name} — click 'Add to plugdev'.")
             except (KeyError, ImportError):
                 pass
 
@@ -6102,12 +6240,13 @@ class PageSettings:
     def _add_plugdev(self) -> None:
         import getpass
         user = getpass.getuser()
+        group_name = _configured_udev_group()
         log = self.app.log
-        log.append(f"=== Add {user} to plugdev ===")
+        log.append(f"=== Add {user} to {group_name} ===")
         result: dict[str, object] = {"ok": False, "msg": "not run"}
 
         def _worker() -> None:
-            ok, msg = self._sudo_run(["usermod", "-aG", "plugdev", user])
+            ok, msg = self._sudo_run(["usermod", "-aG", group_name, user])
             result["ok"] = ok
             result["msg"] = msg
 
@@ -7094,7 +7233,7 @@ class FlashGUI:
             return
 
         if sys.platform.startswith("win"):
-            self.log.append("Scanning Windows serial ports for programmer devices…")
+            self.log.append("Scanning Windows USB + serial programmer devices…")
         elif sys.platform == "darwin":
             self.log.append("Scanning macOS serial devices (/dev/cu.*, /dev/tty.*)…")
         else:
@@ -7141,7 +7280,7 @@ class FlashGUI:
     def _apply_detected_programmers(self, hits: list[tuple[str, str]]) -> None:
         if not hits:
             if sys.platform.startswith("win"):
-                self.log.append("No known programmer detected via Windows serial scan.")
+                self.log.append("No known programmer detected via Windows USB/serial scan.")
             elif sys.platform == "darwin":
                 self.log.append("No known programmer detected via macOS serial scan.")
             else:
@@ -7337,9 +7476,98 @@ from PySide6.QtWidgets import (
 )
 
 
+def _effective_use_native_file_dialogs(use_native_dialogs: bool) -> bool:
+    """Return effective native-dialog usage for Qt file pickers.
+
+    KDE/Plasma sessions default to Qt's non-native dialog for better
+    stability across desktop/session variations.
+    """
+    return bool(use_native_dialogs) and not _is_kde_desktop()
+
+
+def _can_use_kdialog(use_native_dialogs: bool) -> bool:
+    """Return whether KDE native picker integration should be attempted."""
+    return (
+        bool(use_native_dialogs)
+        and sys.platform.startswith("linux")
+        and _is_kde_desktop()
+        and shutil.which("kdialog") is not None
+    )
+
+
+def _qt_filter_to_kdialog_filter(file_filter: str) -> str:
+    """Convert Qt filter syntax to kdialog filter syntax."""
+    parts: list[str] = []
+    for item in (file_filter or "").split(";;"):
+        entry = item.strip()
+        if not entry:
+            continue
+        if "(" in entry and ")" in entry:
+            name, pattern = entry.rsplit("(", 1)
+            parts.append(f"{pattern.rstrip(')')}|{name.strip()}")
+        else:
+            parts.append(entry)
+    return "\n".join(parts) if parts else "*|All Files"
+
+
+def _run_kdialog(cmd: list[str]) -> tuple[str, bool, bool]:
+    """Run kdialog. Returns (path, handled, canceled)."""
+    try:
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=30,
+        )
+    except Exception:
+        # Runtime/invocation problem -> caller should fall back to Qt dialog.
+        return "", False, False
+
+    if proc.returncode != 0:
+        # User cancel (or tool-level rejection): do not open a second dialog.
+        return "", True, True
+
+    path = (proc.stdout or "").strip()
+    return path, True, False
+
+
+def _kde_get_open_file_name(title: str, start_dir: str, file_filter: str) -> tuple[str, bool, bool]:
+    return _run_kdialog([
+        "kdialog",
+        "--title",
+        title,
+        "--getopenfilename",
+        start_dir,
+        _qt_filter_to_kdialog_filter(file_filter),
+    ])
+
+
+def _kde_get_save_file_name(title: str, start_path: str, file_filter: str) -> tuple[str, bool, bool]:
+    return _run_kdialog([
+        "kdialog",
+        "--title",
+        title,
+        "--getsavefilename",
+        start_path,
+        _qt_filter_to_kdialog_filter(file_filter),
+    ])
+
+
+def _kde_get_existing_directory(title: str, start_dir: str) -> tuple[str, bool, bool]:
+    return _run_kdialog([
+        "kdialog",
+        "--title",
+        title,
+        "--getexistingdirectory",
+        start_dir,
+    ])
+
+
 def _qfiledialog_options(use_native_dialogs: bool) -> QFileDialog.Option:
     opts = QFileDialog.Option(0)
-    if not use_native_dialogs:
+    if not _effective_use_native_file_dialogs(use_native_dialogs):
         opts |= QFileDialog.Option.DontUseNativeDialog
     return opts
 
@@ -7352,6 +7580,11 @@ def _qt_get_open_file_name(
     *,
     use_native_dialogs: bool,
 ) -> tuple[str, bool]:
+    if _can_use_kdialog(use_native_dialogs):
+        kpath, handled, canceled = _kde_get_open_file_name(title, start_dir, file_filter)
+        if handled:
+            return (kpath, bool(kpath)) if not canceled else ("", False)
+
     path, selected_filter = QFileDialog.getOpenFileName(
         parent,
         title,
@@ -7370,6 +7603,11 @@ def _qt_get_save_file_name(
     *,
     use_native_dialogs: bool,
 ) -> tuple[str, bool]:
+    if _can_use_kdialog(use_native_dialogs):
+        kpath, handled, canceled = _kde_get_save_file_name(title, start_path, file_filter)
+        if handled:
+            return (kpath, bool(kpath)) if not canceled else ("", False)
+
     path, selected_filter = QFileDialog.getSaveFileName(
         parent,
         title,
@@ -7387,6 +7625,11 @@ def _qt_get_existing_directory(
     *,
     use_native_dialogs: bool,
 ) -> str:
+    if _can_use_kdialog(use_native_dialogs):
+        kpath, handled, canceled = _kde_get_existing_directory(title, start_dir)
+        if handled:
+            return "" if canceled else kpath
+
     return QFileDialog.getExistingDirectory(
         parent,
         title,
@@ -9662,6 +9905,11 @@ class SettingsPage(PageBase):
         self.auto_detect.setChecked(self.state.auto_detect_programmer)
         self.use_native_dialogs = QCheckBox("Use native file dialogs")
         self.use_native_dialogs.setChecked(self.state.use_native_file_dialogs)
+        self.use_native_dialogs.setToolTip(
+            "Use operating-system file pickers when available.\n"
+            "On KDE/Plasma, FlashGUI uses KDE native picker (kdialog) when available, "
+            "otherwise falls back to Qt dialog for stability."
+        )
         f_behavior.addRow(self.beep)
         f_behavior.addRow(self.auto_detect)
         f_behavior.addRow(self.use_native_dialogs)
@@ -9680,10 +9928,13 @@ class SettingsPage(PageBase):
         self.sudo_pw.setEchoMode(QLineEdit.EchoMode.Password)
         self.btn_save_keyring = QPushButton("Save to Keyring")
         self.btn_clear_keyring = QPushButton("Clear Keyring")
+        self.btn_keyring_diag = QPushButton("🟢 Keyring Self-Check")
         self.btn_save_keyring.setProperty("kind", "write")
         self.btn_save_keyring.setMinimumWidth(140)
         self.btn_clear_keyring.setProperty("kind", "erase")
         self.btn_clear_keyring.setMinimumWidth(140)
+        self.btn_keyring_diag.setProperty("kind", "write")
+        self.btn_keyring_diag.setMinimumWidth(140)
 
         row_sudo_pw = QWidget(self)
         row_sudo_pw_l = QHBoxLayout(row_sudo_pw)
@@ -9691,8 +9942,13 @@ class SettingsPage(PageBase):
         row_sudo_pw_l.addWidget(self.sudo_pw, 1)
         row_sudo_pw_l.addWidget(self.btn_save_keyring)
         row_sudo_pw_l.addWidget(self.btn_clear_keyring)
+        row_sudo_pw_l.addWidget(self.btn_keyring_diag)
+        self.keyring_status_label = QLabel("")
+        self.keyring_status_label.setWordWrap(False)
+        self.keyring_status_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         f_sudo.addRow(self.use_sudo)
         f_sudo.addRow("Sudo Password:", row_sudo_pw)
+        f_sudo.addRow("Keyring Status:", self.keyring_status_label)
         # Keep this widget in the object tree on all platforms; if omitted,
         # Qt may destroy it and later signal callbacks can hit deleted objects.
         outer.addWidget(g_sudo)
@@ -9708,6 +9964,8 @@ class SettingsPage(PageBase):
             self.sudo_pw.setEnabled(False)
             self.btn_save_keyring.setEnabled(False)
             self.btn_clear_keyring.setEnabled(False)
+            self.btn_keyring_diag.setEnabled(False)
+        self._refresh_keyring_status()
 
         # Systems & settings
         g_checks = QGroupBox("Systems && Settings")
@@ -9724,11 +9982,11 @@ class SettingsPage(PageBase):
         self.btn_fix_dep = QPushButton("Fix Dependencies")
         self.btn_check_perms = QPushButton("Check Binary Permissions")
         self.btn_fix_perms = QPushButton("Fix Binary Permissions")
-        self.btn_check_udev = QPushButton("Check Udev Rules")
-        self.btn_backup_udev = QPushButton("Backup Udev Rules")
-        self.btn_fix_udev = QPushButton("Fix Udev Rules")
-        self.btn_reload_udev = QPushButton("Reload Udev Rules")
-        self.btn_add_plugdev = QPushButton("Add to plugdev")
+        self.btn_check_udev = QPushButton("🔍 Check Udev Rules")
+        self.btn_backup_udev = QPushButton("💾 Backup Udev Rules")
+        self.btn_fix_udev = QPushButton("🛠️ Fix Udev Rules")
+        self.btn_reload_udev = QPushButton("🔄 Reload Udev Rules")
+        self.btn_add_plugdev = QPushButton("👥 Add to plugdev")
         self.btn_check_dep.setProperty("kind", "subtle")
         self.btn_check_dep.setMinimumWidth(140)
         self.btn_fix_dep.setProperty("kind", "subtle")
@@ -9739,13 +9997,13 @@ class SettingsPage(PageBase):
         self.btn_fix_perms.setMinimumWidth(140)
         self.btn_check_udev.setProperty("kind", "subtle")
         self.btn_check_udev.setMinimumWidth(140)
-        self.btn_backup_udev.setProperty("kind", "subtle")
+        self.btn_backup_udev.setProperty("kind", "read")
         self.btn_backup_udev.setMinimumWidth(140)
-        self.btn_fix_udev.setProperty("kind", "subtle")
+        self.btn_fix_udev.setProperty("kind", "write")
         self.btn_fix_udev.setMinimumWidth(140)
-        self.btn_reload_udev.setProperty("kind", "subtle")
+        self.btn_reload_udev.setProperty("kind", "verify")
         self.btn_reload_udev.setMinimumWidth(140)
-        self.btn_add_plugdev.setProperty("kind", "subtle")
+        self.btn_add_plugdev.setProperty("kind", "write")
         self.btn_add_plugdev.setMinimumWidth(140)
 
         # Settings management (merged into Systems & Settings)
@@ -9783,6 +10041,10 @@ class SettingsPage(PageBase):
         self._relayout_system_buttons()
 
         l_checks.addLayout(checks_grid)
+        self.udev_group_hint_label = QLabel("")
+        self.udev_group_hint_label.setWordWrap(True)
+        self.udev_group_hint_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        l_checks.addWidget(self.udev_group_hint_label)
 
         outer.addWidget(g_checks)
         outer.addStretch(1)
@@ -9804,6 +10066,7 @@ class SettingsPage(PageBase):
 
         self.btn_save_keyring.clicked.connect(self._save_sudo_keyring)
         self.btn_clear_keyring.clicked.connect(self._clear_sudo_keyring)
+        self.btn_keyring_diag.clicked.connect(self._run_keyring_self_check)
 
         self.btn_check_dep.clicked.connect(self._check_dependencies)
         self.btn_fix_dep.clicked.connect(self._fix_dependencies)
@@ -9925,16 +10188,15 @@ class SettingsPage(PageBase):
         worker: Callable[[], None],
         on_done: Callable[[], None] | None = None,
     ) -> None:
-        def _entry() -> None:
-            try:
-                worker()
-            except Exception as exc:
-                QTimer.singleShot(0, lambda e=exc, t=title: self._log(f"ERROR: {t}: {e}"))
-            finally:
-                if on_done is not None:
-                    QTimer.singleShot(0, on_done)
+        def _worker(_signals: WorkerSignals) -> None:
+            worker()
 
-        threading.Thread(target=_entry, daemon=False).start()
+        w = Worker(_worker)
+        w.signals.error.connect(lambda e, t=title: self._log(f"ERROR: {t}: {e}"))
+        if on_done is not None:
+            w.signals.finished.connect(on_done)
+        _retain_worker(w)
+        self.app.thread_pool.start(w)
 
     def _browse_line(self, line: QLineEdit, title: str, file_mode: bool = True) -> None:
         if file_mode:
@@ -9985,6 +10247,22 @@ class SettingsPage(PageBase):
 
     def _refresh_system_fix_buttons(self) -> None:
         self.btn_fix_dep.setEnabled(self._has_missing_core_binaries())
+        is_windows = self._is_windows
+        self.btn_check_perms.setEnabled(not is_windows)
+        self.btn_fix_perms.setEnabled(not is_windows)
+        is_linux = self._is_linux
+        self.btn_check_udev.setEnabled(is_linux)
+        self.btn_backup_udev.setEnabled(is_linux)
+        self.btn_fix_udev.setEnabled(is_linux)
+        self.btn_reload_udev.setEnabled(is_linux)
+        self.btn_add_plugdev.setEnabled(is_linux)
+        if hasattr(self, "udev_group_hint_label"):
+            if is_linux:
+                self.udev_group_hint_label.setText(_udev_group_hint_text())
+            elif self._is_macos:
+                self.udev_group_hint_label.setText(f"Linux-only action. {_udev_group_hint_text()}")
+            else:
+                self.udev_group_hint_label.setText("")
 
     @staticmethod
     def _merge_font_candidates(candidates: list[str]) -> list[str]:
@@ -10151,7 +10429,45 @@ class SettingsPage(PageBase):
             self.warn("keyring not installed", "Install the 'keyring' package to persist passwords securely.")
         except Exception as exc:
             self.state.sudo_password = pw
-            self.warn("Keyring unavailable", f"Could not save password to keyring: {exc}")
+            self._log(f"WARNING: Keyring save failed: {exc}")
+            err_text = str(exc).lower()
+            if self._is_linux and "unlock the collection" in err_text:
+                launched = self._launch_keyring_manager()
+                if launched:
+                    self.warn(
+                        "Keyring locked",
+                        "System keyring appears locked. Opened keyring manager — unlock/sign in there, "
+                        "then click 'Save to Keyring' again.",
+                    )
+                else:
+                    self.warn(
+                        "Keyring locked",
+                        "System keyring appears locked. Unlock/sign in to GNOME Keyring or KWallet, "
+                        "then click 'Save to Keyring' again.",
+                    )
+            else:
+                self.warn(
+                    "Keyring unavailable",
+                    "Could not access an unlocked system keyring. Password kept in memory for this session. "
+                    "Unlock/sign in to your desktop keyring (GNOME Keyring/KWallet) and try again.",
+                )
+        self._refresh_keyring_status()
+
+    def _launch_keyring_manager(self) -> bool:
+        for exe in _preferred_keyring_manager_candidates():
+            if shutil.which(exe):
+                try:
+                    subprocess.Popen(
+                        [exe],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True,
+                    )
+                    self._log(f"INFO: Opened keyring manager: {exe}")
+                    return True
+                except Exception as exc:
+                    self._log(f"WARNING: Failed to open {exe}: {exc}")
+        return False
 
     def _clear_sudo_keyring(self) -> None:
         self.sudo_pw.setText("")
@@ -10162,6 +10478,86 @@ class SettingsPage(PageBase):
         except Exception:
             pass
         self.info("Keyring", "sudo password cleared.")
+        self._refresh_keyring_status()
+
+    def _run_keyring_self_check(self) -> None:
+        self._log("=== Keyring self-check ===")
+        lines: list[str] = []
+
+        def _worker() -> None:
+            lines.append(f"  Platform: {sys.platform}")
+            lines.append(f"  Python: {sys.version.split()[0]}")
+            for env_name in ("DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DESKTOP_SESSION", "XDG_CURRENT_DESKTOP", "KDE_FULL_SESSION"):
+                value = (os.environ.get(env_name) or "").strip()
+                lines.append(f"  env[{env_name}]: {'set' if value else 'missing'}")
+            lines.append(f"  desktop[kde-detected]: {'yes' if _is_kde_desktop() else 'no'}")
+            lines.append(f"  keyring manager priority: {', '.join(_preferred_keyring_manager_candidates())}")
+            for exe in ("seahorse", "kwalletmanager5", "kwalletmanager", "gnome-keyring-daemon", "secret-tool"):
+                lines.append(f"  tool[{exe}]: {shutil.which(exe) or 'NOT FOUND'}")
+
+            try:
+                import keyring  # type: ignore[import]
+            except ImportError:
+                lines.append("  keyring: NOT INSTALLED")
+                return
+
+            backend = "unknown backend"
+            try:
+                backend = type(keyring.get_keyring()).__name__
+            except Exception as exc:
+                lines.append(f"  keyring backend inspect failed: {exc}")
+            lines.append(f"  keyring backend: {backend}")
+
+            probe_user = f"__flashgui_diag_{os.getpid()}_{int(datetime.now().timestamp())}__"
+            probe_value = "ok"
+            try:
+                keyring.set_password("flashgui", probe_user, probe_value)
+                got = keyring.get_password("flashgui", probe_user)
+                lines.append(f"  keyring write/read: {'OK' if got == probe_value else 'MISMATCH'}")
+                try:
+                    keyring.delete_password("flashgui", probe_user)
+                    lines.append("  keyring cleanup: OK")
+                except Exception as exc:
+                    lines.append(f"  keyring cleanup: FAILED ({exc})")
+            except Exception as exc:
+                lines.append(f"  keyring write/read: FAILED ({exc})")
+
+        def _done() -> None:
+            for line in lines:
+                self._log(line)
+            self._log("=== end ===")
+
+        self._run_background("keyring self-check", _worker, _done)
+
+    def _refresh_keyring_status(self) -> None:
+        if not self._is_linux:
+            self.keyring_status_label.setText("Not used on this platform")
+            self.keyring_status_label.setToolTip("Keyring persistence is only used for Linux sudo workflows.")
+            return
+        try:
+            import keyring  # type: ignore[import]
+        except ImportError:
+            self.keyring_status_label.setText("Unavailable: keyring package missing (session-only)")
+            self.keyring_status_label.setToolTip("Install Python package: keyring")
+            return
+
+        backend = "unknown backend"
+        try:
+            backend = type(keyring.get_keyring()).__name__
+        except Exception:
+            pass
+
+        try:
+            _ = keyring.get_password("flashgui", "sudo")
+            self.keyring_status_label.setText(f"Available ({backend})")
+            self.keyring_status_label.setToolTip("Keyring backend is reachable. Save action will validate write access.")
+        except Exception as exc:
+            self.keyring_status_label.setText("Locked/Unavailable — session-only")
+            self.keyring_status_label.setToolTip(
+                "Could not use keyring backend: "
+                f"{backend}\nReason: {exc}\n\n"
+                "Unlock/sign in to your desktop keyring (GNOME Keyring/KWallet) and retry."
+            )
 
     def _sudo_run(self, cmd: list[str], stdin_data: str = "") -> tuple[bool, str]:
         if not cmd:
@@ -10200,18 +10596,24 @@ class SettingsPage(PageBase):
 
         def _worker() -> None:
             lines.append(f"  Python {sys.version.split()[0]}  ({sys.platform})")
-            for label, path in [
-                ("flashrom", self.flashrom_edit.text().strip() or "flashrom"),
-                ("flashprog", self.flashprog_edit.text().strip() or "flashprog"),
-                ("minipro", self.minipro_edit.text().strip() or "minipro"),
-                ("fwinfo", self.fwinfo_edit.text().strip() or "fwinfo"),
+            for label, configured in [
+                ("flashrom", self.flashrom_edit.text().strip()),
+                ("flashprog", self.flashprog_edit.text().strip()),
+                ("minipro", self.minipro_edit.text().strip()),
+                ("fwinfo", self.fwinfo_edit.text().strip()),
             ]:
-                found = shutil.which(path) or shutil.which(label)
+                if configured:
+                    found = configured if os.path.isfile(configured) else None
+                else:
+                    found = shutil.which(label)
                 if found:
                     ver = _get_version(found) or "unknown version"
                     lines.append(f"  {label}: {found}  ({ver})")
                 else:
-                    lines.append(f"  {label}: NOT FOUND")
+                    if configured:
+                        lines.append(f"  {label}: {configured}  (FILE NOT FOUND)")
+                    else:
+                        lines.append(f"  {label}: NOT FOUND")
             if self._is_linux:
                 platform_tools = ("lsusb", "udevadm", "dmesg", "tee", "sudo")
             elif self._is_macos:
@@ -10223,6 +10625,11 @@ class SettingsPage(PageBase):
             for name in platform_tools:
                 loc = shutil.which(name)
                 lines.append(f"  {name}: {loc or 'NOT FOUND'}")
+            try:
+                import keyring as _kr  # type: ignore[import]
+                lines.append(f"  keyring: {getattr(_kr, '__version__', 'installed')}")
+            except ImportError:
+                lines.append("  keyring: not installed")
 
         def _done() -> None:
             for line in lines:
@@ -10316,32 +10723,29 @@ class SettingsPage(PageBase):
         lines: list[str] = []
 
         def _worker() -> None:
-            changed = 0
-            for label, path in [
-                ("flashrom", self.flashrom_edit.text().strip()),
-                ("flashprog", self.flashprog_edit.text().strip()),
-                ("minipro", self.minipro_edit.text().strip()),
-                ("fwinfo", self.fwinfo_edit.text().strip()),
+            if self._is_windows:
+                lines.append("  Permission checks are not required on Windows.")
+                return
+            for label, configured, fallback in [
+                ("flashrom", self.flashrom_edit.text().strip(), "flashrom"),
+                ("flashprog", self.flashprog_edit.text().strip(), "flashprog"),
+                ("minipro", self.minipro_edit.text().strip(), "minipro"),
+                ("fwinfo", self.fwinfo_edit.text().strip(), "fwinfo"),
             ]:
-                if not path:
-                    lines.append(f"  {label}: (using system PATH — skipping)")
-                    continue
-                if not os.path.isfile(path):
-                    lines.append(f"  {label}: {path} — FILE NOT FOUND")
-                    continue
-                if sys.platform.startswith("win"):
-                    lines.append(f"  {label}: {path} — OK (Windows)")
-                    continue
+                if configured:
+                    path = configured
+                    if not os.path.isfile(path):
+                        lines.append(f"  {label}: {path} — FILE NOT FOUND")
+                        continue
+                else:
+                    path = shutil.which(fallback)
+                    if not path:
+                        lines.append(f"  {label}: NOT FOUND")
+                        continue
                 if os.access(path, os.X_OK):
                     lines.append(f"  {label}: {path} — executable ✓")
                 else:
-                    lines.append(f"  {label}: {path} — NOT executable, applying chmod +x…")
-                    ok, msg = self._sudo_run(["chmod", "+x", path])
-                    lines.append(f"    → {'OK' if ok else 'FAILED'}: {msg}")
-                    if ok:
-                        changed += 1
-            if changed:
-                lines.append(f"  Fixed {changed} permission(s).")
+                    lines.append(f"  {label}: {path} — NOT executable")
 
         def _done() -> None:
             for line in lines:
@@ -10355,23 +10759,43 @@ class SettingsPage(PageBase):
         lines: list[str] = []
 
         def _worker() -> None:
+            if self._is_windows:
+                lines.append("  Permission fixes are not required on Windows.")
+                return
+
             changed = 0
-            for label, path in [
-                ("flashrom", self.flashrom_edit.text().strip()),
-                ("flashprog", self.flashprog_edit.text().strip()),
+            for label, configured, fallback in [
+                ("flashrom", self.flashrom_edit.text().strip(), "flashrom"),
+                ("flashprog", self.flashprog_edit.text().strip(), "flashprog"),
+                ("minipro", self.minipro_edit.text().strip(), "minipro"),
+                ("fwinfo", self.fwinfo_edit.text().strip(), "fwinfo"),
             ]:
-                if not path or not os.path.isfile(path) or sys.platform.startswith("win"):
+                if configured:
+                    path = configured
+                    if not os.path.isfile(path):
+                        lines.append(f"  {label}: {path} — FILE NOT FOUND")
+                        continue
+                else:
+                    path = shutil.which(fallback)
+                    if not path:
+                        lines.append(f"  {label}: NOT FOUND")
+                        continue
+                if os.access(path, os.X_OK):
+                    lines.append(f"  {label}: {path} — already executable")
                     continue
-                if not os.access(path, os.X_OK):
-                    lines.append(f"  {label}: {path} — applying chmod +x…")
-                    ok, msg = self._sudo_run(["chmod", "+x", path])
-                    if ok:
-                        lines.append("    ✓ Fixed")
-                        changed += 1
-                    else:
-                        lines.append(f"    ✗ Failed: {msg}")
+                lines.append(f"  {label}: {path} — applying chmod +x…")
+                ok, msg = self._sudo_run(["chmod", "+x", path])
+                if ok:
+                    lines.append("    ✓ Fixed")
+                    changed += 1
+                else:
+                    lines.append(f"    ✗ Failed: {msg}")
+                    if self._is_linux and not self.use_sudo.isChecked():
+                        lines.append("    Hint: enable 'Use sudo' and retry if this path requires elevated permissions.")
             if changed:
                 lines.append(f"  Fixed {changed} permission(s).")
+            else:
+                lines.append("  No permission changes were required.")
 
         def _done() -> None:
             for line in lines:
@@ -10445,8 +10869,11 @@ class SettingsPage(PageBase):
                 return
 
             rule_file, rule_content = _UDEV_RULES[prog_key]
+            group_name = _configured_udev_group()
+            rule_content = _apply_udev_group(rule_content)
             rule_path = f"/etc/udev/rules.d/{rule_file}"
             lines.append(f"=== udev: {prog_key} → {rule_path} ===")
+            lines.append(f"  target group: {group_name}")
 
             first_line = rule_content.splitlines()[0].strip()
             already_ok = False
@@ -10508,11 +10935,12 @@ class SettingsPage(PageBase):
             return
         import getpass
         user = getpass.getuser()
-        self._log(f"=== Add {user} to plugdev ===")
+        group_name = _configured_udev_group()
+        self._log(f"=== Add {user} to {group_name} ===")
         result: dict[str, object] = {"ok": False, "msg": "not run"}
 
         def _worker() -> None:
-            ok, msg = self._sudo_run(["usermod", "-aG", "plugdev", user])
+            ok, msg = self._sudo_run(["usermod", "-aG", group_name, user])
             result["ok"] = ok
             result["msg"] = msg
 
@@ -10766,7 +11194,7 @@ class ToolsPage(PageBase):
         l_console.addWidget(
             QLabel(
                 "Serial terminal for programmer devices (e.g. HydraBus / Bus Pirate). "
-                "Connect to a COM/TTY port, view live output, and send commands."
+                "Connect to a COM/TTY port, view live output, and send commands. Disconnect & Reconnect May Be Needed"
             )
         )
 
@@ -13176,7 +13604,7 @@ class FlashGUIQt(QMainWindow):
             return
 
         if sys.platform.startswith("win"):
-            self.log.append_line("Scanning Windows serial ports for programmer devices…")
+            self.log.append_line("Scanning Windows USB + serial programmer devices…")
         elif sys.platform == "darwin":
             self.log.append_line("Scanning macOS serial devices (/dev/cu.*, /dev/tty.*)…")
         else:
@@ -13189,21 +13617,12 @@ class FlashGUIQt(QMainWindow):
 
         if not hits:
             if sys.platform.startswith("win"):
-                self.log.append_line("No known programmer detected via Windows serial scan.")
+                self.log.append_line("No known programmer detected via Windows USB/serial scan.")
             elif sys.platform == "darwin":
                 self.log.append_line("No known programmer detected via macOS serial scan.")
             else:
                 self.log.append_line("No known programmer detected via USB scan.")
-            if sys.platform.startswith("win"):
-                ports = _detect_programmer_serial_windows()
-                if ports:
-                    self.log.append_line("Windows COM ports enumerated — select one from the dropdown.")
-                    hits = ports
-                else:
-                    self.log.append_line("No COM ports were enumerated on Windows.")
-                    return
-            else:
-                return
+            return
 
         existing = [self.programmer_combo.itemText(i) for i in range(self.programmer_combo.count())]
         self._programmer_updating = True

@@ -4,11 +4,13 @@ Desktop GUI for `flashrom`, `flashprog` & `minipro` focused on safer firmware op
 
 This repository currently ships as a Python desktop app (`flashgui.py`) with a Qt UI and a Tk fallback path.
 
-## Latest release (v1.1.9)
+Main Objective: provide a practical, user-friendly GUI for flashrom-based workflows that helps users avoid common pitfalls and supports a wide range of hardware especially on linux.
 
-- Added robust **global log pane splitter persistence** in Qt (autosaves on drag + on close).
-- Added **Use native file dialogs** setting (Settings → Behavior) for systems where non-native dialogs improve mounted-drive visibility.
-- Kept issue #4 stabilization flow: please re-test on the latest release and report any remaining symptom as a separate issue.
+## Latest release (v1.1.10)
+
+- Added **KDE/Plasma native file dialog support** in the Qt UI via `kdialog` when native dialogs are enabled and KDE is detected.
+- Added safe **Qt dialog fallback** when `kdialog` is unavailable or KDE-native invocation cannot be completed.
+- Added regression coverage for KDE dialog gating plus automated checklist coverage for theme/settings/layout and issue #4/#5 release checks.
 
 ## Platform status
 
@@ -163,6 +165,7 @@ Settings persistence:
 - Use Python 3.10+ (CPython 3.10–3.13 recommended).
 - If dependency installation fails, verify the Python interpreter/version first.
 - For local checks, you can run `pytest` after installing development/build dependencies from `requirements-build.txt`.
+- Automated checklist coverage now lives in `tests/test_theme_automation.py`, `tests/test_settings_layout_automation.py`, and `tests/test_issue4_release_gate_automation.py`.
 
 ## Build binaries (Windows/Linux/macOS)
 
@@ -233,16 +236,19 @@ Optional flags:
 - `python scripts/release.py --skip-local-build` (skip the local build validation step)
 - `python scripts/release.py --allow-dirty` (allow publishing with uncommitted changes)
 
-Release bundle generated in this repo:
+Release bundle examples generated in this repo:
 
-- `release/flashgui-v1.1.6-windows-x64-portable.zip`
+- `release/flashgui-v1.1.10-windows-x64-portable.zip`
+- `release/flashgui-v1.1.10-linux-x64-portable.zip`
+- `release/flashgui-v1.1.10-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.10-macos-x64-portable.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.6`)
+- Create an annotated tag (example: `v1.1.10`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.6`
+- Create a GitHub Release from tag `v1.1.10`
 - CI will build on Windows/Linux/macOS and auto-attach generated portable artifacts to that release
 
 ## Mentions & thanks
