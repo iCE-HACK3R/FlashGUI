@@ -6,11 +6,11 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 Main Objective: provide a practical, user-friendly GUI for flashrom-based workflows that helps users avoid common pitfalls and supports a wide range of hardware especially on linux.
 
-## Latest release (v1.1.10)
+## Latest release (v1.1.11)
 
-- Added **KDE/Plasma native file dialog support** in the Qt UI via `kdialog` when native dialogs are enabled and KDE is detected.
-- Added safe **Qt dialog fallback** when `kdialog` is unavailable or KDE-native invocation cannot be completed.
-- Added regression coverage for KDE dialog gating plus automated checklist coverage for theme/settings/layout and issue #4/#5 release checks.
+- Added expanded **KDE native-dialog regression coverage** for the v1.1.10 fix to lock in behavior across environment combinations and cancel/success paths.
+- Added **security hardening** for settings storage, font cache/temp locations, font-download validation, and binary-path safety checks.
+- Applied hardening consistently to both Qt (`flashgui.py`) and legacy Tk (`flashgui_legacy.py`) paths.
 
 ## Platform status
 
@@ -238,17 +238,17 @@ Optional flags:
 
 Release bundle examples generated in this repo:
 
-- `release/flashgui-v1.1.10-windows-x64-portable.zip`
-- `release/flashgui-v1.1.10-linux-x64-portable.zip`
-- `release/flashgui-v1.1.10-macos-arm64-portable.zip`
-- `release/flashgui-v1.1.10-macos-x64-portable.zip`
+- `release/flashgui-v1.1.11-windows-x64-portable.zip`
+- `release/flashgui-v1.1.11-linux-x64-portable.zip`
+- `release/flashgui-v1.1.11-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.11-macos-x64-portable.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.10`)
+- Create an annotated tag (example: `v1.1.11`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.10`
+- Create a GitHub Release from tag `v1.1.11`
 - CI will build on Windows/Linux/macOS and auto-attach generated portable artifacts to that release
 
 ## Mentions & thanks

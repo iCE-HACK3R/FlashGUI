@@ -1,5 +1,32 @@
 # Release Notes
 
+## v1.1.11
+
+### Highlights (v1.1.11)
+
+- Merged `#7`: expanded KDE native dialog regression coverage for the v1.1.10 dialog fix.
+  - Added broad structural and functional tests for `_is_kde_desktop`, `_effective_use_native_file_dialogs`, `_can_use_kdialog`, and `_run_kdialog` cancel/success/exception behavior.
+  - Reinforces KDE safety guarantees: prefer `kdialog` when eligible, avoid Qt native picker on KDE, and preserve clean fallback behavior.
+- Merged `#8`: security hardening for runtime/storage paths in both Qt and legacy Tk flows.
+  - Settings writes now enforce owner-only permissions (`0o600`).
+  - Font cache moved from world-readable temp paths to user-private cache directories.
+  - Downloaded font files now require valid TTF/OTF signatures before acceptance.
+  - Temporary ROM operation directories moved to app-private locations.
+  - Added binary-path safety validation for environment/config overrides.
+
+### Version (v1.1.11)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.11"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.11"`
+
+### Build Artifact Targets (v1.1.11)
+
+- `release/flashgui-v1.1.11-windows-x64-portable.zip`
+- `release/flashgui-v1.1.11-linux-x64-portable.zip`
+- `release/flashgui-v1.1.11-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.11-macos-x64-portable.zip`
+
 ## v1.1.10
 
 ### Highlights (v1.1.10)
