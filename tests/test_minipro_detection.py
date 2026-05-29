@@ -20,7 +20,7 @@ def test_detect_minipro_hardware_prefers_version_probe(monkeypatch) -> None:
         assert kwargs["capture_output"] is True
         assert kwargs["text"] is True
         assert kwargs["errors"] == "replace"
-        assert kwargs["timeout"] == 120
+        assert kwargs["timeout"] == flashgui._MINIPRO_PROBE_TIMEOUT_SEC
         if cmd[-1] == "-V":
             return SimpleNamespace(
                 stdout=(
@@ -51,7 +51,7 @@ def test_detect_minipro_hardware_falls_back_to_list_probe(monkeypatch) -> None:
         assert kwargs["capture_output"] is True
         assert kwargs["text"] is True
         assert kwargs["errors"] == "replace"
-        assert kwargs["timeout"] == 120
+        assert kwargs["timeout"] == flashgui._MINIPRO_PROBE_TIMEOUT_SEC
         if cmd[-1] == "-V":
             return SimpleNamespace(stdout="minipro version 0.7.4\n", stderr="")
         if cmd[-1] == "-l":
@@ -158,7 +158,7 @@ def test_detect_programmer_usb_windows_maps_ch341a_vid_pid(monkeypatch) -> None:
         assert kwargs["capture_output"] is True
         assert kwargs["text"] is True
         assert kwargs["errors"] == "replace"
-        assert kwargs["timeout"] == 12
+        assert kwargs["timeout"] == flashgui._WINDOWS_USB_ENUM_TIMEOUT_SEC
         if cmd[0] == "powershell":
             return SimpleNamespace(stdout="USB\\VID_1A86&PID_5512\\5&ABC&0&1\n", stderr="")
         if cmd == ["pnputil", "/enum-devices", "/connected"]:
@@ -181,7 +181,7 @@ def test_detect_programmer_usb_windows_merges_usb_and_serial(monkeypatch) -> Non
         assert kwargs["capture_output"] is True
         assert kwargs["text"] is True
         assert kwargs["errors"] == "replace"
-        assert kwargs["timeout"] == 12
+        assert kwargs["timeout"] == flashgui._WINDOWS_USB_ENUM_TIMEOUT_SEC
         if cmd[0] == "powershell":
             return SimpleNamespace(
                 stdout=(
