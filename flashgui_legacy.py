@@ -144,8 +144,16 @@ def _load_settings(path: str) -> dict[str, object]:
 
 def _save_settings(path: str, data: dict[str, object]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        raise
 
 
 def _as_bool(value: object, default: bool = False) -> bool:
@@ -223,7 +231,13 @@ def _register_private_font_windows(font_path: str) -> bool:
 
 
 def _font_cache_dir() -> str:
-    p = os.path.join(tempfile.gettempdir(), "flashgui-font-cache")
+    if sys.platform.startswith("win"):
+        base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~")
+    elif sys.platform == "darwin":
+        base = os.path.join(os.path.expanduser("~"), "Library", "Caches")
+    else:
+        base = os.getenv("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    p = os.path.join(base, "flashgui", "font-cache")
     os.makedirs(p, exist_ok=True)
     return p
 
@@ -267,6 +281,9 @@ def _download_font(font_name: str) -> str | None:
             with urllib.request.urlopen(req, timeout=30) as resp, open(dst, "wb") as out:
                 shutil.copyfileobj(resp, out)
             if os.path.isfile(dst) and os.path.getsize(dst) > 0:
+                if not _validate_ttf_header(dst):
+                    os.remove(dst)
+                    continue
                 return dst
         except Exception as exc:
             last_error = exc
@@ -279,6 +296,22 @@ def _download_font(font_name: str) -> str | None:
     if last_error is not None:
         raise RuntimeError(f"Failed to download font '{font_name}' from all known URLs: {last_error}")
     return None
+
+
+def _validate_ttf_header(path: str) -> bool:
+    """Reject files that are not valid TrueType/OpenType fonts."""
+    _VALID_SIGNATURES = (
+        b"\x00\x01\x00\x00",  # TrueType
+        b"OTTO",              # OpenType (CFF)
+        b"true",              # Apple TrueType
+        b"typ1",              # Apple Type 1
+    )
+    try:
+        with open(path, "rb") as f:
+            header = f.read(4)
+        return any(header.startswith(sig) for sig in _VALID_SIGNATURES)
+    except OSError:
+        return False
 
 
 def _ensure_font_available(font_name: str, logger: Callable[[str], None] | None = None) -> bool:
@@ -595,9 +628,22 @@ _FLASHPROG_PROGRESS = re.compile(
 
 # ────────────────────────── tool discovery ─────────────────────────────────────
 
+def _is_safe_binary_path(path: str) -> bool:
+    """Reject binary paths that contain path-traversal or shell metacharacters."""
+    if not path or not path.strip():
+        return False
+    normalized = os.path.normpath(path)
+    if ".." in normalized.split(os.sep):
+        return False
+    _SHELL_META = set(";&|`$(){}")
+    if any(ch in path for ch in _SHELL_META):
+        return False
+    return True
+
+
 def _resolve_binary(name: str, env_var: str) -> str:
     override = os.getenv(env_var, "").strip()
-    if override:
+    if override and _is_safe_binary_path(override):
         return override
     found = shutil.which(name)
     return found if found else name
@@ -3978,7 +4024,9 @@ class AppState:
 
         self.binary     = self.resolve_tool_binary(self.tool)
         self.programmer = ""
-        self.tmpdir     = tempfile.mkdtemp()
+        _tmpdir_parent = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+        os.makedirs(_tmpdir_parent, exist_ok=True)
+        self.tmpdir     = tempfile.mkdtemp(prefix="flashgui_", dir=_tmpdir_parent)
         self._load_sudo_keyring()
 
     def _load_sudo_keyring(self) -> None:
@@ -3993,8 +4041,14 @@ class AppState:
 
     def resolve_tool_binary(self, tool: str) -> str:
         if tool == "flashrom":
-            return self.flashrom_bin or _resolve_binary("flashrom", "FLASHGUI_FLASHROM_BIN")
-        return self.flashprog_bin or _resolve_binary("flashprog", "FLASHGUI_FLASHPROG_BIN")
+            configured = self.flashrom_bin
+            if configured and _is_safe_binary_path(configured):
+                return configured
+            return _resolve_binary("flashrom", "FLASHGUI_FLASHROM_BIN")
+        configured = self.flashprog_bin
+        if configured and _is_safe_binary_path(configured):
+            return configured
+        return _resolve_binary("flashprog", "FLASHGUI_FLASHPROG_BIN")
 
     def save_settings(self, geometry: str | None = None) -> None:
         data: dict[str, object] = {
