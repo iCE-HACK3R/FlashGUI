@@ -1,5 +1,26 @@
 # Release Notes
 
+## v1.1.12
+
+### Highlights (v1.1.12)
+
+- Release refresh and version alignment after post-v1.1.11 maintenance updates.
+- Maintains the security hardening and KDE regression safeguards introduced in prior release cycles.
+- Ensures release/docs/version metadata remain consistent for downstream packaging and publish automation.
+
+### Version (v1.1.12)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.12"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.12"`
+
+### Build Artifact Targets (v1.1.12)
+
+- `release/flashgui-v1.1.12-windows-x64-portable.zip`
+- `release/flashgui-v1.1.12-linux-x64-portable.zip`
+- `release/flashgui-v1.1.12-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.12-macos-x64-portable.zip`
+
 ## v1.1.11
 
 ### Highlights (v1.1.11)

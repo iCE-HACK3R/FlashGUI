@@ -6,7 +6,7 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 Main Objective: provide a practical, user-friendly GUI for flashrom-based workflows that helps users avoid common pitfalls and supports a wide range of hardware especially on linux.
 
-## Latest release (v1.1.11)
+## Latest release (v1.1.12)
 
 - Added expanded **KDE native-dialog regression coverage** for the v1.1.10 fix to lock in behavior across environment combinations and cancel/success paths.
 - Added **security hardening** for settings storage, font cache/temp locations, font-download validation, and binary-path safety checks.
@@ -238,17 +238,17 @@ Optional flags:
 
 Release bundle examples generated in this repo:
 
-- `release/flashgui-v1.1.11-windows-x64-portable.zip`
-- `release/flashgui-v1.1.11-linux-x64-portable.zip`
-- `release/flashgui-v1.1.11-macos-arm64-portable.zip`
-- `release/flashgui-v1.1.11-macos-x64-portable.zip`
+- `release/flashgui-v1.1.12-windows-x64-portable.zip`
+- `release/flashgui-v1.1.12-linux-x64-portable.zip`
+- `release/flashgui-v1.1.12-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.12-macos-x64-portable.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.11`)
+- Create an annotated tag (example: `v1.1.12`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.11`
+- Create a GitHub Release from tag `v1.1.12`
 - CI will build on Windows/Linux/macOS and auto-attach generated portable artifacts to that release
 
 ## Mentions & thanks

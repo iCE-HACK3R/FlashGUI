@@ -10,6 +10,7 @@ import atexit
 import base64
 import binascii
 from collections.abc import Callable
+from typing import Any
 import hashlib
 import itertools
 import json
@@ -24,6 +25,7 @@ import tempfile
 import threading
 import time
 import urllib.request
+import webbrowser
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox, scrolledtext, ttk
@@ -46,9 +48,18 @@ except ImportError:
     ttk_bs = None
     TTKBOOTSTRAP_AVAILABLE = False
 
+try:
+    import serial  # type: ignore
+    from serial.tools import list_ports  # type: ignore
+    SERIAL_AVAILABLE = True
+except ImportError:
+    serial = None  # type: ignore
+    list_ports = None  # type: ignore
+    SERIAL_AVAILABLE = False
+
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.11"
+VERSION = "1.1.12"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -144,16 +155,8 @@ def _load_settings(path: str) -> dict[str, object]:
 
 def _save_settings(path: str, data: dict[str, object]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except BaseException:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        raise
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def _as_bool(value: object, default: bool = False) -> bool:
@@ -231,13 +234,7 @@ def _register_private_font_windows(font_path: str) -> bool:
 
 
 def _font_cache_dir() -> str:
-    if sys.platform.startswith("win"):
-        base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~")
-    elif sys.platform == "darwin":
-        base = os.path.join(os.path.expanduser("~"), "Library", "Caches")
-    else:
-        base = os.getenv("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
-    p = os.path.join(base, "flashgui", "font-cache")
+    p = os.path.join(tempfile.gettempdir(), "flashgui-font-cache")
     os.makedirs(p, exist_ok=True)
     return p
 
@@ -281,9 +278,6 @@ def _download_font(font_name: str) -> str | None:
             with urllib.request.urlopen(req, timeout=30) as resp, open(dst, "wb") as out:
                 shutil.copyfileobj(resp, out)
             if os.path.isfile(dst) and os.path.getsize(dst) > 0:
-                if not _validate_ttf_header(dst):
-                    os.remove(dst)
-                    continue
                 return dst
         except Exception as exc:
             last_error = exc
@@ -296,22 +290,6 @@ def _download_font(font_name: str) -> str | None:
     if last_error is not None:
         raise RuntimeError(f"Failed to download font '{font_name}' from all known URLs: {last_error}")
     return None
-
-
-def _validate_ttf_header(path: str) -> bool:
-    """Reject files that are not valid TrueType/OpenType fonts."""
-    _VALID_SIGNATURES = (
-        b"\x00\x01\x00\x00",  # TrueType
-        b"OTTO",              # OpenType (CFF)
-        b"true",              # Apple TrueType
-        b"typ1",              # Apple Type 1
-    )
-    try:
-        with open(path, "rb") as f:
-            header = f.read(4)
-        return any(header.startswith(sig) for sig in _VALID_SIGNATURES)
-    except OSError:
-        return False
 
 
 def _ensure_font_available(font_name: str, logger: Callable[[str], None] | None = None) -> bool:
@@ -625,25 +603,13 @@ _FLASHROM_PROGRESS = re.compile(r"\[(READ|WRITE|ERASE):\s*(\d+)%\]", re.IGNORECA
 _FLASHPROG_PROGRESS = re.compile(
     r"(Reading|Writing|Erasing|Progress)\.\.\.\s*\[[^\]]*\]\s*(\d+)%", re.IGNORECASE
 )
+_MINIPRO_PROGRAMMER_ARG = "minipro-usb"
 
 # ────────────────────────── tool discovery ─────────────────────────────────────
 
-def _is_safe_binary_path(path: str) -> bool:
-    """Reject binary paths that contain path-traversal or shell metacharacters."""
-    if not path or not path.strip():
-        return False
-    normalized = os.path.normpath(path)
-    if ".." in normalized.split(os.sep):
-        return False
-    _SHELL_META = set(";&|`$(){}")
-    if any(ch in path for ch in _SHELL_META):
-        return False
-    return True
-
-
 def _resolve_binary(name: str, env_var: str) -> str:
     override = os.getenv(env_var, "").strip()
-    if override and _is_safe_binary_path(override):
+    if override:
         return override
     found = shutil.which(name)
     return found if found else name
@@ -687,6 +653,257 @@ def _list_programmers(binary: str) -> list[str]:
         return programmers
     except Exception:
         return []
+
+
+def _is_minipro_tool(tool: str, binary: str = "") -> bool:
+    t = (tool or "").strip().lower()
+    if t == "minipro":
+        return True
+    b = os.path.basename((binary or "").strip()).lower()
+    return b in {"minipro", "minipro.exe"}
+
+
+def _detect_minipro_hardware(minipro_binary: str) -> tuple[bool, str, list[str]]:
+    """Probe minipro programmer with non-invasive calls.
+
+    Returns (detected, label, relevant_output_lines).
+    """
+
+    def _run_probe(args: list[str]) -> tuple[list[str], str]:
+        try:
+            proc = subprocess.run(
+                [minipro_binary, *args],
+                check=False,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=120,
+            )
+        except Exception:
+            return [], ""
+
+        out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+        raw_lines = [ln.rstrip("\r\n") for ln in out.splitlines() if ln.strip()]
+        found_line = ""
+        for ln in raw_lines:
+            if ln.lower().startswith("found "):
+                found_line = ln.strip()
+                break
+        diag_prefixes = (
+            "found ",
+            "warning:",
+            "expected",
+            "device code:",
+            "serial code:",
+            "manufactured:",
+            "usb speed:",
+            "supply voltage:",
+        )
+        lines = [ln for ln in raw_lines if ln.lower().startswith(diag_prefixes)]
+        if not lines:
+            lines = raw_lines[:20]
+        return lines, found_line
+
+    lines, found_line = _run_probe(["-V"])
+    if not found_line:
+        fallback_lines, found_line = _run_probe(["-l"])
+        if fallback_lines:
+            lines = fallback_lines
+
+    if not found_line:
+        return False, "", lines
+    return True, found_line, lines
+
+
+def _list_minipro_devices(minipro_binary: str, limit: int = 8192) -> list[str]:
+    """Return minipro part names from `minipro -l` output."""
+    try:
+        proc = subprocess.run(
+            [minipro_binary, "-l"],
+            check=False,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=120,
+        )
+    except Exception:
+        return []
+
+    lines = ((proc.stdout or "") + "\n" + (proc.stderr or "")).splitlines()
+    parts: list[str] = []
+    seen: set[str] = set()
+    skip_prefixes = (
+        "minipro version",
+        "usage:",
+        "see the manual",
+        "found ",
+        "warning:",
+        "device code:",
+        "serial code:",
+        "manufactured:",
+        "usb speed:",
+        "supply voltage:",
+    )
+
+    for raw in lines:
+        s = (raw or "").strip()
+        if not s:
+            continue
+        if s.lower().startswith(skip_prefixes):
+            continue
+        token = s.split()[0].strip()
+        if not token:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9@._()+\-/]+", token):
+            continue
+        k = token.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        parts.append(token)
+        if len(parts) >= limit:
+            break
+    return parts
+
+
+def _autodetect_minipro_spi_devices(minipro_binary: str) -> tuple[bool, str, list[str], list[str], str]:
+    """Autodetect SPI devices using minipro -a (8/16-bit buses).
+
+    Returns (detected_programmer, label, chips, lines, bus_width).
+    """
+    all_lines: list[str] = []
+    found_line = ""
+
+    def _collect_candidates(lines: list[str]) -> list[str]:
+        chips: list[str] = []
+        seen: set[str] = set()
+        for raw in lines:
+            s = (raw or "").strip()
+            if not s:
+                continue
+            lo = s.lower()
+            if (
+                lo.startswith("found ")
+                or lo.startswith("warning:")
+                or lo.startswith("expected")
+                or lo.startswith("device code:")
+                or lo.startswith("serial code:")
+                or lo.startswith("manufactured:")
+                or lo.startswith("usb speed:")
+                or lo.startswith("supply voltage:")
+                or lo.startswith("autodetecting device")
+                or lo.endswith("device(s) found.")
+            ):
+                continue
+            if not re.fullmatch(r"[A-Za-z0-9@._()+\-/]+", s):
+                continue
+            k = s.lower()
+            if k in seen:
+                continue
+            seen.add(k)
+            chips.append(s)
+        return chips
+
+    for width in ("8", "16"):
+        try:
+            proc = subprocess.run(
+                [minipro_binary, "-a", width],
+                check=False,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=60,
+            )
+        except Exception:
+            continue
+
+        raw_lines = [ln.rstrip("\r\n") for ln in ((proc.stdout or "") + "\n" + (proc.stderr or "")).splitlines() if ln.strip()]
+        all_lines.extend(raw_lines)
+
+        if not found_line:
+            for ln in raw_lines:
+                if ln.lower().startswith("found "):
+                    found_line = ln.strip()
+                    break
+
+        chips = _collect_candidates(raw_lines)
+        if chips:
+            return bool(found_line), found_line, chips, raw_lines[:120], width
+
+    supported = _list_minipro_devices(minipro_binary)
+    if supported:
+        all_lines.append("No live SPI chip match from minipro -a 8/-a 16; listing supported minipro parts instead.")
+        return bool(found_line), found_line, supported, all_lines[:120], ""
+
+    return bool(found_line), found_line, [], all_lines[:120], ""
+
+
+def _extract_chip_id_from_lines(lines: list[str]) -> str:
+    found_ids: list[str] = []
+    seen: set[str] = set()
+
+    for raw in lines:
+        s = (raw or "").strip()
+        if not s:
+            continue
+
+        m_chip = re.search(r"\bchip\s*id\s*:\s*(0x[0-9a-fA-F]+)", s, re.IGNORECASE)
+        if m_chip:
+            chip_id = m_chip.group(1).upper()
+            if chip_id not in seen:
+                seen.add(chip_id)
+                found_ids.append(chip_id)
+
+        patterns = (
+            r"compare_id:\s*id1\s*0x([0-9a-fA-F]+),\s*id2\s*0x([0-9a-fA-F]+)",
+            r"(?:probe_spi_rdid|spi_rdid)\s*:\s*id1\s*0x([0-9a-fA-F]+),\s*id2\s*0x([0-9a-fA-F]+)",
+            r"\bid1\s*0x([0-9a-fA-F]+),\s*id2\s*0x([0-9a-fA-F]+)",
+        )
+        for pat in patterns:
+            m_id = re.search(pat, s, re.IGNORECASE)
+            if not m_id:
+                continue
+            try:
+                chip_id = f"0x{int(m_id.group(1), 16):02X}{int(m_id.group(2), 16):X}"
+            except ValueError:
+                continue
+            if chip_id not in seen:
+                seen.add(chip_id)
+                found_ids.append(chip_id)
+
+    if not found_ids:
+        return "N/A"
+    return ", ".join(found_ids)
+
+
+def _parse_minipro_device_info(lines: list[str], chip_fallback: str) -> tuple[str, str, str]:
+    model = chip_fallback or "N/A"
+    vendor = "N/A"
+    size_str = "N/A"
+
+    for raw in lines:
+        s = (raw or "").strip()
+        if not s:
+            continue
+
+        m_name = re.match(r"^Name:\s*(.+)$", s, re.IGNORECASE)
+        if m_name:
+            model = m_name.group(1).strip() or model
+
+        m_mfr = re.match(r"^Manufacturer:\s*(.+)$", s, re.IGNORECASE)
+        if m_mfr:
+            vendor = m_mfr.group(1).strip() or vendor
+
+        if size_str == "N/A":
+            m_kb = re.search(r"\((\d+)\s*kB\)", s, re.IGNORECASE)
+            if m_kb:
+                size_str = f"{m_kb.group(1)} kB"
+                continue
+            m_mb = re.search(r"\((\d+)\s*MB\)", s, re.IGNORECASE)
+            if m_mb:
+                size_str = f"{m_mb.group(1)} MB"
+
+    return model, vendor, size_str
 
 
 # ── USB programmer detection ───────────────────────────────────────────────────
@@ -1132,6 +1349,71 @@ def _completion_label(rc: int, had_error: bool = False) -> str:
     return "Fail"
 
 
+def _tool_label_for_preview(tool: str) -> str:
+    t = (tool or "").strip().lower()
+    return t if t in {"flashrom", "flashprog", "minipro"} else "flashrom"
+
+
+def _preview_read_command(tool: str) -> str:
+    t = _tool_label_for_preview(tool)
+    if t == "minipro":
+        return "minipro -p <chip> -r output.bin"
+    return f"{t} -p <programmer> -c <chip> --progress -r output.bin"
+
+
+def _preview_write_command(tool: str) -> str:
+    t = _tool_label_for_preview(tool)
+    if t == "minipro":
+        return "minipro -p <chip> -w file.bin"
+    return f"{t} -p <programmer> -c <chip> --progress -w file.bin"
+
+
+def _preview_verify_command(tool: str) -> str:
+    t = _tool_label_for_preview(tool)
+    if t == "minipro":
+        return "minipro -p <chip> -y file.bin"
+    return f"{t} -p <programmer> -c <chip> --progress -v file.bin"
+
+
+def _preview_erase_command(tool: str) -> str:
+    t = _tool_label_for_preview(tool)
+    if t == "minipro":
+        return "minipro -p <chip> -e"
+    return f"{t} -p <programmer> -c <chip> --progress -E"
+
+
+def _preview_wp_command(tool: str) -> str:
+    t = _tool_label_for_preview(tool)
+    if t == "minipro":
+        return "minipro mode: write-protect controls unavailable"
+    return f"{t} -p <programmer> -c <chip> --wp-enable"
+
+
+def _preview_info_command(tool: str) -> str:
+    t = _tool_label_for_preview(tool)
+    if t == "minipro":
+        return "minipro -p <chip> -i"
+    if t == "flashprog":
+        return "flashprog -p <programmer> -c <chip> --flash-name"
+    return "flashrom -p <programmer> -c <chip> --wp-status"
+
+
+def _render_preview_command(
+    template: str,
+    *,
+    programmer: str = "",
+    chip: str = "",
+    file_path: str = "",
+    output_path: str = "",
+) -> str:
+    rendered = template
+    rendered = rendered.replace("<programmer>", programmer.strip() or "<programmer>")
+    rendered = rendered.replace("<chip>", chip.strip() or "<chip>")
+    rendered = rendered.replace("output.bin", output_path.strip() or "output.bin")
+    rendered = rendered.replace("file.bin", file_path.strip() or "file.bin")
+    return rendered
+
+
 def _system_beep(frequency: int = 1000, duration_ms: int = 200) -> None:
     """Cross-platform beep for operation completion."""
     if winsound:
@@ -1195,6 +1477,7 @@ class _LogWidget(scrolledtext.ScrolledText):
                          bg="#1e1e1e", fg="#d4d4d4",
                          font=_pick_mono(10), **kw)
         self._line_sink = line_sink
+        self._verbose = True
         self.tag_config("err", foreground="#f44747")
         self.tag_config("ok",  foreground="#6a9955")
         self.tag_config("hdr", foreground="#569cd6")
@@ -1254,6 +1537,14 @@ class _LogWidget(scrolledtext.ScrolledText):
             tag = "ok"
         elif any(k in lo for k in ("found", "using", "select", "setting", "saved", "loaded")):
             tag = "info"
+        if not self._verbose and tag in {"cmd", "meta", "info"}:
+            self.config(state="disabled")
+            if self._line_sink is not None:
+                try:
+                    self._line_sink(text)
+                except Exception:
+                    pass
+            return
         self.insert("end", text + "\n", tag)
         self.see("end")
         self.config(state="disabled")
@@ -1267,6 +1558,9 @@ class _LogWidget(scrolledtext.ScrolledText):
         self.config(state="normal")
         self.delete("1.0", "end")
         self.config(state="disabled")
+
+    def set_verbose(self, enabled: bool) -> None:
+        self._verbose = bool(enabled)
 
 
 class _ProgressFrame(ttk.Frame):
@@ -1350,7 +1644,15 @@ class _ChipMixin:
                 pass
 
         def _worker() -> None:
-            chips, suggested = _detect_chips(self.state.binary, self.state.programmer, q)
+            if _is_minipro_tool(self.state.tool, self.state.binary):
+                detected, label, chips, lines, _bus = _autodetect_minipro_spi_devices(self.state.binary)
+                for ln in lines[:80]:
+                    q.put(ln)
+                if detected and label:
+                    q.put(f"Using minipro programmer: {label}")
+                suggested = None
+            else:
+                chips, suggested = _detect_chips(self.state.binary, self.state.programmer, q)
             _safe_after(root_ref, 0, _drain)
             _safe_after(root_ref, 0, lambda: self._autodetect_done(chips, suggested))
 
@@ -1389,7 +1691,7 @@ class PageRead(_ChipMixin):
         self.frame.columnconfigure(0, weight=1)
         self.frame.rowconfigure(0, weight=1)
 
-        # Paned window: top for controls, bottom for Command Preview + Output
+        # Paned window: top for controls, bottom for Command Preview
         paned = ttk.PanedWindow(self.frame, orient="vertical")
         paned.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
@@ -1400,12 +1702,14 @@ class PageRead(_ChipMixin):
         # File picker
         ttk.Label(control_frame, text="Save ROM To:").grid(row=0, column=0, columnspan=3, pady=(0, 2))
         self.file_var = tk.StringVar()
+        self.file_var.trace_add("write", lambda *_: self.refresh_command_preview())
         ttk.Entry(control_frame, textvariable=self.file_var, width=40).grid(row=1, column=0, columnspan=2, sticky="ew", padx=(0, 4))
         ttk.Button(control_frame, text="Browse", width=12, command=self._browse).grid(row=1, column=2, sticky="ew")
 
         # Chip
         ttk.Label(control_frame, text="Select Chip:").grid(row=2, column=0, columnspan=3, pady=(10, 2))
         self.chip_var = tk.StringVar()
+        self.chip_var.trace_add("write", lambda *_: self.refresh_command_preview())
         # Trace chip selection to update sidebar status
         if self.app:
             self.chip_var.trace("w", lambda *args: self.app.chip_status_var.set(self.chip_var.get() or "Not detected"))  # type: ignore
@@ -1445,32 +1749,23 @@ class PageRead(_ChipMixin):
         control_frame.columnconfigure(0, weight=0)
         control_frame.columnconfigure(1, weight=1)
 
-        # Bottom pane: Command Preview + Output
+        # Bottom pane: Command Preview
         bottom_frame = ttk.Frame(paned)
         paned.add(bottom_frame, weight=1)
         bottom_frame.columnconfigure(0, weight=1)
-        bottom_frame.rowconfigure(2, weight=1)
 
         # Command Preview
         ttk.Label(bottom_frame, text="Command Preview:").grid(row=0, column=0, sticky="w", pady=(0, 2))
-        self.cmd_preview_var = tk.StringVar(value="flashrom -p <programmer> -r output.bin")
+        self.cmd_preview_var = tk.StringVar(value=_preview_read_command(self.state.tool))
         ttk.Entry(bottom_frame, textvariable=self.cmd_preview_var, state="readonly", width=80).grid(
             row=0, column=1, sticky="ew", pady=(0, 2))
+        self.refresh_command_preview()
 
-        # Output
-        ttk.Label(bottom_frame, text="Output Log:").grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 2))
-        self.output_text = tk.Text(bottom_frame, height=4, width=80, state="disabled")
-        self.output_text.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 4))
-
-        scrollbar = ttk.Scrollbar(bottom_frame, orient="vertical", command=self.output_text.yview)
-        scrollbar.grid(row=2, column=2, sticky="ns")
-        self.output_text.config(yscrollcommand=scrollbar.set)
-
-        btn_frame = ttk.Frame(bottom_frame)
-        btn_frame.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        ttk.Button(btn_frame, text="Clear Log", command=self._clear_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Copy Log", command=self._copy_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Save Log", command=self._save_output).pack(side="left", padx=2)
+        ttk.Label(
+            bottom_frame,
+            text="Output is unified into the Global Log panel below.",
+            style="Status.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
     # ── auto-populate filename ────────────────────────────────────────────────
 
@@ -1488,6 +1783,17 @@ class PageRead(_ChipMixin):
         super()._autodetect_done(chips, suggested)
         if chips:
             self.file_var.set(self._auto_filename())
+        self.refresh_command_preview()
+
+    def refresh_command_preview(self) -> None:
+        self.cmd_preview_var.set(
+            _render_preview_command(
+                _preview_read_command(self.state.tool),
+                programmer=self.state.programmer,
+                chip=self.chip_var.get(),
+                output_path=self.file_var.get(),
+            )
+        )
 
     # ── browse ────────────────────────────────────────────────────────────────
 
@@ -1505,46 +1811,7 @@ class PageRead(_ChipMixin):
         if p:
             PageRead._last_save_dir = os.path.dirname(os.path.abspath(p))
             self.file_var.set(p)
-
-    # ── output ────────────────────────────────────────────────────────────────
-
-    def _clear_output(self) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.delete("1.0", "end")
-        self.output_text.config(state="disabled")
-
-    def _copy_output(self) -> None:
-        try:
-            content = self.output_text.get("1.0", "end-1c")
-            self.root.clipboard_clear()
-            self.root.clipboard_append(content)
-            self.log.append("Log copied to clipboard.")
-        except Exception as e:
-            self.log.append(f"ERROR: Failed to copy log: {e}")
-
-    def _save_output(self) -> None:
-        content = self.output_text.get("1.0", "end-1c")
-        if not content.strip():
-            self.log.append("ERROR: No log content to save.")
-            return
-        p = filedialog.asksaveasfilename(
-            initialdir=self.state.workspace_dir or os.path.dirname(os.path.abspath(__file__)),
-            defaultextension=".txt",
-            filetypes=[("Text", "*.txt"), ("All", "*.*")],
-        )
-        if p:
-            try:
-                with open(p, "w") as f:
-                    f.write(content)
-                self.log.append(f"Log saved to: {p}")
-            except Exception as e:
-                self.log.append(f"ERROR: Failed to save log: {e}")
-
-    def _append_output(self, text: str) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.insert("end", text + "\n")
-        self.output_text.see("end")
-        self.output_text.config(state="disabled")
+        self.refresh_command_preview()
 
     # ── read ──────────────────────────────────────────────────────────────────
 
@@ -1561,7 +1828,11 @@ class PageRead(_ChipMixin):
             self.log.append("ERROR: Select a programmer first.")
             return
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-r", fp]
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-r", fp]
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-r", fp]
         self.log.append(f"$ {' '.join(cmd)}")
         self.progress.stop_reset()
         self.sha256_var.set("—")
@@ -1720,7 +1991,7 @@ class PageWrite(_ChipMixin):
         self.frame.columnconfigure(0, weight=1)
         self.frame.rowconfigure(0, weight=1)
 
-        # Paned window: top for controls, bottom for Command Preview + Output
+        # Paned window: top for controls, bottom for Command Preview
         paned = ttk.PanedWindow(self.frame, orient="vertical")
         paned.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
@@ -1730,11 +2001,13 @@ class PageWrite(_ChipMixin):
 
         ttk.Label(control_frame, text="File to Flash:").grid(row=0, column=0, columnspan=3, pady=(0, 2))
         self.file_var = tk.StringVar()
+        self.file_var.trace_add("write", lambda *_: self.refresh_command_preview())
         ttk.Entry(control_frame, textvariable=self.file_var, width=40).grid(row=1, column=0, columnspan=2, sticky="ew", padx=(0, 4))
         ttk.Button(control_frame, text="Browse", width=12, command=self._browse).grid(row=1, column=2, sticky="ew")
 
         ttk.Label(control_frame, text="Select Chip:").grid(row=2, column=0, columnspan=3, pady=(10, 2))
         self.chip_var = tk.StringVar()
+        self.chip_var.trace_add("write", lambda *_: self.refresh_command_preview())
         if self.app:
             self.chip_var.trace("w", lambda *args: self.app.chip_status_var.set(self.chip_var.get() or "Not detected"))  # type: ignore
         self.chip_combo = ttk.Combobox(control_frame, textvariable=self.chip_var, width=38)
@@ -1772,32 +2045,23 @@ class PageWrite(_ChipMixin):
 
         control_frame.columnconfigure(1, weight=1)
 
-        # Bottom pane: Command Preview + Output
+        # Bottom pane: Command Preview
         bottom_frame = ttk.Frame(paned)
         paned.add(bottom_frame, weight=1)
         bottom_frame.columnconfigure(0, weight=1)
-        bottom_frame.rowconfigure(2, weight=1)
 
         # Command Preview
         ttk.Label(bottom_frame, text="Command Preview:").grid(row=0, column=0, sticky="w", pady=(0, 2))
-        self.cmd_preview_var = tk.StringVar(value="flashrom -p <programmer> -c <chip> -w file.bin")
+        self.cmd_preview_var = tk.StringVar(value=_preview_write_command(self.state.tool))
         ttk.Entry(bottom_frame, textvariable=self.cmd_preview_var, state="readonly", width=80).grid(
             row=0, column=1, sticky="ew", pady=(0, 2))
+        self.refresh_command_preview()
 
-        # Output
-        ttk.Label(bottom_frame, text="Output Log:").grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 2))
-        self.output_text = tk.Text(bottom_frame, height=4, width=80, state="disabled")
-        self.output_text.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 4))
-
-        scrollbar = ttk.Scrollbar(bottom_frame, orient="vertical", command=self.output_text.yview)
-        scrollbar.grid(row=2, column=2, sticky="ns")
-        self.output_text.config(yscrollcommand=scrollbar.set)
-
-        btn_frame = ttk.Frame(bottom_frame)
-        btn_frame.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        ttk.Button(btn_frame, text="Clear Log", command=self._clear_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Copy Log", command=self._copy_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Save Log", command=self._save_output).pack(side="left", padx=2)
+        ttk.Label(
+            bottom_frame,
+            text="Output is unified into the Global Log panel below.",
+            style="Status.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
     def _browse(self) -> None:
         p = filedialog.askopenfilename(
@@ -1806,44 +2070,17 @@ class PageWrite(_ChipMixin):
         )
         if p:
             self.file_var.set(p)
+        self.refresh_command_preview()
 
-    def _clear_output(self) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.delete("1.0", "end")
-        self.output_text.config(state="disabled")
-
-    def _copy_output(self) -> None:
-        try:
-            content = self.output_text.get("1.0", "end-1c")
-            self.root.clipboard_clear()
-            self.root.clipboard_append(content)
-            self.log.append("Log copied to clipboard.")
-        except Exception as e:
-            self.log.append(f"ERROR: Failed to copy log: {e}")
-
-    def _save_output(self) -> None:
-        content = self.output_text.get("1.0", "end-1c")
-        if not content.strip():
-            self.log.append("ERROR: No log content to save.")
-            return
-        p = filedialog.asksaveasfilename(
-            initialdir=self.state.workspace_dir or os.path.dirname(os.path.abspath(__file__)),
-            defaultextension=".txt",
-            filetypes=[("Text", "*.txt"), ("All", "*.*")],
+    def refresh_command_preview(self) -> None:
+        self.cmd_preview_var.set(
+            _render_preview_command(
+                _preview_write_command(self.state.tool),
+                programmer=self.state.programmer,
+                chip=self.chip_var.get(),
+                file_path=self.file_var.get(),
+            )
         )
-        if p:
-            try:
-                with open(p, "w") as f:
-                    f.write(content)
-                self.log.append(f"Log saved to: {p}")
-            except Exception as e:
-                self.log.append(f"ERROR: Failed to save log: {e}")
-
-    def _append_output(self, text: str) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.insert("end", text + "\n")
-        self.output_text.see("end")
-        self.output_text.config(state="disabled")
 
     def _run(self) -> None:
         fp = self.file_var.get().strip()
@@ -1875,8 +2112,12 @@ class PageWrite(_ChipMixin):
             else:
                 self.log.append("WARNING: Could not determine chip size — skipping padding.")
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-w", actual_fp]
-        if self.opt_noverify.get():
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-w", actual_fp]
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-w", actual_fp]
+        if not is_minipro and self.opt_noverify.get():
             cmd.append("-n")
 
         self.log.append(f"$ {' '.join(cmd)}")
@@ -1955,7 +2196,7 @@ class PageVerify(_ChipMixin):
         self.frame.columnconfigure(0, weight=1)
         self.frame.rowconfigure(0, weight=1)
 
-        # Paned window: top for controls, bottom for Command Preview + Output
+        # Paned window: top for controls, bottom for Command Preview
         paned = ttk.PanedWindow(self.frame, orient="vertical")
         paned.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
@@ -1965,11 +2206,13 @@ class PageVerify(_ChipMixin):
 
         ttk.Label(control_frame, text="File to Verify Against:").grid(row=0, column=0, columnspan=3, pady=(0, 2))
         self.file_var = tk.StringVar()
+        self.file_var.trace_add("write", lambda *_: self.refresh_command_preview())
         ttk.Entry(control_frame, textvariable=self.file_var, width=40).grid(row=1, column=0, columnspan=2, sticky="ew", padx=(0, 4))
         ttk.Button(control_frame, text="Browse", width=12, command=self._browse).grid(row=1, column=2, sticky="ew")
 
         ttk.Label(control_frame, text="Select Chip:").grid(row=2, column=0, columnspan=3, pady=(10, 2))
         self.chip_var = tk.StringVar()
+        self.chip_var.trace_add("write", lambda *_: self.refresh_command_preview())
         if self.app:
             self.chip_var.trace("w", lambda *args: self.app.chip_status_var.set(self.chip_var.get() or "Not detected"))  # type: ignore
         self.chip_combo = ttk.Combobox(control_frame, textvariable=self.chip_var, width=38)
@@ -2006,32 +2249,23 @@ class PageVerify(_ChipMixin):
 
         control_frame.columnconfigure(1, weight=1)
 
-        # Bottom pane: Command Preview + Output
+        # Bottom pane: Command Preview
         bottom_frame = ttk.Frame(paned)
         paned.add(bottom_frame, weight=1)
         bottom_frame.columnconfigure(0, weight=1)
-        bottom_frame.rowconfigure(2, weight=1)
 
         # Command Preview
         ttk.Label(bottom_frame, text="Command Preview:").grid(row=0, column=0, sticky="w", pady=(0, 2))
-        self.cmd_preview_var = tk.StringVar(value="flashrom -p <programmer> -c <chip> -v file.bin")
+        self.cmd_preview_var = tk.StringVar(value=_preview_verify_command(self.state.tool))
         ttk.Entry(bottom_frame, textvariable=self.cmd_preview_var, state="readonly", width=80).grid(
             row=0, column=1, sticky="ew", pady=(0, 2))
+        self.refresh_command_preview()
 
-        # Output
-        ttk.Label(bottom_frame, text="Output Log:").grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 2))
-        self.output_text = tk.Text(bottom_frame, height=4, width=80, state="disabled")
-        self.output_text.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 4))
-
-        scrollbar = ttk.Scrollbar(bottom_frame, orient="vertical", command=self.output_text.yview)
-        scrollbar.grid(row=2, column=2, sticky="ns")
-        self.output_text.config(yscrollcommand=scrollbar.set)
-
-        btn_frame = ttk.Frame(bottom_frame)
-        btn_frame.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        ttk.Button(btn_frame, text="Clear Log", command=self._clear_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Copy Log", command=self._copy_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Save Log", command=self._save_output).pack(side="left", padx=2)
+        ttk.Label(
+            bottom_frame,
+            text="Output is unified into the Global Log panel below.",
+            style="Status.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
     def _browse(self) -> None:
         p = filedialog.askopenfilename(
@@ -2040,44 +2274,17 @@ class PageVerify(_ChipMixin):
         )
         if p:
             self.file_var.set(p)
+        self.refresh_command_preview()
 
-    def _clear_output(self) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.delete("1.0", "end")
-        self.output_text.config(state="disabled")
-
-    def _copy_output(self) -> None:
-        try:
-            content = self.output_text.get("1.0", "end-1c")
-            self.root.clipboard_clear()
-            self.root.clipboard_append(content)
-            self.log.append("Log copied to clipboard.")
-        except Exception as e:
-            self.log.append(f"ERROR: Failed to copy log: {e}")
-
-    def _save_output(self) -> None:
-        content = self.output_text.get("1.0", "end-1c")
-        if not content.strip():
-            self.log.append("ERROR: No log content to save.")
-            return
-        p = filedialog.asksaveasfilename(
-            initialdir=self.state.workspace_dir or os.path.dirname(os.path.abspath(__file__)),
-            defaultextension=".txt",
-            filetypes=[("Text", "*.txt"), ("All", "*.*")],
+    def refresh_command_preview(self) -> None:
+        self.cmd_preview_var.set(
+            _render_preview_command(
+                _preview_verify_command(self.state.tool),
+                programmer=self.state.programmer,
+                chip=self.chip_var.get(),
+                file_path=self.file_var.get(),
+            )
         )
-        if p:
-            try:
-                with open(p, "w") as f:
-                    f.write(content)
-                self.log.append(f"Log saved to: {p}")
-            except Exception as e:
-                self.log.append(f"ERROR: Failed to save log: {e}")
-
-    def _append_output(self, text: str) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.insert("end", text + "\n")
-        self.output_text.see("end")
-        self.output_text.config(state="disabled")
 
     def _run(self) -> None:
         fp = self.file_var.get().strip()
@@ -2092,7 +2299,11 @@ class PageVerify(_ChipMixin):
             self.log.append("ERROR: Select a programmer first.")
             return
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-v", fp]
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-y", fp]
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-v", fp]
         self.log.append(f"$ {' '.join(cmd)}")
         self.progress.stop_reset()
         self.sha256_var.set("—")
@@ -2162,7 +2373,7 @@ class PageErase(_ChipMixin):
         self.frame.columnconfigure(0, weight=1)
         self.frame.rowconfigure(0, weight=1)
 
-        # Paned window: top for controls, bottom for Command Preview + Output
+        # Paned window: top for controls, bottom for Command Preview
         paned = ttk.PanedWindow(self.frame, orient="vertical")
         paned.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
@@ -2172,6 +2383,7 @@ class PageErase(_ChipMixin):
 
         ttk.Label(control_frame, text="Select Chip:").grid(row=0, column=0, columnspan=3, pady=(0, 2))
         self.chip_var = tk.StringVar()
+        self.chip_var.trace_add("write", lambda *_: self.refresh_command_preview())
         if self.app:
             self.chip_var.trace("w", lambda *args: self.app.chip_status_var.set(self.chip_var.get() or "Not detected"))  # type: ignore
         self.chip_combo = ttk.Combobox(control_frame, textvariable=self.chip_var, width=38)
@@ -2210,70 +2422,31 @@ class PageErase(_ChipMixin):
 
         control_frame.columnconfigure(1, weight=1)
 
-        # Bottom pane: Command Preview + Output
+        # Bottom pane: Command Preview
         bottom_frame = ttk.Frame(paned)
         paned.add(bottom_frame, weight=1)
         bottom_frame.columnconfigure(0, weight=1)
-        bottom_frame.rowconfigure(2, weight=1)
 
         # Command Preview
         ttk.Label(bottom_frame, text="Command Preview:").grid(row=0, column=0, sticky="w", pady=(0, 2))
-        self.cmd_preview_var = tk.StringVar(value="flashrom -p <programmer> -c <chip> -E")
+        self.cmd_preview_var = tk.StringVar(value=_preview_erase_command(self.state.tool))
         ttk.Entry(bottom_frame, textvariable=self.cmd_preview_var, state="readonly", width=80).grid(
             row=0, column=1, sticky="ew", pady=(0, 2))
+        self.refresh_command_preview()
+        ttk.Label(
+            bottom_frame,
+            text="Output is unified into the Global Log panel below.",
+            style="Status.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
-        # Output
-        ttk.Label(bottom_frame, text="Output Log:").grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 2))
-        self.output_text = tk.Text(bottom_frame, height=4, width=80, state="disabled")
-        self.output_text.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 4))
-
-        scrollbar = ttk.Scrollbar(bottom_frame, orient="vertical", command=self.output_text.yview)
-        scrollbar.grid(row=2, column=2, sticky="ns")
-        self.output_text.config(yscrollcommand=scrollbar.set)
-
-        btn_frame = ttk.Frame(bottom_frame)
-        btn_frame.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        ttk.Button(btn_frame, text="Clear Log", command=self._clear_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Copy Log", command=self._copy_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Save Log", command=self._save_output).pack(side="left", padx=2)
-
-    def _clear_output(self) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.delete("1.0", "end")
-        self.output_text.config(state="disabled")
-
-    def _copy_output(self) -> None:
-        try:
-            content = self.output_text.get("1.0", "end-1c")
-            self.root.clipboard_clear()
-            self.root.clipboard_append(content)
-            self.log.append("Log copied to clipboard.")
-        except Exception as e:
-            self.log.append(f"ERROR: Failed to copy log: {e}")
-
-    def _save_output(self) -> None:
-        content = self.output_text.get("1.0", "end-1c")
-        if not content.strip():
-            self.log.append("ERROR: No log content to save.")
-            return
-        p = filedialog.asksaveasfilename(
-            initialdir=self.state.workspace_dir or os.path.dirname(os.path.abspath(__file__)),
-            defaultextension=".txt",
-            filetypes=[("Text", "*.txt"), ("All", "*.*")],
+    def refresh_command_preview(self) -> None:
+        self.cmd_preview_var.set(
+            _render_preview_command(
+                _preview_erase_command(self.state.tool),
+                programmer=self.state.programmer,
+                chip=self.chip_var.get(),
+            )
         )
-        if p:
-            try:
-                with open(p, "w") as f:
-                    f.write(content)
-                self.log.append(f"Log saved to: {p}")
-            except Exception as e:
-                self.log.append(f"ERROR: Failed to save log: {e}")
-
-    def _append_output(self, text: str) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.insert("end", text + "\n")
-        self.output_text.see("end")
-        self.output_text.config(state="disabled")
 
     def _run(self) -> None:
         chip = self.chip_var.get().strip()
@@ -2291,7 +2464,11 @@ class PageErase(_ChipMixin):
         ):
             return
 
-        cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-E"]
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+        if is_minipro:
+            cmd = [self.state.binary, "-p", chip, "-e"]
+        else:
+            cmd = [self.state.binary, "-p", self.state.programmer, "-c", chip, "--progress", "-E"]
         self.log.append(f"$ {' '.join(cmd)}")
         self.progress.stop_reset()
         self.sha256_var.set("N/A")
@@ -2354,7 +2531,7 @@ class PageWriteProtect(_ChipMixin):
         self.frame.columnconfigure(0, weight=1)
         self.frame.rowconfigure(0, weight=1)
 
-        # Paned window: top for controls, bottom for Command Preview + Output
+        # Paned window: top for controls, bottom for Command Preview
         paned = ttk.PanedWindow(self.frame, orient="vertical")
         paned.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
@@ -2364,6 +2541,7 @@ class PageWriteProtect(_ChipMixin):
 
         ttk.Label(control_frame, text="Select Chip:").grid(row=0, column=0, columnspan=3, pady=(0, 2))
         self.chip_var = tk.StringVar()
+        self.chip_var.trace_add("write", lambda *_: self.refresh_command_preview())
         if self.app:
             self.chip_var.trace("w", lambda *args: self.app.chip_status_var.set(self.chip_var.get() or "Not detected"))  # type: ignore
         self.chip_combo = ttk.Combobox(control_frame, textvariable=self.chip_var, width=38)
@@ -2409,72 +2587,36 @@ class PageWriteProtect(_ChipMixin):
 
         control_frame.columnconfigure(1, weight=1)
 
-        # Bottom pane: Command Preview + Output
+        # Bottom pane: Command Preview
         bottom_frame = ttk.Frame(paned)
         paned.add(bottom_frame, weight=1)
         bottom_frame.columnconfigure(0, weight=1)
-        bottom_frame.rowconfigure(2, weight=1)
 
         # Command Preview
         ttk.Label(bottom_frame, text="Command Preview:").grid(row=0, column=0, sticky="w", pady=(0, 2))
-        self.cmd_preview_var = tk.StringVar(value="flashrom -p <programmer> -c <chip> --wp-enable")
+        self.cmd_preview_var = tk.StringVar(value=_preview_wp_command(self.state.tool))
         ttk.Entry(bottom_frame, textvariable=self.cmd_preview_var, state="readonly", width=80).grid(
             row=0, column=1, sticky="ew", pady=(0, 2))
+        self.refresh_command_preview()
+        ttk.Label(
+            bottom_frame,
+            text="Output is unified into the Global Log panel below.",
+            style="Status.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
-        # Output
-        ttk.Label(bottom_frame, text="Output Log:").grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 2))
-        self.output_text = tk.Text(bottom_frame, height=4, width=80, state="disabled")
-        self.output_text.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 4))
-
-        scrollbar = ttk.Scrollbar(bottom_frame, orient="vertical", command=self.output_text.yview)
-        scrollbar.grid(row=2, column=2, sticky="ns")
-        self.output_text.config(yscrollcommand=scrollbar.set)
-
-        btn_frame = ttk.Frame(bottom_frame)
-        btn_frame.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        ttk.Button(btn_frame, text="Clear Log", command=self._clear_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Copy Log", command=self._copy_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Save Log", command=self._save_output).pack(side="left", padx=2)
-
-    def _clear_output(self) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.delete("1.0", "end")
-        self.output_text.config(state="disabled")
-
-    def _copy_output(self) -> None:
-        try:
-            content = self.output_text.get("1.0", "end-1c")
-            self.root.clipboard_clear()
-            self.root.clipboard_append(content)
-            self.log.append("Log copied to clipboard.")
-        except Exception as e:
-            self.log.append(f"ERROR: Failed to copy log: {e}")
-
-    def _save_output(self) -> None:
-        content = self.output_text.get("1.0", "end-1c")
-        if not content.strip():
-            self.log.append("ERROR: No log content to save.")
-            return
-        p = filedialog.asksaveasfilename(
-            initialdir=self.state.workspace_dir or os.path.dirname(os.path.abspath(__file__)),
-            defaultextension=".txt",
-            filetypes=[("Text", "*.txt"), ("All", "*.*")],
+    def refresh_command_preview(self) -> None:
+        self.cmd_preview_var.set(
+            _render_preview_command(
+                _preview_wp_command(self.state.tool),
+                programmer=self.state.programmer,
+                chip=self.chip_var.get(),
+            )
         )
-        if p:
-            try:
-                with open(p, "w") as f:
-                    f.write(content)
-                self.log.append(f"Log saved to: {p}")
-            except Exception as e:
-                self.log.append(f"ERROR: Failed to save log: {e}")
-
-    def _append_output(self, text: str) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.insert("end", text + "\n")
-        self.output_text.see("end")
-        self.output_text.config(state="disabled")
 
     def _wp(self, flag: str) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append("ERROR: Write-Protect controls are not supported in minipro mode.")
+            return
         chip = self.chip_var.get().strip()
         if not chip or not self.state.programmer:
             self.log.append("ERROR: Select programmer and detect chip first.")
@@ -2483,6 +2625,9 @@ class PageWriteProtect(_ChipMixin):
         self._run_cmd(cmd)
 
     def _wp_range(self) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append("ERROR: Write-Protect controls are not supported in minipro mode.")
+            return
         chip = self.chip_var.get().strip()
         rng = self.wp_range_var.get().strip()
         if not chip or not self.state.programmer or not rng:
@@ -2492,6 +2637,9 @@ class PageWriteProtect(_ChipMixin):
         self._run_cmd(cmd)
 
     def _wp_region(self) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append("ERROR: Write-Protect controls are not supported in minipro mode.")
+            return
         chip = self.chip_var.get().strip()
         region = self.wp_region_var.get().strip()
         if not chip or not self.state.programmer or not region:
@@ -2554,7 +2702,7 @@ class PageInfo(_ChipMixin):
         self.frame.columnconfigure(0, weight=1)
         self.frame.rowconfigure(0, weight=1)
 
-        # Paned window: top for controls, bottom for Command Preview + Output
+        # Paned window: top for controls, bottom for Command Preview
         paned = ttk.PanedWindow(self.frame, orient="vertical")
         paned.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
@@ -2564,6 +2712,7 @@ class PageInfo(_ChipMixin):
 
         ttk.Label(control_frame, text="Select Chip:").grid(row=0, column=0, columnspan=3, pady=(0, 2))
         self.chip_var = tk.StringVar()
+        self.chip_var.trace_add("write", lambda *_: self.refresh_command_preview())
         if self.app:
             self.chip_var.trace("w", lambda *args: self.app.chip_status_var.set(self.chip_var.get() or "Not detected"))  # type: ignore
         self.chip_combo = ttk.Combobox(control_frame, textvariable=self.chip_var, width=38)
@@ -2580,7 +2729,7 @@ class PageInfo(_ChipMixin):
         self.tree.column("v", width=260)
         self.tree.grid(row=3, column=0, columnspan=3, sticky="nsew")
 
-        for prop in ("Model", "Vendor", "Size", "Write Protection"):
+        for prop in ("Model", "Vendor", "Size", "Chip ID", "Write Protection"):
             self.tree.insert("", "end", text=prop, values=("",))
 
         self.progress = _ProgressFrame(control_frame, length=300)
@@ -2588,70 +2737,31 @@ class PageInfo(_ChipMixin):
         control_frame.columnconfigure(0, weight=1)
         control_frame.rowconfigure(3, weight=1)
 
-        # Bottom pane: Command Preview + Output
+        # Bottom pane: Command Preview
         bottom_frame = ttk.Frame(paned)
         paned.add(bottom_frame, weight=1)
         bottom_frame.columnconfigure(0, weight=1)
-        bottom_frame.rowconfigure(2, weight=1)
 
         # Command Preview
         ttk.Label(bottom_frame, text="Command Preview:").grid(row=0, column=0, sticky="w", pady=(0, 2))
-        self.cmd_preview_var = tk.StringVar(value="flashrom -p <programmer> --flash-name | grep -i <chip>")
+        self.cmd_preview_var = tk.StringVar(value=_preview_info_command(self.state.tool))
         ttk.Entry(bottom_frame, textvariable=self.cmd_preview_var, state="readonly", width=80).grid(
             row=0, column=1, sticky="ew", pady=(0, 2))
+        self.refresh_command_preview()
+        ttk.Label(
+            bottom_frame,
+            text="Output is unified into the Global Log panel below.",
+            style="Status.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
-        # Output
-        ttk.Label(bottom_frame, text="Output Log:").grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 2))
-        self.output_text = tk.Text(bottom_frame, height=4, width=80, state="disabled")
-        self.output_text.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 4))
-
-        scrollbar = ttk.Scrollbar(bottom_frame, orient="vertical", command=self.output_text.yview)
-        scrollbar.grid(row=2, column=2, sticky="ns")
-        self.output_text.config(yscrollcommand=scrollbar.set)
-
-        btn_frame = ttk.Frame(bottom_frame)
-        btn_frame.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        ttk.Button(btn_frame, text="Clear Log", command=self._clear_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Copy Log", command=self._copy_output).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="Save Log", command=self._save_output).pack(side="left", padx=2)
-
-    def _clear_output(self) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.delete("1.0", "end")
-        self.output_text.config(state="disabled")
-
-    def _copy_output(self) -> None:
-        try:
-            content = self.output_text.get("1.0", "end-1c")
-            self.root.clipboard_clear()
-            self.root.clipboard_append(content)
-            self.log.append("Log copied to clipboard.")
-        except Exception as e:
-            self.log.append(f"ERROR: Failed to copy log: {e}")
-
-    def _save_output(self) -> None:
-        content = self.output_text.get("1.0", "end-1c")
-        if not content.strip():
-            self.log.append("ERROR: No log content to save.")
-            return
-        p = filedialog.asksaveasfilename(
-            initialdir=self.state.workspace_dir or os.path.dirname(os.path.abspath(__file__)),
-            defaultextension=".txt",
-            filetypes=[("Text", "*.txt"), ("All", "*.*")],
+    def refresh_command_preview(self) -> None:
+        self.cmd_preview_var.set(
+            _render_preview_command(
+                _preview_info_command(self.state.tool),
+                programmer=self.state.programmer,
+                chip=self.chip_var.get(),
+            )
         )
-        if p:
-            try:
-                with open(p, "w") as f:
-                    f.write(content)
-                self.log.append(f"Log saved to: {p}")
-            except Exception as e:
-                self.log.append(f"ERROR: Failed to save log: {e}")
-
-    def _append_output(self, text: str) -> None:
-        self.output_text.config(state="normal")
-        self.output_text.insert("end", text + "\n")
-        self.output_text.see("end")
-        self.output_text.config(state="disabled")
 
     def _read_info(self) -> None:
         chip = self.chip_var.get().strip()
@@ -2690,10 +2800,28 @@ class PageInfo(_ChipMixin):
             vendor = "N/A"
             model = "N/A"
             size_str = "N/A"
+            chip_id_text = "N/A"
             wp = "N/A"
 
             try:
-                if tool != "flashprog":
+                if _is_minipro_tool(tool, binary):
+                    try:
+                        proc = subprocess.run(
+                            [binary, "-p", chip, "-i"],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            errors="replace",
+                            timeout=60,
+                        )
+                        out_lines = ((proc.stdout or "") + (proc.stderr or "")).splitlines()
+                    except subprocess.TimeoutExpired:
+                        out_lines = []
+
+                    model, vendor, size_str = _parse_minipro_device_info(out_lines, chip)
+                    chip_id_text = _extract_chip_id_from_lines(out_lines)
+                    wp = "N/A"
+                elif tool != "flashprog":
                     # ── flashrom: single call to --wp-status gives Found line + WP ──
                     try:
                         proc = subprocess.run(
@@ -2705,6 +2833,13 @@ class PageInfo(_ChipMixin):
                         out_lines = []
 
                     vendor, model, size_str = _parse_chip_info(out_lines)
+                    chip_id_match = re.search(
+                        r"\bid(?:1|2)?\s*=\s*(0x[0-9a-fA-F]+|[0-9a-fA-F]{2,8})",
+                        "\n".join(out_lines),
+                        flags=re.IGNORECASE,
+                    )
+                    if chip_id_match:
+                        chip_id_text = chip_id_match.group(1)
 
                     wp_lines = [
                         ln for ln in out_lines
@@ -2727,19 +2862,597 @@ class PageInfo(_ChipMixin):
                         out_lines = []
 
                     vendor, model, size_str = _parse_chip_info(out_lines)
+                    chip_id_match = re.search(
+                        r"\bid(?:1|2)?\s*=\s*(0x[0-9a-fA-F]+|[0-9a-fA-F]{2,8})",
+                        "\n".join(out_lines),
+                        flags=re.IGNORECASE,
+                    )
+                    if chip_id_match:
+                        chip_id_text = chip_id_match.group(1)
                     wp = "N/A"
             except Exception as exc:
                 _safe_after(self.root, 0, lambda e=exc: self.log.append(f"ERROR: Failed to read chip info: {e}"))
 
-            _safe_after(self.root, 0, lambda: self._fill_info(model, vendor, size_str, wp))
+            _safe_after(self.root, 0, lambda: self._fill_info(model, vendor, size_str, chip_id_text, wp))
 
         threading.Thread(target=_worker, daemon=False).start()
 
-    def _fill_info(self, model: str, vendor: str, size: str, wp: str) -> None:
+    def _fill_info(self, model: str, vendor: str, size: str, chip_id: str, wp: str) -> None:
         self.progress.stop_reset()
-        values = [model, vendor, size, wp]
+        values = [model, vendor, size, chip_id, wp]
         for i, item in enumerate(self.tree.get_children()):
             self.tree.item(item, values=(values[i],))
+
+
+class PageHelpAbout:
+    def __init__(self, nb: ttk.Notebook, state: "AppState", log: _LogWidget, root: tk.Tk) -> None:
+        self.state = state
+        self.log = log
+        self.root = root
+
+        self.frame = ttk.Frame(nb)
+        nb.add(self.frame, text="Help & About")
+        self.frame.columnconfigure(0, weight=1)
+        self.frame.rowconfigure(3, weight=1)
+
+        title = ttk.Label(self.frame, text=f"flashgui {VERSION}", font=("", 14, "bold"))
+        title.grid(row=0, column=0, sticky="w", padx=10, pady=(10, 4))
+
+        summary = (
+            "Practical GUI frontend for flashrom/flashprog/minipro workflows.\n"
+            "Use this page for quick help links, release checks, and shortcut reminders."
+        )
+        ttk.Label(self.frame, text=summary, justify="left").grid(
+            row=1, column=0, sticky="w", padx=10, pady=(0, 10)
+        )
+
+        links = ttk.LabelFrame(self.frame, text="Shortcuts & Links", padding=8)
+        links.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 8))
+        links.columnconfigure(1, weight=1)
+
+        ttk.Label(links, text="F1").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        ttk.Label(links, text="Open Help & About page").grid(row=0, column=1, sticky="w")
+
+        ttk.Label(links, text="Ctrl+U").grid(row=1, column=0, sticky="w", padx=(0, 8))
+        ttk.Label(links, text="Open latest releases page").grid(row=1, column=1, sticky="w")
+
+        btn_row = ttk.Frame(links)
+        btn_row.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Button(btn_row, text="Open GitHub", command=self.open_project_home).pack(side="left", padx=(0, 6))
+        ttk.Button(btn_row, text="Latest Releases", command=self.open_releases).pack(side="left", padx=(0, 6))
+        ttk.Button(btn_row, text="flashrom docs", command=self.open_flashrom_docs).pack(side="left", padx=(0, 6))
+        ttk.Button(btn_row, text="Open README", command=lambda: self._open_local_file("README.md")).pack(side="left")
+
+        credits = tk.Text(self.frame, height=10, wrap="word", state="normal")
+        credits.grid(row=3, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        credits.insert(
+            "end",
+            "Thanks to:\n"
+            "- flashrom/flashrom\n"
+            "- SourceArcade/flashprog\n"
+            "- DavidGriffith/minipro (https://github.com/DavidGriffith/minipro) — actively maintained minipro ecosystem.\n"
+            "- Jazzzny/iFR\n"
+            "- KantBStoppd/FlashromGUI\n\n"
+            "This project is an independent frontend and is not affiliated with or endorsed by the "
+            "flashrom or flashprog maintainers."
+        )
+        credits.configure(state="disabled")
+
+    def _open_url(self, url: str, label: str) -> None:
+        try:
+            webbrowser.open(url)
+            self.log.append(f"Opened {label}: {url}")
+        except Exception as exc:
+            self.log.append(f"ERROR: Failed to open {label}: {exc}")
+
+    def _open_local_file(self, relative_path: str) -> None:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
+        if not os.path.isfile(p):
+            self.log.append(f"ERROR: Local file not found: {relative_path}")
+            return
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", p])
+            elif sys.platform.startswith("linux"):
+                subprocess.Popen(["xdg-open", p])
+            else:
+                startfile = getattr(os, "startfile", None)
+                if callable(startfile):
+                    startfile(p)
+                else:
+                    webbrowser.open(f"file:///{p.replace(os.sep, '/')}")
+            self.log.append(f"Opened local file: {p}")
+        except Exception as exc:
+            self.log.append(f"ERROR: Failed to open local file '{relative_path}': {exc}")
+
+    def open_project_home(self) -> None:
+        self._open_url("https://github.com/iCE-HACK3R/FlashGUI", "project home")
+
+    def open_releases(self) -> None:
+        self._open_url("https://github.com/iCE-HACK3R/FlashGUI/releases/latest", "latest releases")
+
+    def open_flashrom_docs(self) -> None:
+        self._open_url("https://www.flashrom.org/classic_cli_manpage.html", "flashrom docs")
+
+
+class PageTools:
+    def __init__(self, nb: ttk.Notebook, state: "AppState", log: _LogWidget, root: tk.Tk) -> None:
+        self.state = state
+        self.log = log
+        self.root = root
+
+        self.frame = ttk.Frame(nb)
+        nb.add(self.frame, text="Tools")
+        self.frame.columnconfigure(0, weight=1)
+        self.frame.rowconfigure(1, weight=1)
+
+        actions = ttk.LabelFrame(self.frame, text="Tool Actions", padding=8)
+        actions.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 6))
+
+        ttk.Button(actions, text="Binwalk Analyze", command=self._binwalk_analyze).grid(row=0, column=0, padx=3, pady=3, sticky="ew")
+        ttk.Button(actions, text="Binwalk Extract+Analyze", command=self._binwalk_extract_analyze).grid(row=0, column=1, padx=3, pady=3, sticky="ew")
+        ttk.Button(actions, text="Calculate Hashes", command=self._calculate_hashes).grid(row=0, column=2, padx=3, pady=3, sticky="ew")
+        ttk.Button(actions, text="Compare ROMs", command=self._compare_roms).grid(row=1, column=0, padx=3, pady=3, sticky="ew")
+        ttk.Button(actions, text="BIN → HEX", command=self._convert_bin_to_hex).grid(row=1, column=1, padx=3, pady=3, sticky="ew")
+        ttk.Button(actions, text="HEX → BIN", command=self._convert_hex_to_bin).grid(row=1, column=2, padx=3, pady=3, sticky="ew")
+        ttk.Button(actions, text="Diff Summary", command=self._diff_summary).grid(row=2, column=0, padx=3, pady=3, sticky="ew")
+        ttk.Button(actions, text="FwInfo", command=self._fwinfo_info).grid(row=2, column=1, padx=3, pady=3, sticky="ew")
+        ttk.Button(actions, text="FwInfo Update", command=self._fwinfo_update).grid(row=2, column=2, padx=3, pady=3, sticky="ew")
+
+        for c in range(3):
+            actions.columnconfigure(c, weight=1)
+
+        out = ttk.LabelFrame(self.frame, text="Tools Output", padding=8)
+        out.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        out.columnconfigure(0, weight=1)
+        out.rowconfigure(1, weight=1)
+
+        toolbar = ttk.Frame(out)
+        toolbar.grid(row=0, column=0, sticky="w", pady=(0, 4))
+        ttk.Button(toolbar, text="Clear", command=self._clear_output).pack(side="left", padx=(0, 4))
+        ttk.Button(toolbar, text="Copy", command=self._copy_output).pack(side="left")
+
+        self.output_text = tk.Text(out, height=12, wrap="word", state="disabled")
+        self.output_text.grid(row=1, column=0, sticky="nsew")
+        sc = ttk.Scrollbar(out, orient="vertical", command=self.output_text.yview)
+        sc.grid(row=1, column=1, sticky="ns")
+        self.output_text.config(yscrollcommand=sc.set)
+
+    def _append_output(self, text: str) -> None:
+        self.output_text.config(state="normal")
+        self.output_text.insert("end", text + "\n")
+        self.output_text.see("end")
+        self.output_text.config(state="disabled")
+
+    def _clear_output(self) -> None:
+        self.output_text.config(state="normal")
+        self.output_text.delete("1.0", "end")
+        self.output_text.config(state="disabled")
+
+    def _copy_output(self) -> None:
+        try:
+            content = self.output_text.get("1.0", "end-1c")
+            self.root.clipboard_clear()
+            self.root.clipboard_append(content)
+            self.log.append("Tools output copied to clipboard.")
+        except Exception as exc:
+            self.log.append(f"ERROR: Failed to copy tools output: {exc}")
+
+    def _pick_file(self, title: str = "Select file") -> str:
+        return filedialog.askopenfilename(
+            title=title,
+            initialdir=self.state.workspace_dir,
+            filetypes=[("Binary/Text", "*.bin *.rom *.hex *.txt"), ("All", "*.*")],
+        )
+
+    def _run_capture(self, cmd: list[str], timeout: int = 180) -> tuple[int, str]:
+        self.log.append(f"$ {' '.join(cmd)}")
+        try:
+            proc = subprocess.run(
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=timeout,
+            )
+            out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+            return proc.returncode, out
+        except Exception as exc:
+            return 1, f"ERROR: {exc}"
+
+    def _binwalk_analyze(self) -> None:
+        fp = self._pick_file("Select firmware image for Binwalk")
+        if not fp:
+            return
+        binwalk = shutil.which("binwalk")
+        if not binwalk:
+            msg = "ERROR: binwalk not found in PATH."
+            self.log.append(msg)
+            self._append_output(msg)
+            return
+        rc, out = self._run_capture([binwalk, fp], timeout=300)
+        self._append_output(f"[binwalk analyze] rc={rc}\n{out or '(no output)'}")
+
+    def _binwalk_extract_analyze(self) -> None:
+        fp = self._pick_file("Select firmware image for Binwalk extract")
+        if not fp:
+            return
+        binwalk = shutil.which("binwalk")
+        if not binwalk:
+            msg = "ERROR: binwalk not found in PATH."
+            self.log.append(msg)
+            self._append_output(msg)
+            return
+        rc, out = self._run_capture([binwalk, "-e", fp], timeout=600)
+        self._append_output(f"[binwalk extract+analyze] rc={rc}\n{out or '(no output)'}")
+
+    def _calculate_hashes(self) -> None:
+        fp = self._pick_file("Select file for hash calculation")
+        if not fp:
+            return
+        try:
+            md5 = hashlib.md5()
+            sha256 = hashlib.sha256()
+            sha512 = hashlib.sha512()
+            with open(fp, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    md5.update(chunk)
+                    sha256.update(chunk)
+                    sha512.update(chunk)
+            lines = [
+                f"File: {fp}",
+                f"MD5:    {md5.hexdigest()}",
+                f"SHA256: {sha256.hexdigest()}",
+                f"SHA512: {sha512.hexdigest()}",
+            ]
+            self._append_output("[hash]\n" + "\n".join(lines))
+            self.log.append(f"Computed hashes for {os.path.basename(fp)}")
+        except Exception as exc:
+            self.log.append(f"ERROR: Hash calculation failed: {exc}")
+
+    def _compare_roms(self) -> None:
+        a = self._pick_file("Select first file to compare")
+        if not a:
+            return
+        b = self._pick_file("Select second file to compare")
+        if not b:
+            return
+        try:
+            size_a = os.path.getsize(a)
+            size_b = os.path.getsize(b)
+            mismatch_at = -1
+            with open(a, "rb") as fa, open(b, "rb") as fb:
+                offset = 0
+                while True:
+                    ca = fa.read(65536)
+                    cb = fb.read(65536)
+                    if not ca and not cb:
+                        break
+                    if ca != cb:
+                        lim = min(len(ca), len(cb))
+                        for i in range(lim):
+                            if ca[i] != cb[i]:
+                                mismatch_at = offset + i
+                                break
+                        if mismatch_at < 0 and len(ca) != len(cb):
+                            mismatch_at = offset + lim
+                        break
+                    offset += len(ca)
+            if mismatch_at < 0 and size_a == size_b:
+                self._append_output(f"[compare] MATCH\n{a}\n{b}")
+            else:
+                self._append_output(
+                    f"[compare] DIFFER\n{a}\n{b}\nsizeA={size_a}, sizeB={size_b}, first_mismatch_offset={mismatch_at}"
+                )
+        except Exception as exc:
+            self.log.append(f"ERROR: Compare failed: {exc}")
+
+    def _convert_bin_to_hex(self) -> None:
+        src = self._pick_file("Select BIN/ROM file")
+        if not src:
+            return
+        dst = filedialog.asksaveasfilename(
+            title="Save HEX text file",
+            initialdir=self.state.workspace_dir,
+            defaultextension=".hex.txt",
+            filetypes=[("Hex Text", "*.hex.txt *.txt"), ("All", "*.*")],
+        )
+        if not dst:
+            return
+        try:
+            with open(src, "rb") as f:
+                data = f.read()
+            with open(dst, "w", encoding="utf-8") as out:
+                out.write(data.hex())
+            self._append_output(f"[convert] BIN→HEX\n{src}\n->\n{dst}")
+        except Exception as exc:
+            self.log.append(f"ERROR: BIN→HEX conversion failed: {exc}")
+
+    def _convert_hex_to_bin(self) -> None:
+        src = self._pick_file("Select HEX text file")
+        if not src:
+            return
+        dst = filedialog.asksaveasfilename(
+            title="Save BIN file",
+            initialdir=self.state.workspace_dir,
+            defaultextension=".bin",
+            filetypes=[("Binary", "*.bin"), ("All", "*.*")],
+        )
+        if not dst:
+            return
+        try:
+            with open(src, "r", encoding="utf-8") as f:
+                raw = f.read()
+            cleaned = re.sub(r"[^0-9a-fA-F]", "", raw)
+            if len(cleaned) % 2 != 0:
+                cleaned = "0" + cleaned
+            data = bytes.fromhex(cleaned)
+            with open(dst, "wb") as out:
+                out.write(data)
+            self._append_output(f"[convert] HEX→BIN\n{src}\n->\n{dst}")
+        except Exception as exc:
+            self.log.append(f"ERROR: HEX→BIN conversion failed: {exc}")
+
+    def _diff_summary(self) -> None:
+        a = self._pick_file("Select first file for diff summary")
+        if not a:
+            return
+        b = self._pick_file("Select second file for diff summary")
+        if not b:
+            return
+        try:
+            with open(a, "rb") as fa, open(b, "rb") as fb:
+                da = fa.read()
+                db = fb.read()
+            limit = min(len(da), len(db))
+            mismatch_offsets: list[int] = []
+            for i in range(limit):
+                if da[i] != db[i]:
+                    mismatch_offsets.append(i)
+                    if len(mismatch_offsets) >= 16:
+                        break
+            if len(da) != len(db) and len(mismatch_offsets) < 16:
+                mismatch_offsets.append(limit)
+            if mismatch_offsets:
+                summary = ", ".join(hex(x) for x in mismatch_offsets)
+                self._append_output(f"[diff] first mismatch offsets: {summary}")
+            else:
+                self._append_output("[diff] no mismatches found")
+        except Exception as exc:
+            self.log.append(f"ERROR: Diff summary failed: {exc}")
+
+    def _fwinfo_binary(self) -> str:
+        return self.state.fwinfo_bin or _resolve_binary("fwinfo", "FLASHGUI_FWINFO_BIN")
+
+    def _fwinfo_info(self) -> None:
+        fw = self._fwinfo_binary()
+        if not shutil.which(fw) and not os.path.isfile(fw):
+            msg = f"ERROR: fwinfo binary not found: {fw}"
+            self.log.append(msg)
+            self._append_output(msg)
+            return
+        rc, out = self._run_capture([fw, "--help"], timeout=60)
+        self._append_output(f"[fwinfo] rc={rc}\n{out or '(no output)'}")
+
+    def _fwinfo_update(self) -> None:
+        fw = self._fwinfo_binary()
+        if not shutil.which(fw) and not os.path.isfile(fw):
+            msg = f"ERROR: fwinfo binary not found: {fw}"
+            self.log.append(msg)
+            self._append_output(msg)
+            return
+        rc, out = self._run_capture([fw, "--version"], timeout=60)
+        self._append_output(f"[fwinfo update check] rc={rc}\n{out or '(no output)'}")
+
+
+class PageSerialConsole:
+    def __init__(self, nb: ttk.Notebook, state: "AppState", log: _LogWidget, root: tk.Tk) -> None:
+        self.state = state
+        self.log = log
+        self.root = root
+        self._serial_conn: Any | None = None
+        self._reader_thread: threading.Thread | None = None
+        self._reader_stop = threading.Event()
+        self._rx_queue: queue.Queue[str] = queue.Queue()
+
+        self.frame = ttk.Frame(nb)
+        nb.add(self.frame, text="Serial Console")
+        self.frame.columnconfigure(0, weight=1)
+        self.frame.rowconfigure(2, weight=1)
+
+        ctrl = ttk.LabelFrame(self.frame, text="Connection", padding=8)
+        ctrl.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 6))
+        ctrl.columnconfigure(1, weight=1)
+
+        ttk.Label(ctrl, text="Port:").grid(row=0, column=0, sticky="w")
+        self.port_var = tk.StringVar()
+        self.port_combo = ttk.Combobox(ctrl, textvariable=self.port_var, width=26)
+        self.port_combo.grid(row=0, column=1, sticky="ew", padx=(4, 6))
+        ttk.Button(ctrl, text="Refresh", command=self._refresh_ports).grid(row=0, column=2, padx=(0, 4))
+
+        ttk.Label(ctrl, text="Baud:").grid(row=0, column=3, sticky="w")
+        self.baud_var = tk.StringVar(value="115200")
+        self.baud_combo = ttk.Combobox(
+            ctrl,
+            textvariable=self.baud_var,
+            values=["9600", "19200", "38400", "57600", "115200", "230400"],
+            width=10,
+        )
+        self.baud_combo.grid(row=0, column=4, sticky="w", padx=(4, 6))
+
+        self.connect_btn = ttk.Button(ctrl, text="Connect", command=self._connect)
+        self.connect_btn.grid(row=0, column=5, padx=(0, 4))
+        self.disconnect_btn = ttk.Button(ctrl, text="Disconnect", command=self._disconnect, state="disabled")
+        self.disconnect_btn.grid(row=0, column=6)
+
+        self.serial_status_var = tk.StringVar(value="Serial status: disconnected")
+        ttk.Label(ctrl, textvariable=self.serial_status_var).grid(row=1, column=0, columnspan=7, sticky="w", pady=(6, 0))
+
+        tx = ttk.LabelFrame(self.frame, text="Transmit", padding=8)
+        tx.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 6))
+        tx.columnconfigure(0, weight=1)
+        self.tx_var = tk.StringVar()
+        self.tx_entry = ttk.Entry(tx, textvariable=self.tx_var)
+        self.tx_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        self.send_btn = ttk.Button(tx, text="Send", command=self._send, state="disabled")
+        self.send_btn.grid(row=0, column=1)
+        self.tx_entry.bind("<Return>", self._send)
+
+        rx = ttk.LabelFrame(self.frame, text="Receive / Console", padding=8)
+        rx.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        rx.columnconfigure(0, weight=1)
+        rx.rowconfigure(1, weight=1)
+
+        tb = ttk.Frame(rx)
+        tb.grid(row=0, column=0, sticky="w", pady=(0, 4))
+        ttk.Button(tb, text="Clear", command=self._clear_rx).pack(side="left", padx=(0, 4))
+        ttk.Button(tb, text="Copy", command=self._copy_rx).pack(side="left")
+
+        self.rx_text = tk.Text(rx, wrap="word", state="disabled", height=12)
+        self.rx_text.grid(row=1, column=0, sticky="nsew")
+        sc = ttk.Scrollbar(rx, orient="vertical", command=self.rx_text.yview)
+        sc.grid(row=1, column=1, sticky="ns")
+        self.rx_text.config(yscrollcommand=sc.set)
+
+        if not SERIAL_AVAILABLE:
+            self.serial_status_var.set("Serial status: pyserial not installed; console disabled")
+            self.port_combo.configure(state="disabled")
+            self.baud_combo.configure(state="disabled")
+            self.connect_btn.configure(state="disabled")
+            self.disconnect_btn.configure(state="disabled")
+            self.send_btn.configure(state="disabled")
+            self.tx_entry.configure(state="disabled")
+            self.log.append("WARNING: pyserial not available — Serial Console disabled.")
+        else:
+            self._refresh_ports()
+            self._poll_rx_queue()
+
+    def _append_rx(self, text: str) -> None:
+        self.rx_text.config(state="normal")
+        self.rx_text.insert("end", text + "\n")
+        self.rx_text.see("end")
+        self.rx_text.config(state="disabled")
+
+    def _clear_rx(self) -> None:
+        self.rx_text.config(state="normal")
+        self.rx_text.delete("1.0", "end")
+        self.rx_text.config(state="disabled")
+
+    def _copy_rx(self) -> None:
+        try:
+            content = self.rx_text.get("1.0", "end-1c")
+            self.root.clipboard_clear()
+            self.root.clipboard_append(content)
+            self.log.append("Serial console output copied to clipboard.")
+        except Exception as exc:
+            self.log.append(f"ERROR: Failed to copy serial console output: {exc}")
+
+    def _refresh_ports(self) -> None:
+        if not SERIAL_AVAILABLE:
+            return
+        try:
+            ports = [p.device for p in list_ports.comports()]  # type: ignore[union-attr]
+        except Exception as exc:
+            self.log.append(f"WARNING: Failed to refresh serial ports: {exc}")
+            ports = []
+        self.port_combo["values"] = ports
+        if ports and not self.port_var.get().strip():
+            self.port_var.set(ports[0])
+        if not ports:
+            self.serial_status_var.set("Serial status: no ports detected")
+
+    def _connect(self) -> None:
+        if not SERIAL_AVAILABLE:
+            return
+        port = self.port_var.get().strip()
+        if not port:
+            self.log.append("ERROR: Select a serial port first.")
+            return
+        try:
+            baud = int(self.baud_var.get().strip() or "115200")
+        except ValueError:
+            self.log.append("ERROR: Invalid baud rate.")
+            return
+        try:
+            conn = serial.Serial(port=port, baudrate=baud, timeout=0.2)  # type: ignore[attr-defined]
+        except Exception as exc:
+            self.log.append(f"ERROR: Failed to connect serial port {port}: {exc}")
+            self.serial_status_var.set(f"Serial status: connect failed ({port})")
+            return
+
+        self._serial_conn = conn
+        self._reader_stop.clear()
+        self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
+        self._reader_thread.start()
+
+        self.connect_btn.configure(state="disabled")
+        self.disconnect_btn.configure(state="normal")
+        self.send_btn.configure(state="normal")
+        self.serial_status_var.set(f"Serial status: connected {port} @ {baud}")
+        self.log.append(f"Serial connected: {port} @ {baud}")
+
+    def _disconnect(self) -> None:
+        self._reader_stop.set()
+        conn = self._serial_conn
+        self._serial_conn = None
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        self.connect_btn.configure(state="normal")
+        self.disconnect_btn.configure(state="disabled")
+        self.send_btn.configure(state="disabled")
+        self.serial_status_var.set("Serial status: disconnected")
+        self.log.append("Serial disconnected.")
+
+    def _reader_loop(self) -> None:
+        while not self._reader_stop.is_set():
+            conn = self._serial_conn
+            if conn is None:
+                break
+            try:
+                data = conn.readline()
+            except Exception as exc:
+                self._rx_queue.put(f"[error] serial read failed: {exc}")
+                break
+            if not data:
+                continue
+            try:
+                text = data.decode("utf-8", errors="replace").rstrip("\r\n")
+            except Exception:
+                text = repr(data)
+            if text:
+                self._rx_queue.put(text)
+
+    def _poll_rx_queue(self) -> None:
+        try:
+            while True:
+                line = self._rx_queue.get_nowait()
+                self._append_rx(line)
+        except queue.Empty:
+            pass
+        _safe_after(self.root, 100, self._poll_rx_queue)
+
+    def _send(self, _event: object = None) -> None:
+        conn = self._serial_conn
+        if conn is None:
+            self.log.append("ERROR: Serial is not connected.")
+            return
+        payload = self.tx_var.get()
+        if payload == "":
+            return
+        try:
+            data = (payload + "\n").encode("utf-8", errors="replace")
+            conn.write(data)
+            self._append_rx(f"> {payload}")
+            self.tx_var.set("")
+        except Exception as exc:
+            self.log.append(f"ERROR: Serial send failed: {exc}")
+
+    def shutdown(self) -> None:
+        self._disconnect()
 
 
 class PageSettings:
@@ -2808,23 +3521,39 @@ class PageSettings:
                    command=lambda: self._browse_binary(self.flashprog_var, "Select flashprog binary")
                    ).grid(row=3, column=2, columnspan=2, pady=3)
 
+        ttk.Label(lf1, text="minipro binary:").grid(row=4, column=0, sticky="e", pady=3)
+        self.minipro_var = tk.StringVar(value=self.state.minipro_bin)
+        ttk.Entry(lf1, textvariable=self.minipro_var, width=50).grid(row=4, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8,
+               command=lambda: self._browse_binary(self.minipro_var, "Select minipro binary")
+               ).grid(row=4, column=2, columnspan=2, pady=3)
+
+        ttk.Label(lf1, text="fwinfo binary:").grid(row=5, column=0, sticky="e", pady=3)
+        self.fwinfo_var = tk.StringVar(value=self.state.fwinfo_bin)
+        ttk.Entry(lf1, textvariable=self.fwinfo_var, width=50).grid(row=5, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8,
+               command=lambda: self._browse_binary(self.fwinfo_var, "Select fwinfo binary")
+               ).grid(row=5, column=2, columnspan=2, pady=3)
+
         self.flashrom_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
         self.flashprog_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
+        self.minipro_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
+        self.fwinfo_var.trace_add("write", lambda *args: self._refresh_system_fix_buttons())
 
-        ttk.Label(lf1, text="Workspace path:").grid(row=4, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="Workspace path:").grid(row=6, column=0, sticky="e", pady=3)
         self.workspace_var = tk.StringVar(value=self.state.workspace_dir)
-        ttk.Entry(lf1, textvariable=self.workspace_var, width=50).grid(row=4, column=1, sticky="ew", padx=(6, 4), pady=3)
-        ttk.Button(lf1, text="Browse", width=8, command=self._browse_workspace).grid(row=4, column=2, columnspan=2, pady=3)
+        ttk.Entry(lf1, textvariable=self.workspace_var, width=50).grid(row=6, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8, command=self._browse_workspace).grid(row=6, column=2, columnspan=2, pady=3)
 
-        ttk.Label(lf1, text="Window geometry:").grid(row=5, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="Window geometry:").grid(row=7, column=0, sticky="e", pady=3)
         self.geometry_var = tk.StringVar(value=self.state.window_geometry or self.app.root.geometry())
-        ttk.Entry(lf1, textvariable=self.geometry_var, width=50).grid(row=5, column=1, sticky="ew", padx=(6, 4), pady=3)
-        ttk.Button(lf1, text="Acquire", width=8, command=self._capture_geometry).grid(row=5, column=2, columnspan=2, pady=3)
+        ttk.Entry(lf1, textvariable=self.geometry_var, width=50).grid(row=7, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Acquire", width=8, command=self._capture_geometry).grid(row=7, column=2, columnspan=2, pady=3)
 
-        ttk.Label(lf1, text="Log file path:").grid(row=6, column=0, sticky="e", pady=3)
+        ttk.Label(lf1, text="Log file path:").grid(row=8, column=0, sticky="e", pady=3)
         self.log_file_var = tk.StringVar(value=self.state.log_file_path)
-        ttk.Entry(lf1, textvariable=self.log_file_var, width=50).grid(row=6, column=1, sticky="ew", padx=(6, 4), pady=3)
-        ttk.Button(lf1, text="Browse", width=8, command=self._browse_log_file).grid(row=6, column=2, columnspan=2, pady=3)
+        ttk.Entry(lf1, textvariable=self.log_file_var, width=50).grid(row=8, column=1, sticky="ew", padx=(6, 4), pady=3)
+        ttk.Button(lf1, text="Browse", width=8, command=self._browse_log_file).grid(row=8, column=2, columnspan=2, pady=3)
 
         # ── Behavior ─────────────────────────────────────────────────────────
         lf2 = ttk.LabelFrame(outer, text="Behavior", padding=6)
@@ -3828,6 +4557,8 @@ class PageSettings:
             "font_size": self.font_size_var.get(),
             "flashrom_bin": self.flashrom_var.get(),
             "flashprog_bin": self.flashprog_var.get(),
+            "minipro_bin": self.minipro_var.get(),
+            "fwinfo_bin": self.fwinfo_var.get(),
             "workspace_dir": self.workspace_var.get(),
             "window_geometry": self.geometry_var.get(),
             "log_file_path": self.log_file_var.get(),
@@ -3868,6 +4599,8 @@ class PageSettings:
             pass
         self.flashrom_var.set(str(data.get("flashrom_bin", "")))
         self.flashprog_var.set(str(data.get("flashprog_bin", "")))
+        self.minipro_var.set(str(data.get("minipro_bin", "")))
+        self.fwinfo_var.set(str(data.get("fwinfo_bin", "")))
         self.workspace_var.set(str(data.get("workspace_dir", self.state.workspace_dir)))
         self.geometry_var.set(str(data.get("window_geometry", "")))
         self.log_file_var.set(str(data.get("log_file_path", "")))
@@ -3894,6 +4627,8 @@ class PageSettings:
         self.font_var.set(_FONT_PRESETS[0] if _FONT_PRESETS else "")
         self.flashrom_var.set("")
         self.flashprog_var.set("")
+        self.minipro_var.set("")
+        self.fwinfo_var.set("")
         self.workspace_var.set(script_dir)
         self.geometry_var.set("")
         self.log_file_var.set(os.path.join(script_dir, "flashgui.log"))
@@ -3919,6 +4654,8 @@ class PageSettings:
             self.state.beep_on_complete = self.beep_var.get()
             self.state.flashrom_bin   = self.flashrom_var.get().strip()
             self.state.flashprog_bin  = self.flashprog_var.get().strip()
+            self.state.minipro_bin    = self.minipro_var.get().strip()
+            self.state.fwinfo_bin     = self.fwinfo_var.get().strip()
 
             workspace = self.workspace_var.get().strip()
             if workspace:
@@ -3991,11 +4728,13 @@ class AppState:
         self.settings = _load_settings(self.settings_path)
 
         self.tool = str(self.settings.get("tool", "flashrom"))
-        if self.tool not in {"flashrom", "flashprog"}:
+        if self.tool not in {"flashrom", "flashprog", "minipro"}:
             self.tool = "flashrom"
 
         self.flashrom_bin   = str(self.settings.get("flashrom_bin",  "")).strip()
         self.flashprog_bin  = str(self.settings.get("flashprog_bin", "")).strip()
+        self.minipro_bin    = str(self.settings.get("minipro_bin", "")).strip()
+        self.fwinfo_bin     = str(self.settings.get("fwinfo_bin", "")).strip()
         self.workspace_dir  = (
             str(self.settings.get("workspace_dir", "")).strip()
             or os.path.dirname(os.path.abspath(__file__))
@@ -4009,6 +4748,12 @@ class AppState:
         self.log_file_path   = str(self.settings.get("log_file_path",   "")).strip()
         if not self.log_file_path:
             self.log_file_path = os.path.join(self.workspace_dir, "flashgui.log")
+        self.log_font = str(self.settings.get("log_font", "")).strip()
+        try:
+            self.log_font_size = max(8, int(str(self.settings.get("log_font_size", 10)).strip() or "10"))
+        except (TypeError, ValueError):
+            self.log_font_size = 10
+        self.log_verbose = _as_bool(self.settings.get("log_verbose", True), True)
 
         self.use_sudo               = _as_bool(self.settings.get("use_sudo", False), False)
         self.auto_detect_programmer = _as_bool(self.settings.get("auto_detect_programmer", False), False)
@@ -4024,9 +4769,7 @@ class AppState:
 
         self.binary     = self.resolve_tool_binary(self.tool)
         self.programmer = ""
-        _tmpdir_parent = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-        os.makedirs(_tmpdir_parent, exist_ok=True)
-        self.tmpdir     = tempfile.mkdtemp(prefix="flashgui_", dir=_tmpdir_parent)
+        self.tmpdir     = tempfile.mkdtemp()
         self._load_sudo_keyring()
 
     def _load_sudo_keyring(self) -> None:
@@ -4041,25 +4784,28 @@ class AppState:
 
     def resolve_tool_binary(self, tool: str) -> str:
         if tool == "flashrom":
-            configured = self.flashrom_bin
-            if configured and _is_safe_binary_path(configured):
-                return configured
-            return _resolve_binary("flashrom", "FLASHGUI_FLASHROM_BIN")
-        configured = self.flashprog_bin
-        if configured and _is_safe_binary_path(configured):
-            return configured
-        return _resolve_binary("flashprog", "FLASHGUI_FLASHPROG_BIN")
+            return self.flashrom_bin or _resolve_binary("flashrom", "FLASHGUI_FLASHROM_BIN")
+        if tool == "flashprog":
+            return self.flashprog_bin or _resolve_binary("flashprog", "FLASHGUI_FLASHPROG_BIN")
+        if tool == "minipro":
+            return self.minipro_bin or _resolve_binary("minipro", "FLASHGUI_MINIPRO_BIN")
+        return tool
 
     def save_settings(self, geometry: str | None = None) -> None:
         data: dict[str, object] = {
             "tool":                   self.tool,
             "flashrom_bin":           self.flashrom_bin,
             "flashprog_bin":          self.flashprog_bin,
+            "minipro_bin":            self.minipro_bin,
+            "fwinfo_bin":             self.fwinfo_bin,
             "workspace_dir":          self.workspace_dir,
             "preferred_font":         self.preferred_font,
             "font_size":              self.font_size,
             "window_geometry":        geometry if geometry is not None else self.window_geometry,
             "log_file_path":          self.log_file_path,
+            "log_font":               self.log_font,
+            "log_font_size":          self.log_font_size,
+            "log_verbose":            self.log_verbose,
             "use_sudo":               self.use_sudo,
             "auto_detect_programmer": self.auto_detect_programmer,
             "theme":                  self.theme,
@@ -4072,6 +4818,21 @@ class AppState:
         self.settings = data
 
 
+def _startup_runtime_log_lines(state: AppState) -> list[str]:
+    os_name = platform.system().strip() or sys.platform
+    flashrom_bin = state.resolve_tool_binary("flashrom")
+    flashprog_bin = state.resolve_tool_binary("flashprog")
+    minipro_bin = state.resolve_tool_binary("minipro")
+    fwinfo_bin = state.fwinfo_bin or _resolve_binary("fwinfo", "FLASHGUI_FWINFO_BIN")
+    return [
+        f"OS Detected: {os_name}",
+        f"Using Binary for flashrom: {flashrom_bin}",
+        f"Using Binary for flashprog: {flashprog_bin}",
+        f"Using Binary for minipro: {minipro_bin}",
+        f"Using Binary for fwinfo: {fwinfo_bin}",
+    ]
+
+
 # ────────────────────────── main window ───────────────────────────────────────
 
 class FlashGUI:
@@ -4079,6 +4840,8 @@ class FlashGUI:
         self.root = tk.Tk()
         _install_embedded_font()
         self._log_io_error_once = False
+        self._programmer_manual_override = False
+        self._programmer_updating = False
         self.state = AppState()
         _set_preferred_mono_font(self.state.preferred_font)
         self.style = ttk.Style(self.root)
@@ -4109,32 +4872,99 @@ class FlashGUI:
 
         self._build_toolbar()
         self._build_main_content()
-        
-        # Create a silent log object for backward compatibility (not displayed, but needed for API)
-        _dummy_log_frame = ttk.Frame(self.root)  # invisible, never gridded
-        self.log = _LogWidget(_dummy_log_frame, height=0, line_sink=self._write_log_line)
-        
+        self._build_global_log_panel()
         self._build_status_bar()
         self._apply_layout_mode(silent=True)
         self._apply_theme_visuals(self.style.theme_use())
         self._apply_gui_font(self.state.preferred_font, self.state.font_size, allow_download=False)
+        self._apply_log_controls(persist=False)
 
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=1)
-        self.root.rowconfigure(3, weight=0)  # status bar
+        self.root.rowconfigure(2, weight=0)  # status bar
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._bind_global_shortcuts()
 
         self._boot()
+
+    def _bind_global_shortcuts(self) -> None:
+        self.root.bind("<F1>", self._on_help_shortcut)
+        self.root.bind("<Control-u>", self._on_update_shortcut)
+
+    def _on_help_shortcut(self, _event: object = None) -> None:
+        self._show_page("help")
+        self.log.append("Shortcut: opened Help & About page (F1).")
+
+    def _on_update_shortcut(self, _event: object = None) -> None:
+        self._show_page("help")
+        page = getattr(self, "page_help", None)
+        if page is not None and hasattr(page, "open_releases"):
+            page.open_releases()
+        else:
+            webbrowser.open("https://github.com/iCE-HACK3R/FlashGUI/releases/latest")
+        self.log.append("Shortcut: opened latest releases page (Ctrl+U).")
+
+    def _build_global_log_panel(self) -> None:
+        panel = ttk.LabelFrame(self.body_paned, text="Global Log", padding=6)
+        panel.columnconfigure(0, weight=1)
+        panel.rowconfigure(1, weight=1)
+
+        controls = ttk.Frame(panel)
+        controls.grid(row=0, column=0, sticky="ew", pady=(0, 4))
+
+        available_fonts = sorted(set(_tkfont.families()))
+        control_fonts = [f for f in _FONT_PRESETS if f not in available_fonts] + available_fonts
+        default_log_font = self.state.log_font or self.state.preferred_font or (_FONT_PRESETS[0] if _FONT_PRESETS else "")
+
+        self.log_font_var = tk.StringVar(value=default_log_font)
+        self.log_font_size_var = tk.IntVar(value=self.state.log_font_size)
+        self.log_verbose_var = tk.BooleanVar(value=self.state.log_verbose)
+
+        ttk.Label(controls, text="Font:").pack(side="left")
+        ttk.Combobox(controls, textvariable=self.log_font_var, values=control_fonts, width=20).pack(side="left", padx=(4, 8))
+        ttk.Label(controls, text="Size:").pack(side="left")
+        ttk.Spinbox(controls, from_=8, to=18, textvariable=self.log_font_size_var, width=4).pack(side="left", padx=(4, 8))
+        ttk.Checkbutton(controls, text="Verbose", variable=self.log_verbose_var).pack(side="left")
+        ttk.Button(controls, text="Apply", command=self._apply_log_controls).pack(side="left", padx=(8, 4))
+        ttk.Button(controls, text="Clear", command=lambda: self.log.clear()).pack(side="left")
+
+        self.log = _LogWidget(panel, height=8, line_sink=self._write_log_line)
+        self.log.grid(row=1, column=0, sticky="nsew")
+        self.body_paned.add(panel, weight=1)
+
+    def _apply_log_controls(self, persist: bool = True) -> None:
+        chosen_font = (self.log_font_var.get() or "").strip()
+        size = max(8, min(18, int(self.log_font_size_var.get() or 10)))
+        self.log_font_size_var.set(size)
+
+        if chosen_font and chosen_font not in _tkfont.families():
+            self.log.append(f"WARNING: Log font '{chosen_font}' is not available; using fallback.")
+            chosen_font = ""
+
+        if chosen_font:
+            self.log.configure(font=(chosen_font, size))
+        else:
+            self.log.configure(font=_pick_mono(size))
+
+        self.log.set_verbose(self.log_verbose_var.get())
+        self.state.log_font = chosen_font
+        self.state.log_font_size = size
+        self.state.log_verbose = self.log_verbose_var.get()
+        self.log.append(
+            f"Global log controls applied (font={'default' if not chosen_font else chosen_font}, size={size}, verbose={self.state.log_verbose})."
+        )
+        if persist:
+            self.state.save_settings(geometry=self.state.window_geometry)
 
     def _build_toolbar(self) -> None:
         bar = ttk.Frame(self.root, padding=6)
         bar.grid(row=0, column=0, sticky="ew")
         bar.columnconfigure(2, weight=1)
 
-        ttk.Label(bar, text="Tool:").grid(row=0, column=0, sticky="e", padx=(0, 4))
+        ttk.Label(bar, text="Tool Selection:").grid(row=0, column=0, sticky="e", padx=(0, 4))
         self.tool_var = tk.StringVar(value=self.state.tool)
         tool_combo = ttk.Combobox(bar, textvariable=self.tool_var,
-                                  values=["flashrom", "flashprog"], width=12, state="readonly")
+                                  values=["flashrom", "flashprog", "minipro"], width=12, state="readonly")
         tool_combo.grid(row=0, column=1, sticky="w")
         tool_combo.bind("<<ComboboxSelected>>", self._on_tool_change)
 
@@ -4146,6 +4976,11 @@ class FlashGUI:
         self.programmer_combo.bind("<Return>", self._on_programmer_change)
         ttk.Button(bar, text="Detect", command=self._on_detect_programmer).grid(
             row=0, column=5, padx=(4, 0))
+        ttk.Label(
+            bar,
+            text="Auto-switches only if selection wasn't manually overridden",
+            style="Status.TLabel",
+        ).grid(row=0, column=10, sticky="w", padx=(10, 0))
         ttk.Button(bar, text="Cancel", command=self._cancel_active_operations).grid(
             row=0, column=6, padx=(4, 0))
         ttk.Label(bar, text="FT232H SPI Clock Divisor:").grid(row=0, column=7, sticky="e", padx=(12, 4))
@@ -4179,11 +5014,14 @@ class FlashGUI:
 
     def _build_main_content(self) -> None:
         """Create sidebar + notebook layout."""
-        self.content_frame = ttk.Frame(self.root)
-        self.content_frame.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
+        self.body_paned = ttk.PanedWindow(self.root, orient="vertical")
+        self.body_paned.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
+
+        self.content_frame = ttk.Frame(self.body_paned)
         self.content_frame.columnconfigure(0, weight=0)  # sidebar
         self.content_frame.columnconfigure(1, weight=1)  # content
         self.content_frame.rowconfigure(0, weight=1)
+        self.body_paned.add(self.content_frame, weight=4)
 
         # Sidebar
         self.sidebar = ttk.Frame(self.content_frame, width=140)
@@ -4204,6 +5042,9 @@ class FlashGUI:
             ("✓ Verify ROM", "verify"),
             ("🗑️ Erase ROM", "erase"),
             ("🔒 Write-Protect", "wp"),
+            ("🧰 Tools", "tools"),
+            ("🖧 Serial Console", "serial"),
+            ("❓ Help & About", "help"),
             ("⚙️ Settings", "settings"),
         ]
         for label, key in nav_items:
@@ -4218,7 +5059,7 @@ class FlashGUI:
     def _build_status_bar(self) -> None:
         """Create status bar at bottom."""
         self.status_frame = ttk.Frame(self.root, relief="sunken", height=24)
-        self.status_frame.grid(row=3, column=0, sticky="ew", padx=0, pady=0)
+        self.status_frame.grid(row=2, column=0, sticky="ew", padx=0, pady=0)
         self.status_frame.columnconfigure(0, weight=1)
 
         self.status_var = tk.StringVar(value="Ready")
@@ -4260,7 +5101,7 @@ class FlashGUI:
                 self.log.append("Switched to sidebar navigation")
 
     def _show_page(self, page_key: str) -> None:
-        """Show a page by key (read, write, verify, erase, wp, info, settings)."""
+        """Show a page by key (read, write, verify, erase, wp, info, tools, serial, help, settings)."""
         page_map = {
             "read": self.page_read,
             "write": self.page_write,
@@ -4268,6 +5109,9 @@ class FlashGUI:
             "erase": self.page_erase,
             "wp": self.page_wp,
             "info": self.page_info,
+            "tools": self.page_tools,
+            "serial": self.page_serial,
+            "help": self.page_help,
             "settings": self.page_settings,
         }
         page = page_map.get(page_key)
@@ -4275,9 +5119,69 @@ class FlashGUI:
             self.nb.select(self.nb.index(page.frame))
             self._update_status(f"Showing: {page_key.upper()}")
 
+    def _current_page_key(self) -> str:
+        try:
+            current = self.nb.select()
+            if not current:
+                return "info"
+            tab_text = str(self.nb.tab(current, "text") or "").strip().lower()
+        except tk.TclError:
+            return "info"
+
+        mapping = {
+            "about rom": "info",
+            "read rom": "read",
+            "write rom": "write",
+            "verify rom": "verify",
+            "erase rom": "erase",
+            "write-protect": "wp",
+            "tools": "tools",
+            "serial console": "serial",
+            "help & about": "help",
+            "settings": "settings",
+        }
+        return mapping.get(tab_text, "info")
+
     def _update_status(self, text: str) -> None:
         """Update status bar text."""
         self.status_var.set(text)
+
+    def _update_programmer_status(self, programmer: str, source: str = "selected") -> None:
+        prog = (programmer or "").strip() or "(none)"
+        if source == "manual":
+            self._update_status(f"Programmer (manual): {prog}")
+            return
+        if source == "auto":
+            self._update_status(f"Programmer (auto): {prog}")
+            return
+        if source == "default":
+            self._update_status(f"Programmer (default): {prog}")
+            return
+        if source == "detected":
+            self._update_status(f"Programmer detected: {prog}")
+            return
+        self._update_status(f"Programmer: {prog}")
+
+    def _log_tool_transition(
+        self,
+        phase: str,
+        *,
+        tool: str,
+        binary: str = "",
+        version: str = "",
+    ) -> None:
+        if phase == "switching":
+            self.log.append(f"Tool switching: {tool}")
+            self._update_status(f"Switching tool to {tool}…")
+            return
+        if phase == "checking":
+            self.log.append(f"Tool checking: {tool} → {binary}")
+            self._update_status(f"Tool checking: {tool}")
+            return
+        if phase == "ready":
+            self.log.append(f"Tool ready: {tool} ({version or 'unknown'})")
+            self._update_status(f"Tool ready: {tool}")
+            return
 
     def _apply_theme_visuals(self, theme_name: str) -> None:
         """Apply color scheme for given theme."""
@@ -4348,12 +5252,14 @@ class FlashGUI:
 
     def _boot(self) -> None:
         self._rebuild_pages()
-        self.log.append(f"flashgui {VERSION}  —  dual-tool GUI for flashrom + flashprog")
+        self.log.append(f"flashgui {VERSION}  —  multi-tool GUI for flashrom + flashprog + minipro")
+        for line in _startup_runtime_log_lines(self.state):
+            self.log.append(line)
         self._refresh_tool()
         if self.state.auto_detect_programmer:
             _safe_after(self.root, 1500, self._on_detect_programmer)
 
-    def _rebuild_pages(self) -> None:
+    def _rebuild_pages(self, keep_page: str = "info") -> None:
         for tab in self.nb.tabs():
             self.nb.forget(tab)
         self.page_info    = PageInfo(self.nb, self.state, self.log, self.root, self)
@@ -4362,44 +5268,127 @@ class FlashGUI:
         self.page_verify  = PageVerify(self.nb, self.state, self.log, self.root, self)
         self.page_erase   = PageErase(self.nb, self.state, self.log, self.root, self)
         self.page_wp      = PageWriteProtect(self.nb, self.state, self.log, self.root, self)
+        self.page_tools   = PageTools(self.nb, self.state, self.log, self.root)
+        self.page_serial  = PageSerialConsole(self.nb, self.state, self.log, self.root)
+        self.page_help    = PageHelpAbout(self.nb, self.state, self.log, self.root)
         self.page_settings = PageSettings(self.nb, self)
+        self._show_page(keep_page)
+        self._refresh_all_command_previews()
+
+    def _refresh_all_command_previews(self) -> None:
+        pages = (
+            getattr(self, "page_read", None),
+            getattr(self, "page_write", None),
+            getattr(self, "page_verify", None),
+            getattr(self, "page_erase", None),
+            getattr(self, "page_wp", None),
+            getattr(self, "page_info", None),
+        )
+        for page in pages:
+            if page is None:
+                continue
+            refresher = getattr(page, "refresh_command_preview", None)
+            if callable(refresher):
+                try:
+                    refresher()
+                except Exception:
+                    pass
 
     def _refresh_tool(self) -> None:
         tool = self.tool_var.get()
         self.state.binary = self.state.resolve_tool_binary(tool)
         self.state.tool = tool
 
-        self.log.append(f"Tool: {self.state.binary}  (checking version…)")
+        self._log_tool_transition("checking", tool=tool, binary=self.state.binary)
 
         def _worker() -> None:
             ver = _get_version(self.state.binary)
-            progs = _list_programmers(self.state.binary)
+            if _is_minipro_tool(tool, self.state.binary):
+                progs = [_MINIPRO_PROGRAMMER_ARG]
+            else:
+                progs = _list_programmers(self.state.binary)
             _safe_after(self.root, 0, lambda v=ver, p=progs: self._set_tool_refresh_result(v, p))
 
         threading.Thread(target=_worker, daemon=False).start()
 
     def _set_tool_refresh_result(self, ver: str | None, progs: list[str]) -> None:
-        self.log.append(f"Tool version: {ver or 'unknown'}")
+        self._log_tool_transition("ready", tool=self.state.tool, version=ver or "unknown")
         self._set_programmers(progs)
+        self._refresh_all_command_previews()
 
     def _set_programmers(self, progs: list[str]) -> None:
-        self.programmer_combo["values"] = progs
-        if progs:
-            self.programmer_var.set(progs[0])
-            self.state.programmer = progs[0]
-            self.log.append(f"Programmer set to {progs[0]}")
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            uniq: list[str] = []
+            seen: set[str] = set()
+            for p in progs:
+                s = (p or "").strip()
+                if not s:
+                    continue
+                k = s.lower()
+                if k in seen:
+                    continue
+                seen.add(k)
+                uniq.append(s)
+            progs = uniq or [_MINIPRO_PROGRAMMER_ARG]
+        self._programmer_manual_override = False
+        self._programmer_updating = True
+        try:
+            self.programmer_combo["values"] = progs
+            current = (self.programmer_var.get().strip() or self.state.programmer.strip())
+            if current:
+                self.programmer_var.set(current)
+                self.state.programmer = current
+                self._update_programmer_status(current)
+                self._refresh_all_command_previews()
+                return
+            if progs:
+                self.programmer_var.set(progs[0])
+                self.state.programmer = progs[0]
+                self.log.append(f"Programmer set to {progs[0]}")
+                self._update_programmer_status(progs[0], "default")
+            self._refresh_all_command_previews()
+        finally:
+            self._programmer_updating = False
 
     def _on_tool_change(self, _event: object = None) -> None:
-        self._rebuild_pages()
+        keep_page = self._current_page_key()
+        self._log_tool_transition("switching", tool=self.tool_var.get())
+        self.state.tool = self.tool_var.get()
+        self._rebuild_pages(keep_page=keep_page)
         self._refresh_tool()
 
     def _on_programmer_change(self, _event: object = None) -> None:
         self.state.programmer = self.programmer_var.get().strip()
+        if self._programmer_updating:
+            return
+        self._programmer_manual_override = bool(self.state.programmer)
         if self.state.programmer:
             self.log.append(f"Programmer set to {self.state.programmer}")
+            self._update_programmer_status(self.state.programmer, "manual")
+        self._refresh_all_command_previews()
 
     def _on_detect_programmer(self) -> None:
-        self.log.append("Scanning USB devices via lsusb / dmesg…")
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self.log.append("Probing minipro USB programmer (T48/TL866)…")
+            self._update_status("Detecting programmer (minipro)…")
+
+            def _worker_minipro() -> None:
+                hits: list[tuple[str, str]] = []
+                detected, label, lines = _detect_minipro_hardware(self.state.binary)
+                if detected:
+                    hits = [(_MINIPRO_PROGRAMMER_ARG, label or "minipro USB programmer")]
+                _safe_after(self.root, 0, lambda lns=lines, h=hits: self._apply_detected_minipro_programmer(lns, h))
+
+            threading.Thread(target=_worker_minipro, daemon=False).start()
+            return
+
+        if sys.platform.startswith("win"):
+            self.log.append("Scanning Windows USB + serial programmer devices…")
+        elif sys.platform == "darwin":
+            self.log.append("Scanning macOS serial devices (/dev/cu.*, /dev/tty.*)…")
+        else:
+            self.log.append("Scanning USB devices via lsusb / dmesg…")
+        self._update_status("Detecting programmer…")
 
         def _worker() -> None:
             hits = _detect_programmer_usb()
@@ -4419,9 +5408,38 @@ class FlashGUI:
         self._update_status("Cancellation requested")
         self.log.append("Cancellation signal sent to active operation(s).")
 
+    def _apply_detected_minipro_programmer(self, lines: list[str], hits: list[tuple[str, str]]) -> None:
+        for ln in lines[:60]:
+            self.log.append(ln)
+        if not hits:
+            self.log.append("No minipro programmer detected. Check USB cable/power and try again.")
+            self._update_status("Programmer detection: none found")
+            return
+        for prog, label in hits:
+            self.log.append(f"  Found: {label}  →  programmer: {prog}")
+
+        existing = list(self.programmer_combo["values"])
+        for prog, _ in reversed(hits):
+            if prog not in existing:
+                existing.insert(0, prog)
+        self.programmer_combo["values"] = existing
+
+        self.programmer_var.set(_MINIPRO_PROGRAMMER_ARG)
+        self.state.programmer = _MINIPRO_PROGRAMMER_ARG
+        self._programmer_manual_override = False
+        self.log.append(f"Programmer auto-set to  {_MINIPRO_PROGRAMMER_ARG}")
+        self._update_programmer_status(_MINIPRO_PROGRAMMER_ARG, "auto")
+        self._refresh_all_command_previews()
+
     def _apply_detected_programmers(self, hits: list[tuple[str, str]]) -> None:
         if not hits:
-            self.log.append("No known programmer detected via USB scan.")
+            if sys.platform.startswith("win"):
+                self.log.append("No known programmer detected via Windows USB/serial scan.")
+            elif sys.platform == "darwin":
+                self.log.append("No known programmer detected via macOS serial scan.")
+            else:
+                self.log.append("No known programmer detected via USB scan.")
+            self._update_status("Programmer detection: none found")
             return
         for prog, label in hits:
             self.log.append(f"  Found: {label}  →  programmer: {prog}")
@@ -4431,10 +5449,30 @@ class FlashGUI:
             if prog not in existing:
                 existing.insert(0, prog)
         self.programmer_combo["values"] = existing
-        # Auto-select the first hit
-        self.programmer_var.set(hits[0][0])
-        self.state.programmer = hits[0][0]
-        self.log.append(f"Programmer auto-set to  {hits[0][0]}")
+        current = (self.programmer_var.get().strip() or self.state.programmer.strip())
+        detected = hits[0][0] if hits else ""
+        if len(hits) == 1 and not current:
+            self.programmer_var.set(detected)
+            self.state.programmer = detected
+            self._programmer_manual_override = False
+            self.log.append(f"Programmer auto-set to  {detected}")
+            self._update_programmer_status(detected, "auto")
+        elif len(hits) == 1 and current and self._programmer_manual_override and current != detected:
+            self.log.append(f"Single programmer detected — keeping current selection: {current}")
+            self._update_programmer_status(current, "manual")
+        elif len(hits) == 1 and current != detected:
+            self.programmer_var.set(detected)
+            self.state.programmer = detected
+            self._programmer_manual_override = False
+            self.log.append(f"Programmer auto-set to  {detected}")
+            self._update_programmer_status(detected, "auto")
+        elif len(hits) == 1 and current == detected:
+            self.log.append(f"Single programmer detected — already selected: {current}")
+            self._update_programmer_status(current, "detected")
+        else:
+            self.log.append("Multiple programmers detected — no auto-selection applied.")
+            self._update_status("Programmer detection: multiple matches")
+        self._refresh_all_command_previews()
 
     def _write_log_line(self, text: str) -> None:
         path = self.state.log_file_path.strip()
@@ -4451,6 +5489,12 @@ class FlashGUI:
                 print(f"WARNING: Could not write log file: {path}", file=sys.stderr)
 
     def _on_close(self) -> None:
+        try:
+            page_serial = getattr(self, "page_serial", None)
+            if page_serial is not None and hasattr(page_serial, "shutdown"):
+                page_serial.shutdown()
+        except Exception:
+            pass
         _APP_SHUTTING_DOWN.set()
         _terminate_active_processes()
         try:

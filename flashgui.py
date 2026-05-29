@@ -30,6 +30,7 @@ import tempfile
 import threading
 import time
 import urllib.request
+import zipfile
 from datetime import datetime
 from functools import lru_cache
 from urllib.parse import quote_plus, unquote, urljoin, urlparse
@@ -77,7 +78,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.11"
+VERSION = "1.1.12"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -143,6 +144,8 @@ _DEFAULT_TESTED_CHIPS: tuple[str, ...] = (
     "MX25V16066",
     "GD25Q32(B)",
     "GD25Q128C",
+    "PM25LD040(C)",
+    "XM25QH128C",
     "W25X20",
 )
 
@@ -910,16 +913,8 @@ def _load_settings(path: str) -> dict[str, object]:
 
 def _save_settings(path: str, data: dict[str, object]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except BaseException:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        raise
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def _as_bool(value: object, default: bool = False) -> bool:
@@ -1008,13 +1003,7 @@ def _register_private_font_windows(font_path: str) -> bool:
 
 
 def _font_cache_dir() -> str:
-    if sys.platform.startswith("win"):
-        base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~")
-    elif sys.platform == "darwin":
-        base = os.path.join(os.path.expanduser("~"), "Library", "Caches")
-    else:
-        base = os.getenv("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
-    p = os.path.join(base, "flashgui", "font-cache")
+    p = os.path.join(tempfile.gettempdir(), "flashgui-font-cache")
     os.makedirs(p, exist_ok=True)
     return p
 
@@ -1143,9 +1132,6 @@ def _download_font(font_name: str) -> str | None:
             with urllib.request.urlopen(req, timeout=30) as resp, open(dst, "wb") as out:
                 shutil.copyfileobj(resp, out)
             if os.path.isfile(dst) and os.path.getsize(dst) > 0:
-                if not _validate_ttf_header(dst):
-                    os.remove(dst)
-                    continue
                 return dst
         except Exception as exc:
             last_error = exc
@@ -1158,22 +1144,6 @@ def _download_font(font_name: str) -> str | None:
     if last_error is not None:
         raise RuntimeError(f"Failed to download font '{font_name}' from all known URLs: {last_error}")
     return None
-
-
-def _validate_ttf_header(path: str) -> bool:
-    """Reject files that are not valid TrueType/OpenType fonts."""
-    _VALID_SIGNATURES = (
-        b"\x00\x01\x00\x00",  # TrueType
-        b"OTTO",              # OpenType (CFF)
-        b"true",              # Apple TrueType
-        b"typ1",              # Apple Type 1
-    )
-    try:
-        with open(path, "rb") as f:
-            header = f.read(4)
-        return any(header.startswith(sig) for sig in _VALID_SIGNATURES)
-    except OSError:
-        return False
 
 
 def _ensure_font_available(font_name: str, logger: Callable[[str], None] | None = None) -> bool:
@@ -1489,6 +1459,19 @@ _PROGRAMMER_LABEL_HINTS: dict[str, str] = {}
 _PROGRAMMER_BASE_LABEL_HINTS: dict[str, str] = {}
 _MINIPRO_PROGRAMMER_ARG = "minipro-usb"
 
+# Hardware-probe timeout for minipro -V / -l. Kept short so a missing programmer
+# (e.g. T48/TL866 unplugged) fails fast on the detect path instead of stalling
+# the UI thread for the full subprocess timeout.
+_MINIPRO_PROBE_TIMEOUT_SEC = 5
+
+# Keep metadata discovery probes short so startup never appears stuck.
+_TOOL_METADATA_PROBE_TIMEOUT_SEC = 5
+_MINIPRO_LIST_TIMEOUT_SEC = 15
+_MINIPRO_AUTODETECT_TIMEOUT_SEC = 15
+_WINDOWS_USB_ENUM_TIMEOUT_SEC = 5
+_PROGRAMMER_DETECT_TIMEOUT_SEC = 20
+_SERIAL_ENUM_TIMEOUT_SEC = 4.0
+
 
 def _normalize_minipro_model_tokens(text: str) -> str:
     """Normalize common minipro model tokens to canonical casing."""
@@ -1554,22 +1537,9 @@ def _format_programmer_status(prog: str) -> str:
 
 # ────────────────────────── tool discovery ─────────────────────────────────────
 
-def _is_safe_binary_path(path: str) -> bool:
-    """Reject binary paths that contain path-traversal or shell metacharacters."""
-    if not path or not path.strip():
-        return False
-    normalized = os.path.normpath(path)
-    if ".." in normalized.split(os.sep):
-        return False
-    _SHELL_META = set(";&|`$(){}")
-    if any(ch in path for ch in _SHELL_META):
-        return False
-    return True
-
-
 def _resolve_binary(name: str, env_var: str) -> str:
     override = os.getenv(env_var, "").strip()
-    if override and _is_safe_binary_path(override):
+    if override:
         return override
     found = shutil.which(name)
     return found if found else name
@@ -1588,7 +1558,14 @@ def _get_version(binary: str) -> str | None:
 
 def _list_programmers(binary: str) -> list[str]:
     try:
-        proc = subprocess.run([binary], check=False, capture_output=True, text=True, errors="replace", timeout=12)
+        proc = subprocess.run(
+            [binary],
+            check=False,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=_TOOL_METADATA_PROBE_TIMEOUT_SEC,
+        )
         lines = ((proc.stdout or "") + "\n" + (proc.stderr or "")).splitlines()
         start = -1
         for i, line in enumerate(lines):
@@ -1642,7 +1619,7 @@ def _detect_minipro_hardware(minipro_binary: str) -> tuple[bool, str, list[str]]
                 capture_output=True,
                 text=True,
                 errors="replace",
-                timeout=120,
+                timeout=_MINIPRO_PROBE_TIMEOUT_SEC,
             )
         except Exception:
             return [], ""
@@ -1701,7 +1678,7 @@ def _list_minipro_devices(minipro_binary: str, limit: int = 8192) -> list[str]:
             capture_output=True,
             text=True,
             errors="replace",
-            timeout=120,
+            timeout=_MINIPRO_LIST_TIMEOUT_SEC,
         )
     except Exception:
         return []
@@ -1790,7 +1767,7 @@ def _autodetect_minipro_spi_devices(minipro_binary: str) -> tuple[bool, str, lis
                 capture_output=True,
                 text=True,
                 errors="replace",
-                timeout=60,
+                timeout=_MINIPRO_AUTODETECT_TIMEOUT_SEC,
             )
         except Exception:
             continue
@@ -2050,13 +2027,9 @@ def _detect_programmer_serial_windows() -> list[tuple[str, str]]:
     """
     results: list[tuple[str, str]] = []
     seen: set[str] = set()
-
-    try:
-        from serial.tools import list_ports  # type: ignore[import-not-found]
-    except Exception:
+    ports = _list_serial_ports_safe()
+    if not ports:
         return results
-
-    ports = list(list_ports.comports())
     for port in ports:
         device = str(getattr(port, "device", "")).strip()
         if not device:
@@ -2124,6 +2097,50 @@ def _extract_windows_vid_pid_pairs(text: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def _list_serial_ports_safe(timeout_sec: float = _SERIAL_ENUM_TIMEOUT_SEC) -> list[Any]:
+    """Return serial ports with a bounded wait.
+
+    pyserial enumeration can block on some hosts/drivers. This guard keeps
+    programmer detection responsive by capping the wait.
+    """
+    ports: list[Any] = []
+
+    def _worker() -> None:
+        nonlocal ports
+        try:
+            from serial.tools import list_ports  # type: ignore[import-not-found]
+            ports = list(list_ports.comports())
+        except Exception:
+            ports = []
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(max(0.1, float(timeout_sec)))
+    if t.is_alive():
+        return []
+    return ports
+
+
+def _call_with_timeout(func: Callable[[], Any], timeout_sec: float, default: Any) -> Any:
+    """Run *func* with a hard wait budget; return *default* on timeout/error."""
+    box: dict[str, Any] = {"done": False, "value": default}
+
+    def _worker() -> None:
+        try:
+            box["value"] = func()
+        except Exception:
+            box["value"] = default
+        finally:
+            box["done"] = True
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(max(0.1, float(timeout_sec)))
+    if not bool(box.get("done")):
+        return default
+    return box.get("value", default)
+
+
 def _enumerate_windows_usb_vid_pid_pairs() -> list[tuple[str, str]]:
     """Return connected Windows USB VID:PID pairs from built-in OS tooling."""
     collected: list[tuple[str, str]] = []
@@ -2153,7 +2170,7 @@ def _enumerate_windows_usb_vid_pid_pairs() -> list[tuple[str, str]]:
                 capture_output=True,
                 text=True,
                 errors="replace",
-                timeout=12,
+                timeout=_WINDOWS_USB_ENUM_TIMEOUT_SEC,
             )
         except Exception:
             continue
@@ -2177,13 +2194,9 @@ def _detect_programmer_serial_posix() -> list[tuple[str, str]]:
     """
     results: list[tuple[str, str]] = []
     seen: set[str] = set()
-
-    try:
-        from serial.tools import list_ports  # type: ignore[import-not-found]
-    except Exception:
+    ports = _list_serial_ports_safe()
+    if not ports:
         return results
-
-    ports = list(list_ports.comports())
     for port in ports:
         device = str(getattr(port, "device", "")).strip()
         if not device:
@@ -2869,7 +2882,15 @@ def _detect_programmer_usb() -> list[tuple[str, str]]:
         results: list[tuple[str, str]] = []
         seen: set[str] = set()
 
-        for vid, pid in _enumerate_windows_usb_vid_pid_pairs():
+        usb_timeout = max(8.0, float(_WINDOWS_USB_ENUM_TIMEOUT_SEC) * 3.0 + 2.0)
+        serial_timeout = max(4.0, float(_SERIAL_ENUM_TIMEOUT_SEC) + 2.0)
+
+        vid_pid_pairs = _call_with_timeout(
+            _enumerate_windows_usb_vid_pid_pairs,
+            timeout_sec=usb_timeout,
+            default=[],
+        )
+        for vid, pid in (vid_pid_pairs or []):
             for (v, p, prog, label) in _USB_PROGRAMMER_MAP:
                 if v != vid or p != pid:
                     continue
@@ -2885,7 +2906,12 @@ def _detect_programmer_usb() -> list[tuple[str, str]]:
                 seen.add(prog)
                 break
 
-        for prog, label in _detect_programmer_serial_windows():
+        serial_hits = _call_with_timeout(
+            _detect_programmer_serial_windows,
+            timeout_sec=serial_timeout,
+            default=[],
+        )
+        for prog, label in (serial_hits or []):
             if prog in seen:
                 continue
             results.append((prog, label))
@@ -6664,9 +6690,7 @@ class AppState:
         self.programmer = ""
         self.selected_chip = ""
         self.last_probe_ids: list[tuple[int, int]] = []
-        _tmpdir_parent = _app_config_dir()
-        os.makedirs(_tmpdir_parent, exist_ok=True)
-        self.tmpdir     = tempfile.mkdtemp(prefix="flashgui_", dir=_tmpdir_parent)
+        self.tmpdir     = tempfile.mkdtemp()
         self._load_sudo_keyring()
 
         (
@@ -6797,20 +6821,11 @@ class AppState:
 
     def resolve_tool_binary(self, tool: str) -> str:
         if tool == "flashrom":
-            configured = self.flashrom_bin
-            if configured and _is_safe_binary_path(configured):
-                return configured
-            return _resolve_binary("flashrom", "FLASHGUI_FLASHROM_BIN")
+            return self.flashrom_bin or _resolve_binary("flashrom", "FLASHGUI_FLASHROM_BIN")
         if tool == "flashprog":
-            configured = self.flashprog_bin
-            if configured and _is_safe_binary_path(configured):
-                return configured
-            return _resolve_binary("flashprog", "FLASHGUI_FLASHPROG_BIN")
+            return self.flashprog_bin or _resolve_binary("flashprog", "FLASHGUI_FLASHPROG_BIN")
         if tool == "minipro":
-            configured = self.minipro_bin
-            if configured and _is_safe_binary_path(configured):
-                return configured
-            return _resolve_binary("minipro", "FLASHGUI_MINIPRO_BIN")
+            return self.minipro_bin or _resolve_binary("minipro", "FLASHGUI_MINIPRO_BIN")
         return tool
 
     def verbose_arg(self) -> str | None:
@@ -6854,10 +6869,10 @@ class AppState:
             # sudo_password intentionally omitted — stored in system keyring only
         }
         # Preserve splitter states if they exist
-        if "hsplitter_state" in self.settings:
-            data["hsplitter_state"] = self.settings["hsplitter_state"]
-        if "vsplitter_state" in self.settings:
-            data["vsplitter_state"] = self.settings["vsplitter_state"]
+        if "hsplitter_sizes" in self.settings:
+            data["hsplitter_sizes"] = self.settings["hsplitter_sizes"]
+        if "vsplitter_sizes" in self.settings:
+            data["vsplitter_sizes"] = self.settings["vsplitter_sizes"]
         _save_settings(self.settings_path, data)
         self.settings = data
 
@@ -7772,6 +7787,7 @@ class LogWidget(QTextEdit):
         "hdr":   "#2d81ff",
         "cmd":   "#d7aefb",
         "warn":  "#f88080",
+        "missing": "#ffb347",
         "info":  "#dfa425",
         "meta":  "#5dd6c3",
         "eta":   "#aacc2e",
@@ -7790,6 +7806,7 @@ class LogWidget(QTextEdit):
         "hdr":   "#1d4ed8",
         "cmd":   "#7c3aed",
         "warn":  "#b45309",
+        "missing": "#b45309",
         "info":  "#0369a1",
         "meta":  "#0f766e",
         "eta":   "#a16207",
@@ -7802,7 +7819,7 @@ class LogWidget(QTextEdit):
         "num":   "#3f6212",
         "pct":   "#1d4ed8",
     }
-    _BOLD_TAGS: set[str] = {"err", "warn", "done", "cmd", "hdr"}
+    _BOLD_TAGS: set[str] = {"err", "warn", "missing", "done", "cmd", "hdr"}
 
     # Inline highlight regexes (applied on top of the base line colour).
     _INLINE_PATTERNS: tuple[tuple[str, "re.Pattern[str]"], ...] = (
@@ -7834,6 +7851,15 @@ class LogWidget(QTextEdit):
             return ""
         if t.startswith("$ "):
             return "cmd"
+
+        # "No programmer detected" variants should stand out in orange.
+        if (
+            lo.startswith("no minipro programmer detected")
+            or lo.startswith("no known programmer detected")
+            or lo.startswith("no programmer found")
+            or "no known programmer detected via" in lo
+        ):
+            return "missing"
 
         # Errors (high priority)
         if (lo.startswith("error") or "error:" in lo or "failed" in lo
@@ -8045,6 +8071,17 @@ class PageBase(QWidget):
         self.app = app
         self.state = app.state
         self.root_window = app
+        # Allow the vertical splitter to compress this page freely.
+        # Without this every page advertises its full content height as a minimum,
+        # which prevents the Global Logs splitter from being dragged upward.
+        self.setMinimumSize(0, 0)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Ignored,
+        )
+
+    def minimumSizeHint(self) -> QSize:  # type: ignore[override]
+        return QSize(0, 0)
 
     def log(self, text: str) -> None:
         self.app.log.append_line(text)
@@ -9741,6 +9778,8 @@ class SettingsPage(PageBase):
 
     def __init__(self, app: "FlashGUIQt") -> None:
         super().__init__(app)
+        self.setMinimumSize(0, 0)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
 
         self.theme_original = self.state.theme or "default"
         self._is_linux = sys.platform.startswith("linux")
@@ -9753,12 +9792,16 @@ class SettingsPage(PageBase):
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
+        scroll.setMinimumSize(0, 0)
+        scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self._settings_scroll = scroll
         self._settings_viewport = scroll.viewport()
         self._settings_viewport.installEventFilter(self)
         root_lay.addWidget(scroll)
 
         content = QWidget(self)
+        content.setMinimumSize(0, 0)
+        content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         scroll.setWidget(content)
 
         outer = QVBoxLayout(content)
@@ -11221,7 +11264,7 @@ class ToolsPage(PageBase):
 
         tool_actions: list[tuple[str, Callable[[], None]]] = [
             ("Binwalk ROMs", self._binwalk_rom),
-            ("Binwalk Extract & Analize", self._binwalk_extract_analize),
+            ("Binwalk Extract && Analize", self._binwalk_extract_analize),
             ("Calculate Hashes", self._calculate_hashes),
             ("Compare ROMs", self._compare_roms),
             ("Convert BIN To HEX", self._convert_bin_to_hex),
@@ -12043,15 +12086,19 @@ class HelpAboutPage(PageBase):
         btn_link = QPushButton("FlashGUI Link")
         btn_install = QPushButton("Install Binaries Guide")
         btn_update = QPushButton("FlashGUI Check Update")
+        btn_install_update = QPushButton("FlashGUI Install Update")
         btn_link.setProperty("kind", "subtle")
         btn_install.setProperty("kind", "subtle")
         btn_update.setProperty("kind", "subtle")
+        btn_install_update.setProperty("kind", "subtle")
         btn_link.clicked.connect(self._open_link)
         btn_install.clicked.connect(self._open_install_binaries_guide)
         btn_update.clicked.connect(self._check_update)
+        btn_install_update.clicked.connect(self._install_update)
         row_update_l.addWidget(btn_link)
         row_update_l.addWidget(btn_install)
         row_update_l.addWidget(btn_update)
+        row_update_l.addWidget(btn_install_update)
         row_update_l.addStretch(1)
         l_about.addRow("Actions", row_update)
         outer.addWidget(g_about)
@@ -12066,14 +12113,20 @@ class HelpAboutPage(PageBase):
         help_actions: list[tuple[str, Callable[[], None]]] = [
             ("Manual flashrom", lambda: self._run_tool_manual("flashrom", "Manual flashrom")),
             ("Manual flashprog", lambda: self._run_tool_manual("flashprog", "Manual flashprog")),
+            ("Manual minipro", lambda: self._run_tool_manual("minipro", "Manual minipro")),
+            ("Report An Issue", self._report_issue),
             ("Help flashrom", lambda: self._run_tool_help("flashrom", ["--help"], "Help flashrom")),
             ("Help flashprog", lambda: self._run_tool_help("flashprog", ["--help"], "Help flashprog")),
+            ("Help minipro", lambda: self._run_tool_help("minipro", ["--help"], "Help minipro")),
             ("Supported Chips flashrom", lambda: self._run_tool_help("flashrom", ["-L"], "Supported Chips flashrom")),
             ("Supported Chips flashprog", lambda: self._run_tool_help("flashprog", ["-L"], "Supported Chips flashprog")),
+            ("Supported Chips minipro", lambda: self._run_tool_help("minipro", ["-l"], "Supported Chips minipro")),
             ("Search Chips flashrom", lambda: self._search_tool_chips("flashrom", "Search Chips flashrom")),
             ("Search Chips flashprog", lambda: self._search_tool_chips("flashprog", "Search Chips flashprog")),
+            ("Search Chips minipro", lambda: self._search_tool_chips("minipro", "Search Chips minipro")),
             ("Supported Programmers flashrom", lambda: self._run_tool_help("flashrom", ["-p", "-h"], "Supported Programmers flashrom")),
             ("Supported Programmers flashprog", lambda: self._run_tool_help("flashprog", ["-p", "-h"], "Supported Programmers flashprog")),
+            ("Supported Programmers minipro", lambda: self._run_tool_help("minipro", ["--version"], "Supported Programmers minipro")),
         ]
         self._help_grid = l_help
         self._help_buttons: list[QPushButton] = []
@@ -12157,6 +12210,89 @@ class HelpAboutPage(PageBase):
     def _open_link(self) -> None:
         webbrowser.open(self._REPO_URL)
 
+    def _release_asset_candidates(self, latest_tag: str) -> list[str]:
+        tag = (latest_tag or "").strip() or VERSION
+        if tag.lower().startswith("v"):
+            tag = tag[1:]
+
+        machine = (platform.machine() or "").strip().lower()
+        if sys.platform.startswith("win"):
+            return [
+                f"flashgui-v{tag}-windows-x64-portable.zip",
+                f"flashgui-v{tag}-windows-legacy-x64-portable.zip",
+            ]
+        if sys.platform == "darwin":
+            if "arm" in machine or "aarch64" in machine:
+                return [
+                    f"flashgui-v{tag}-macos-arm64-portable.zip",
+                    f"flashgui-v{tag}-macos-x64-portable.zip",
+                ]
+            return [
+                f"flashgui-v{tag}-macos-x64-portable.zip",
+                f"flashgui-v{tag}-macos-arm64-portable.zip",
+            ]
+        return [f"flashgui-v{tag}-linux-x64-portable.zip"]
+
+    def _open_folder(self, folder_path: str) -> None:
+        path = (folder_path or "").strip()
+        if not path:
+            return
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(path)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as exc:
+            self.log(f"Could not open folder automatically: {exc}")
+
+    def _report_issue(self) -> None:
+        tool = (getattr(self.state, "tool", "") or "unknown").strip() or "unknown"
+        programmer = (getattr(self.state, "programmer", "") or "").strip() or "(not set)"
+        app_theme = (getattr(self.state, "theme", "") or "default").strip() or "default"
+        issue_title = f"[Bug] {VERSION}: describe issue"
+        issue_body = "\n".join([
+            "## Summary",
+            "Describe the issue clearly.",
+            "",
+            "## Steps to Reproduce",
+            "1. ",
+            "2. ",
+            "3. ",
+            "",
+            "## Expected Behavior",
+            "What did you expect to happen?",
+            "",
+            "## Actual Behavior",
+            "What happened instead?",
+            "",
+            "## Environment",
+            f"- FlashGUI version: {VERSION}",
+            f"- OS: {platform.platform()}",
+            f"- Python: {platform.python_version()}",
+            f"- Tool: {tool}",
+            f"- Programmer: {programmer}",
+            f"- Theme: {app_theme}",
+            "",
+            "## Logs / Screenshots",
+            "Paste relevant logs from Global Logs and attach screenshots if possible.",
+        ])
+        issue_url = (
+            self._REPO_URL
+            + "/issues/new?title="
+            + quote_plus(issue_title)
+            + "&body="
+            + quote_plus(issue_body)
+        )
+        try:
+            webbrowser.open(issue_url)
+            self.log(f"Opened issue reporter: {issue_url}")
+        except Exception:
+            fallback = self._REPO_URL + "/issues/new/choose"
+            webbrowser.open(fallback)
+            self.log(f"Opened issues page: {fallback}")
+
     @staticmethod
     def _version_tuple(text: str) -> tuple[int, ...]:
         nums = re.findall(r"\d+", text)
@@ -12190,6 +12326,100 @@ class HelpAboutPage(PageBase):
         except Exception as exc:
             self.warn("Update check failed", f"Could not check updates:\n{exc}")
             webbrowser.open(self._REPO_URL + "/releases")
+
+    def _install_update(self) -> None:
+        """Download and extract latest release artifact for this platform."""
+        api_url = "https://api.github.com/repos/iCE-HACK3R/FlashGUI/releases/latest"
+        try:
+            req = urllib.request.Request(api_url, headers={"User-Agent": "FlashGUI"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+
+            latest = str(payload.get("tag_name") or payload.get("name") or "latest")
+            latest_url = str(payload.get("html_url") or (self._REPO_URL + "/releases"))
+            assets = payload.get("assets")
+            assets_list = assets if isinstance(assets, list) else []
+
+            selected_asset: dict[str, Any] | None = None
+            for candidate in self._release_asset_candidates(latest):
+                for asset in assets_list:
+                    if not isinstance(asset, dict):
+                        continue
+                    if str(asset.get("name") or "").strip() == candidate:
+                        selected_asset = asset
+                        break
+                if selected_asset is not None:
+                    break
+
+            if selected_asset is None:
+                self.warn(
+                    "Install update unavailable",
+                    "Could not find a matching portable release asset for this platform.\n\n"
+                    f"Opening release page:\n{latest_url}",
+                )
+                webbrowser.open(latest_url)
+                return
+
+            asset_name = str(selected_asset.get("name") or "").strip()
+            download_url = str(selected_asset.get("browser_download_url") or "").strip()
+            if not asset_name or not download_url:
+                self.warn(
+                    "Install update unavailable",
+                    "Release asset metadata is incomplete. Opening release page instead.",
+                )
+                webbrowser.open(latest_url)
+                return
+
+            default_root = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else self.state.workspace_dir
+            install_root = _qt_get_existing_directory(
+                self,
+                "Select folder to install extracted update",
+                default_root,
+                use_native_dialogs=self.state.use_native_file_dialogs,
+            )
+            if not install_root:
+                return
+
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            tmp_zip = os.path.join(tempfile.gettempdir(), f"flashgui-update-{stamp}-{asset_name}")
+            self.log(f"Downloading update package: {asset_name}")
+
+            dl_req = urllib.request.Request(download_url, headers={"User-Agent": "FlashGUI"})
+            with urllib.request.urlopen(dl_req, timeout=45) as resp, open(tmp_zip, "wb") as out:
+                while True:
+                    chunk = resp.read(1024 * 512)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+
+            extracted_name = os.path.splitext(asset_name)[0]
+            extracted_dir = os.path.join(install_root, extracted_name)
+            if os.path.exists(extracted_dir):
+                extracted_dir = os.path.join(install_root, f"{extracted_name}-{stamp}")
+
+            with zipfile.ZipFile(tmp_zip, "r") as archive:
+                archive.extractall(extracted_dir)
+
+            try:
+                os.remove(tmp_zip)
+            except Exception:
+                pass
+
+            self._show_text_dialog(
+                "FlashGUI Install Update",
+                "Update package downloaded and extracted successfully.\n\n"
+                f"Release: {latest}\n"
+                f"Asset: {asset_name}\n"
+                f"Installed to:\n{extracted_dir}\n\n"
+                "Next: close current app and launch FlashGUI from the extracted folder.",
+            )
+            self._open_folder(extracted_dir)
+            self.log(f"Installed FlashGUI update package to: {extracted_dir}")
+        except Exception as exc:
+            fallback = self._REPO_URL + "/releases"
+            self.warn("Install update failed", f"Could not install update:\n{exc}\n\nOpening: {fallback}")
+            webbrowser.open(fallback)
+            self.log(f"Opened FlashGUI releases page (fallback): {fallback}")
 
     def _open_install_binaries_guide(self) -> None:
         lines = [
@@ -12249,11 +12479,14 @@ class HelpAboutPage(PageBase):
         binary = self._resolve_tool_binary(tool_name)
         if not binary:
             return
+        args = ["-L"]
+        if (tool_name or "").strip().lower() == "minipro":
+            args = ["-l"]
         self._run_capture_to_dialog(
             title,
-            [binary, "-L"],
+            [binary] + args,
             timeout=120,
-            display_cmd=f"{tool_name} -L | grep -iE {pattern}",
+            display_cmd=f"{tool_name} {' '.join(args)} | grep -iE {pattern}",
             filter_pattern=pattern,
         )
 
@@ -12410,23 +12643,14 @@ class FlashGUIQt(QMainWindow):
         self._build_statusbar()
         self._apply_button_icons()
 
-        # Restore splitter states from saved settings
-        if self.hsplitter and "hsplitter_state" in self.state.settings:
-            try:
-                h_state_hex = self.state.settings["hsplitter_state"]
-                if isinstance(h_state_hex, str):
-                    h_state = QByteArray.fromHex(h_state_hex.encode())
-                    self.hsplitter.restoreState(h_state)
-            except Exception:
-                pass
-        if self.vsplitter and "vsplitter_state" in self.state.settings:
-            try:
-                v_state_hex = self.state.settings["vsplitter_state"]
-                if isinstance(v_state_hex, str):
-                    v_state = QByteArray.fromHex(v_state_hex.encode())
-                    self.vsplitter.restoreState(v_state)
-            except Exception:
-                pass
+        # Restore splitter sizes from safe numeric settings.
+        # (Legacy QByteArray restore blobs proved fragile across theme/layout changes.)
+        self._restore_splitter_sizes_from_settings()
+
+        # Some saved splitter states can restore into near-unusable proportions.
+        # Clamp once after the initial layout pass so the log splitter remains draggable.
+        QTimer.singleShot(0, self._ensure_splitter_sizes)
+        QTimer.singleShot(0, self._ensure_splitter_handle_widths)
 
         # Restore window geometry from saved state
         if self.state.window_geometry:
@@ -12440,6 +12664,7 @@ class FlashGUIQt(QMainWindow):
 
         if self.state.theme:
             self.apply_theme(self.state.theme)
+        self._ensure_splitter_handle_widths()
         self.apply_runtime_font_preferences()
         self._log_startup_runtime_info()
         self._apply_startup_settings_validation()
@@ -12641,6 +12866,8 @@ class FlashGUIQt(QMainWindow):
 
         self.stack = QStackedWidget()
         self.stack.setObjectName("stack")
+        self.stack.setMinimumSize(0, 0)
+        self.stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         split.addWidget(self.stack)
         split.setSizes([250, 830])
         split.setStretchFactor(1, 1)
@@ -12778,7 +13005,7 @@ class FlashGUIQt(QMainWindow):
             "wp enable": "wp-enable",
             "wp disable": "wp-disable",
             "binwalk roms": "scan",
-            "binwalk extract & analize": "scan",
+            "binwalk extract && analize": "scan",
             "calculate hashes": "verify-rom",
             "compare roms": "verify-rom",
             "convert bin to hex": "write-rom",
@@ -12797,16 +13024,23 @@ class FlashGUIQt(QMainWindow):
             "datasheet (download/open pdf rom)": "preview",
             "flashgui link": "about-rom",
             "flashgui check update": "reload",
+            "flashgui install update": "install",
+            "report an issue": "about-rom",
             "manual flashrom": "flashrom",
             "manual flashprog": "flashprog",
+            "manual minipro": "tools",
             "help flashrom": "flashrom",
             "help flashprog": "flashprog",
+            "help minipro": "tools",
             "supported chips flashrom": "chip",
             "supported chips flashprog": "chip",
+            "supported chips minipro": "chip",
             "search chips flashrom": "detect-rom",
             "search chips flashprog": "detect-rom",
+            "search chips minipro": "detect-rom",
             "supported programmers flashrom": "flashrom",
             "supported programmers flashprog": "flashprog",
+            "supported programmers minipro": "tools",
             "firmware info (fwinfo)": "chip",
             "firmware update": "write-rom",
             "hardware self-test (-t)": "check",
@@ -12893,14 +13127,83 @@ class FlashGUIQt(QMainWindow):
         if isinstance(timer, QTimer):
             timer.start()
 
+    def _restore_splitter_sizes_from_settings(self) -> None:
+        """Restore splitter sizes from simple persisted lists when available."""
+        try:
+            h_sizes = self.state.settings.get("hsplitter_sizes")
+            if self.hsplitter and isinstance(h_sizes, list) and len(h_sizes) >= 2:
+                left = int(h_sizes[0])
+                right = int(h_sizes[1])
+                if left > 0 and right > 0:
+                    self.hsplitter.setSizes([left, right])
+        except Exception:
+            pass
+
+        try:
+            v_sizes = self.state.settings.get("vsplitter_sizes")
+            if self.vsplitter and isinstance(v_sizes, list) and len(v_sizes) >= 2:
+                top = int(v_sizes[0])
+                bottom = int(v_sizes[1])
+                if top > 0 and bottom > 0:
+                    self.vsplitter.setSizes([top, bottom])
+        except Exception:
+            pass
+
+    def _ensure_splitter_sizes(self) -> None:
+        """Ensure restored splitter geometry has sane defaults without capping user movement."""
+        try:
+            if self.hsplitter:
+                hs = self.hsplitter.sizes()
+                if len(hs) >= 2 and (hs[0] <= 0 or hs[1] <= 0):
+                    self.hsplitter.setSizes([250, 830])
+
+            if self.vsplitter:
+                vs = self.vsplitter.sizes()
+                if len(vs) >= 2 and (vs[0] <= 0 or vs[1] <= 0):
+                    self.vsplitter.setSizes([700, 250])
+        except Exception:
+            pass
+
+    def _ensure_splitter_handle_widths(self) -> None:
+        """Reapply splitter handle widths after style/theme updates."""
+        try:
+            theme_name = str(getattr(self.state, "theme", "") or "").lower()
+            is_dark = any(
+                key in theme_name
+                for key in (
+                    "dark",
+                    "cyborg",
+                    "superhero",
+                    "vapor",
+                    "solar",
+                )
+            )
+            border = "#2d4064" if is_dark else "#b2c0da"
+            accent = "#4a8dff" if is_dark else "#4c5ab0"
+            handle_style = (
+                f"QSplitter::handle {{ background: {border}; }}"
+                f"QSplitter::handle:hover {{ background: {accent}; }}"
+                "QSplitter::handle:horizontal { width: 8px; }"
+                "QSplitter::handle:vertical { height: 8px; }"
+            )
+            if self.hsplitter:
+                self.hsplitter.setHandleWidth(8)
+                self.hsplitter.setStyleSheet(handle_style)
+            if self.vsplitter:
+                self.vsplitter.setHandleWidth(8)
+                self.vsplitter.setStyleSheet(handle_style)
+        except Exception:
+            pass
+
     def _persist_splitter_state(self) -> None:
         try:
             if self.hsplitter:
-                h_state = self.hsplitter.saveState()
-                self.state.settings["hsplitter_state"] = h_state.toHex().data().decode()  # type: ignore[attr-defined]
+                self.state.settings["hsplitter_sizes"] = [int(x) for x in self.hsplitter.sizes()[:2]]
             if self.vsplitter:
-                v_state = self.vsplitter.saveState()
-                self.state.settings["vsplitter_state"] = v_state.toHex().data().decode()  # type: ignore[attr-defined]
+                self.state.settings["vsplitter_sizes"] = [int(x) for x in self.vsplitter.sizes()[:2]]
+            # Remove legacy blob keys so bad historical states cannot be re-applied.
+            self.state.settings.pop("hsplitter_state", None)
+            self.state.settings.pop("vsplitter_state", None)
             self.state.window_geometry = f"{self.width()}x{self.height()}"
             self.state.save_settings(geometry=self.state.window_geometry)
         except Exception:
@@ -13149,8 +13452,10 @@ class FlashGUIQt(QMainWindow):
                 f"QTextEdit#globalLog, QTextEdit#outputLog {{ background: {c['main']}; border: 1px solid {c['border']}; color: {c['text']}; }}"
                 f"QProgressBar {{ background: {c['main']}; border: 1px solid {c['border']}; border-radius: 6px; text-align: center; color: {c['text']}; }}"
                 f"QProgressBar::chunk {{ background: {c['accent']}; border-radius: 5px; }}"
-                f"QSplitter::handle {{ background: {c['border']}; width: 2px; }}"
+                f"QSplitter::handle:horizontal {{ background: {c['border']}; width: 8px; }}"
+                f"QSplitter::handle:vertical {{ background: {c['border']}; height: 8px; }}"
             )
+            self._ensure_splitter_handle_widths()
             return
 
         c = light_palettes.get(n, light_palettes["default"])
@@ -13168,8 +13473,10 @@ class FlashGUIQt(QMainWindow):
             f"QTextEdit#globalLog, QTextEdit#outputLog {{ background: {c['field']}; border: 1px solid {c['border']}; }}"
             f"QProgressBar {{ background: {c['bg']}; border: 1px solid {c['border']}; border-radius: 6px; text-align: center; }}"
             f"QProgressBar::chunk {{ background: {c['accent']}; border-radius: 5px; }}"
-            f"QSplitter::handle {{ background: {c['border']}; width: 2px; }}"
+            f"QSplitter::handle:horizontal {{ background: {c['border']}; width: 8px; }}"
+            f"QSplitter::handle:vertical {{ background: {c['border']}; height: 8px; }}"
         )
+        self._ensure_splitter_handle_widths()
 
     def apply_theme(self, name: str) -> None:
         n = (name or "").lower()
@@ -13273,7 +13580,8 @@ class FlashGUIQt(QMainWindow):
                 f"QListWidget#sidebar::item:selected {{ background: {c['sidebar_sel']}; color: {c['text']}; border-left: 3px solid {c['accent']}; }}"
                 f"QListWidget#sidebar::item:hover {{ background: {c['toolbar']}; }}"
                 f"QTextEdit#globalLog, QTextEdit#outputLog {{ background: {c['main']}; }}"
-                f"QSplitter::handle {{ background: {c['border']}; width: 2px; }}"
+                f"QSplitter::handle:horizontal {{ background: {c['border']}; width: 8px; }}"
+                f"QSplitter::handle:vertical {{ background: {c['border']}; height: 8px; }}"
                 f"QProgressBar {{ background: {c['main']}; border: 1px solid {c['border']}; border-radius: 6px; text-align: center; }}"
                 f"QProgressBar::chunk {{ background: {c['accent']}; border-radius: 5px; }}"
                 f"QPushButton {{ background: {c['toolbar']}; border: 1px solid {c['border']}; border-radius: 7px; padding: 7px 12px; min-height: 32px; color: {c['text']}; }}"
@@ -13293,6 +13601,7 @@ class FlashGUIQt(QMainWindow):
                 f"QScrollBar::handle:vertical:hover {{ background: {c['accent']}; }}"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
             )
+            self._ensure_splitter_handle_widths()
             return
 
         # light (and unknown) fallback remains intentionally safe and readable
@@ -13453,75 +13762,111 @@ class FlashGUIQt(QMainWindow):
             f"QTextEdit#globalLog, QTextEdit#outputLog {{ background: {log_bg}; border: 1px solid {c['border']}; }}"
             f"QProgressBar {{ background: {progress_bg}; border: 1px solid {c['border']}; border-radius: {button_radius}; text-align: center; }}"
             f"QProgressBar::chunk {{ background: {progress_chunk}; border-radius: {button_radius}; }}"
-            f"QSplitter::handle {{ background: {c['border']}; width: 2px; }}"
+            f"QSplitter::handle:horizontal {{ background: {c['border']}; width: 8px; }}"
+            f"QSplitter::handle:vertical {{ background: {c['border']}; height: 8px; }}"
             f"QScrollBar:vertical {{ background: {c['bg']}; width: 12px; margin: 2px; border-radius: 6px; }}"
             f"QScrollBar::handle:vertical {{ background: {c['sidebar_sel']}; min-height: 26px; border-radius: 6px; }}"
             f"QScrollBar::handle:vertical:hover {{ background: {c['accent']}; }}"
             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
         )
+        self._ensure_splitter_handle_widths()
 
     def _refresh_tool(self) -> None:
         tool = self.tool_combo.currentText().strip() or "flashrom"
         self.state.tool = tool
         self.state.binary = self.state.resolve_tool_binary(tool)
         self._programmer_manual_override = False
-        self.log.append_line(f"Tool: {self.state.binary} (checking version…)")
-        try:
-            ver = _get_version(self.state.binary)
-            if _is_minipro_tool(tool, self.state.binary):
-                progs = [_MINIPRO_PROGRAMMER_ARG]
-            else:
-                progs = _with_internal_programmer(_list_programmers(self.state.binary))
-                if sys.platform.startswith("win"):
-                    win_serial = [prog for prog, _label in _detect_programmer_serial_windows()]
-                    progs = _with_internal_programmer(progs + win_serial)
-                elif sys.platform == "darwin":
-                    mac_serial = [prog for prog, _label in _detect_programmer_serial_posix()]
-                    progs = _with_internal_programmer(progs + mac_serial)
-        except Exception as exc:
-            self.log.append_line(f"ERROR: refresh tool failed: {exc}")
-            return
+        binary = self.state.binary
+        self.log.append_line(f"Tool: {binary} (checking version…)")
 
-        self.log.append_line(f"Tool version: {ver or 'unknown'}")
-        self.status_tool.setText(f" Tool Selection: {tool} ")
-        self._programmer_updating = True
-        self.programmer_combo.blockSignals(True)
-        try:
-            self.programmer_combo.clear()
-            for p in progs:
-                self.programmer_combo.addItem(p)
-            current = (self.state.programmer or "").strip()
-            if sys.platform.startswith("win") and current.startswith("/dev/"):
-                self.log.append_line(f"Ignoring Linux-style programmer setting on Windows: {current}")
-                current = ""
-                self.state.programmer = ""
-            if sys.platform == "darwin" and re.match(r"^[A-Za-z]:", current):
-                self.log.append_line(f"Ignoring Windows-style programmer setting on macOS: {current}")
-                current = ""
-                self.state.programmer = ""
-            if current:
-                idx = self.programmer_combo.findText(current)
-                if idx >= 0:
-                    self.programmer_combo.setCurrentIndex(idx)
+        refresh_seq = int(getattr(self, "_tool_refresh_seq", 0)) + 1
+        self._tool_refresh_seq = refresh_seq
+        self.statusBar().showMessage("Refreshing tool metadata…", 2000)
+        refresh_started = time.monotonic()
+
+        def _worker() -> None:
+            err: Exception | None = None
+            ver: str | None = None
+            progs: list[str] = []
+            try:
+                ver = _get_version(binary)
+                if _is_minipro_tool(tool, binary):
+                    progs = [_MINIPRO_PROGRAMMER_ARG]
                 else:
-                    self.programmer_combo.setCurrentText(current)
-                self.state.programmer = current
-            elif _is_minipro_tool(tool, self.state.binary) and progs:
-                self.programmer_combo.setCurrentText(progs[0])
-                self.state.programmer = progs[0]
-            else:
-                self.programmer_combo.setCurrentIndex(-1)
-                self.programmer_combo.setEditText("")
-        finally:
-            self.programmer_combo.blockSignals(False)
-            self._programmer_updating = False
-        if not (self.state.programmer or "").strip():
-            self.log.append_line("Programmer list refreshed — select programmer (or choose internal).")
-        if self.state.programmer:
-            self.status_programmer.setText(_format_programmer_status(self.state.programmer))
-        else:
-            self.status_programmer.setText(" Programmer: — ")
-        self._update_ft232h_toolbar_visibility()
+                    progs = _with_internal_programmer(_list_programmers(binary))
+                    if sys.platform.startswith("win"):
+                        win_serial = [prog for prog, _label in _detect_programmer_serial_windows()]
+                        progs = _with_internal_programmer(progs + win_serial)
+                    elif sys.platform == "darwin":
+                        mac_serial = [prog for prog, _label in _detect_programmer_serial_posix()]
+                        progs = _with_internal_programmer(progs + mac_serial)
+            except Exception as exc:
+                err = exc
+
+            def _apply() -> None:
+                if refresh_seq != int(getattr(self, "_tool_refresh_seq", 0)):
+                    return
+
+                live_tool = self.tool_combo.currentText().strip() or "flashrom"
+                if live_tool != tool:
+                    return
+
+                elapsed_s = max(0.0, time.monotonic() - refresh_started)
+
+                if err is not None:
+                    self.log.append_line(f"ERROR: refresh tool failed: {err}")
+                    self.log.append_line("Tool metadata refresh finished (failed).")
+                    self.log.append_line(f"Tool metadata refresh elapsed: {elapsed_s:.1f}s")
+                    return
+
+                self.log.append_line(f"Tool version: {ver or 'unknown'}")
+                self.status_tool.setText(f" Tool Selection: {tool} ")
+                self._programmer_updating = True
+                self.programmer_combo.blockSignals(True)
+                try:
+                    self.programmer_combo.clear()
+                    for p in progs:
+                        self.programmer_combo.addItem(p)
+                    current = (self.state.programmer or "").strip()
+                    if sys.platform.startswith("win") and current.startswith("/dev/"):
+                        self.log.append_line(f"Ignoring Linux-style programmer setting on Windows: {current}")
+                        current = ""
+                        self.state.programmer = ""
+                    if sys.platform == "darwin" and re.match(r"^[A-Za-z]:", current):
+                        self.log.append_line(f"Ignoring Windows-style programmer setting on macOS: {current}")
+                        current = ""
+                        self.state.programmer = ""
+                    if current:
+                        idx = self.programmer_combo.findText(current)
+                        if idx >= 0:
+                            self.programmer_combo.setCurrentIndex(idx)
+                        else:
+                            self.programmer_combo.setCurrentText(current)
+                        self.state.programmer = current
+                    elif _is_minipro_tool(tool, binary) and progs:
+                        self.programmer_combo.setCurrentText(progs[0])
+                        self.state.programmer = progs[0]
+                    else:
+                        self.programmer_combo.setCurrentIndex(-1)
+                        self.programmer_combo.setEditText("")
+                finally:
+                    self.programmer_combo.blockSignals(False)
+                    self._programmer_updating = False
+
+                if not (self.state.programmer or "").strip():
+                    self.log.append_line("Programmer list refreshed — select programmer (or choose internal).")
+                if self.state.programmer:
+                    self.status_programmer.setText(_format_programmer_status(self.state.programmer))
+                else:
+                    self.status_programmer.setText(" Programmer: — ")
+                self._update_ft232h_toolbar_visibility()
+                self.log.append_line("Tool metadata refresh finished.")
+                self.log.append_line(f"Tool metadata refresh elapsed: {elapsed_s:.1f}s")
+
+            # Dispatch back to the GUI object's thread explicitly.
+            QTimer.singleShot(0, self, _apply)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _on_tool_change(self, _: str) -> None:
         self._refresh_tool()
@@ -13636,92 +13981,205 @@ class FlashGUIQt(QMainWindow):
             self.statusBar().showMessage("Programmer detect disabled while operation is running", 3000)
             return
 
-        if _is_minipro_tool(self.state.tool, self.state.binary):
-            self.log.append_line("Probing minipro USB programmer (T48/TL866)…")
-            detected, label, lines = _detect_minipro_hardware(self.state.binary)
-            for ln in lines[:60]:
-                self.log.append_line(ln)
-            if not detected:
-                self.log.append_line("No minipro programmer detected. Check USB cable/power and try again.")
-                return
-
-            existing = [self.programmer_combo.itemText(i) for i in range(self.programmer_combo.count())]
-            if _MINIPRO_PROGRAMMER_ARG not in existing:
-                self.programmer_combo.insertItem(0, _MINIPRO_PROGRAMMER_ARG)
-            self.state.programmer = _MINIPRO_PROGRAMMER_ARG
-            self.programmer_combo.blockSignals(True)
-            try:
-                self.programmer_combo.setCurrentText(self.state.programmer)
-            finally:
-                self.programmer_combo.blockSignals(False)
-            if label:
-                _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = label
-            self.status_programmer.setText(_format_programmer_status(self.state.programmer))
-            self.log.append_line(f"Programmer set to {_MINIPRO_PROGRAMMER_ARG}")
+        if getattr(self, "_detect_programmer_inflight", False):
+            self.log.append_line("Programmer detection already in progress — ignoring duplicate request.")
             return
+        self._detect_programmer_inflight = True
+        detect_seq = int(getattr(self, "_detect_programmer_seq", 0)) + 1
+        self._detect_programmer_seq = detect_seq
+        detect_started = time.monotonic()
 
-        if sys.platform.startswith("win"):
+        tool = self.state.tool
+        binary = self.state.binary
+        is_minipro = _is_minipro_tool(tool, binary)
+
+        if is_minipro:
+            self.log.append_line("Probing minipro USB programmer (T48/TL866)…")
+        elif sys.platform.startswith("win"):
             self.log.append_line("Scanning Windows USB + serial programmer devices…")
         elif sys.platform == "darwin":
             self.log.append_line("Scanning macOS serial devices (/dev/cu.*, /dev/tty.*)…")
         else:
             self.log.append_line("Scanning USB devices via lsusb / dmesg…")
+
         try:
-            hits = _detect_programmer_usb()
-        except Exception as exc:
-            self.log.append_line(f"ERROR: detect programmer failed: {exc}")
-            return
+            self.detect_btn.setEnabled(False)
+        except Exception:
+            pass
 
-        if not hits:
-            if sys.platform.startswith("win"):
-                self.log.append_line("No known programmer detected via Windows USB/serial scan.")
-            elif sys.platform == "darwin":
-                self.log.append_line("No known programmer detected via macOS serial scan.")
-            else:
-                self.log.append_line("No known programmer detected via USB scan.")
-            return
+        def _on_detect_timeout() -> None:
+            if detect_seq != int(getattr(self, "_detect_programmer_seq", 0)):
+                return
+            if not getattr(self, "_detect_programmer_inflight", False):
+                return
+            elapsed_s = max(0.0, time.monotonic() - detect_started)
+            self.log.append_line(
+                f"Programmer detection timed out after {elapsed_s:.1f}s — stopping this detection attempt."
+            )
+            self._detect_programmer_inflight = False
+            try:
+                self.detect_btn.setEnabled(True)
+            except Exception:
+                pass
 
-        existing = [self.programmer_combo.itemText(i) for i in range(self.programmer_combo.count())]
-        self._programmer_updating = True
-        self.programmer_combo.blockSignals(True)
-        for prog, label in hits:
-            self.log.append_line(f"  Found: {label}  \u2192  programmer: {prog}")
-            if prog not in existing:
-                self.programmer_combo.insertItem(0, prog)
-        self.programmer_combo.blockSignals(False)
-        self._programmer_updating = False
+        QTimer.singleShot(_PROGRAMMER_DETECT_TIMEOUT_SEC * 1000, _on_detect_timeout)
 
-        chosen = hits[0][0]
-        current = (self.programmer_combo.currentText() or self.state.programmer or "").strip()
-        if len(hits) > 1:
-            self.log.append_line("Multiple programmers detected — select the correct one from the dropdown.")
-            self.programmer_combo.showPopup()
-            self.log.append_line("Ambiguous detection — no auto-selection applied.")
-            return
-        if current and self._programmer_manual_override and current != chosen:
-            self.log.append_line(f"Single programmer detected — keeping current selection: {current}")
-            return
-        if current == chosen:
-            self.log.append_line(f"Single programmer detected — already selected: {current}")
-            return
+        def _worker() -> None:
+            err: Exception | None = None
+            mp_detected = False
+            mp_label = ""
+            mp_lines: list[str] = []
+            hits: list[tuple[str, str]] = []
+            try:
+                if is_minipro:
+                    minipro_budget = max(12.0, float(_MINIPRO_PROBE_TIMEOUT_SEC) * 2.0 + 4.0)
+                    minipro_probe = _call_with_timeout(
+                        lambda: _detect_minipro_hardware(binary),
+                        timeout_sec=minipro_budget,
+                        default=None,
+                    )
+                    if minipro_probe is None:
+                        err = TimeoutError(
+                            f"minipro hardware probe exceeded {minipro_budget:.1f}s budget"
+                        )
+                    else:
+                        mp_detected, mp_label, mp_lines = cast(tuple[bool, str, list[str]], minipro_probe)
+                else:
+                    detect_budget = max(20.0, float(_PROGRAMMER_DETECT_TIMEOUT_SEC) - 10.0)
+                    usb_scan = _call_with_timeout(
+                        _detect_programmer_usb,
+                        timeout_sec=detect_budget,
+                        default=None,
+                    )
+                    if usb_scan is None:
+                        err = TimeoutError(
+                            f"Windows USB/serial scan exceeded {detect_budget:.1f}s budget"
+                        )
+                    else:
+                        hits = cast(list[tuple[str, str]], usb_scan)
+            except Exception as exc:
+                err = exc
 
-        self.state.programmer = str(chosen)
-        self.programmer_combo.blockSignals(True)
-        try:
-            idx = self.programmer_combo.findText(self.state.programmer)
-            if idx >= 0:
-                self.programmer_combo.setCurrentIndex(idx)
-            else:
-                self.programmer_combo.setCurrentText(self.state.programmer)
-        finally:
-            self.programmer_combo.blockSignals(False)
-        self._programmer_manual_override = False
-        friendly = _programmer_friendly_name(self.state.programmer)
-        if friendly and friendly.lower() != self.state.programmer.lower():
-            self.log.append_line(f"Programmer set to {friendly} ({self.state.programmer})")
-        else:
-            self.log.append_line(f"Programmer set to {self.state.programmer}")
-        self.status_programmer.setText(_format_programmer_status(self.state.programmer))
+            def _apply() -> None:
+                if detect_seq != int(getattr(self, "_detect_programmer_seq", 0)):
+                    return
+
+                def _log_detect_finished() -> None:
+                    elapsed_s = max(0.0, time.monotonic() - detect_started)
+                    self.log.append_line("Programmer detection finished.")
+                    self.log.append_line(f"Programmer detection elapsed: {elapsed_s:.1f}s")
+
+                try:
+                    if err is not None:
+                        self.log.append_line(f"ERROR: detect programmer failed: {err}")
+                        elapsed_s = max(0.0, time.monotonic() - detect_started)
+                        self.log.append_line(f"Programmer detection failed after {elapsed_s:.1f}s")
+                        return
+
+                    if is_minipro:
+                        for ln in mp_lines[:60]:
+                            self.log.append_line(ln)
+                        if not mp_detected:
+                            self.log.append_line(
+                                "No minipro programmer detected. Check USB cable/power and try again."
+                            )
+                            _log_detect_finished()
+                            return
+                        existing = [
+                            self.programmer_combo.itemText(i)
+                            for i in range(self.programmer_combo.count())
+                        ]
+                        if _MINIPRO_PROGRAMMER_ARG not in existing:
+                            self.programmer_combo.insertItem(0, _MINIPRO_PROGRAMMER_ARG)
+                        self.state.programmer = _MINIPRO_PROGRAMMER_ARG
+                        self.programmer_combo.blockSignals(True)
+                        try:
+                            self.programmer_combo.setCurrentText(self.state.programmer)
+                        finally:
+                            self.programmer_combo.blockSignals(False)
+                        if mp_label:
+                            _PROGRAMMER_LABEL_HINTS[_MINIPRO_PROGRAMMER_ARG] = mp_label
+                        self.status_programmer.setText(_format_programmer_status(self.state.programmer))
+                        self.log.append_line(f"Programmer set to {_MINIPRO_PROGRAMMER_ARG}")
+                        _log_detect_finished()
+                        return
+
+                    if not hits:
+                        if sys.platform.startswith("win"):
+                            self.log.append_line("No known programmer detected via Windows USB/serial scan.")
+                        elif sys.platform == "darwin":
+                            self.log.append_line("No known programmer detected via macOS serial scan.")
+                        else:
+                            self.log.append_line("No known programmer detected via USB scan.")
+                        _log_detect_finished()
+                        return
+
+                    existing = [
+                        self.programmer_combo.itemText(i)
+                        for i in range(self.programmer_combo.count())
+                    ]
+                    self._programmer_updating = True
+                    self.programmer_combo.blockSignals(True)
+                    for prog, label in hits:
+                        self.log.append_line(f"  Found: {label}  \u2192  programmer: {prog}")
+                        if prog not in existing:
+                            self.programmer_combo.insertItem(0, prog)
+                    self.programmer_combo.blockSignals(False)
+                    self._programmer_updating = False
+
+                    chosen = hits[0][0]
+                    current = (self.programmer_combo.currentText() or self.state.programmer or "").strip()
+                    if len(hits) > 1:
+                        self.log.append_line(
+                            "Multiple programmers detected — select the correct one from the dropdown."
+                        )
+                        self.programmer_combo.showPopup()
+                        self.log.append_line("Ambiguous detection — no auto-selection applied.")
+                        _log_detect_finished()
+                        return
+                    if current and self._programmer_manual_override and current != chosen:
+                        self.log.append_line(
+                            f"Single programmer detected — keeping current selection: {current}"
+                        )
+                        _log_detect_finished()
+                        return
+                    if current == chosen:
+                        self.log.append_line(f"Single programmer detected — already selected: {current}")
+                        _log_detect_finished()
+                        return
+
+                    self.state.programmer = str(chosen)
+                    self.programmer_combo.blockSignals(True)
+                    try:
+                        idx = self.programmer_combo.findText(self.state.programmer)
+                        if idx >= 0:
+                            self.programmer_combo.setCurrentIndex(idx)
+                        else:
+                            self.programmer_combo.setCurrentText(self.state.programmer)
+                    finally:
+                        self.programmer_combo.blockSignals(False)
+                    self._programmer_manual_override = False
+                    friendly = _programmer_friendly_name(self.state.programmer)
+                    if friendly and friendly.lower() != self.state.programmer.lower():
+                        self.log.append_line(
+                            f"Programmer set to {friendly} ({self.state.programmer})"
+                        )
+                    else:
+                        self.log.append_line(f"Programmer set to {self.state.programmer}")
+                    self.status_programmer.setText(_format_programmer_status(self.state.programmer))
+                    _log_detect_finished()
+                finally:
+                    if detect_seq == int(getattr(self, "_detect_programmer_seq", 0)):
+                        self._detect_programmer_inflight = False
+                        try:
+                            self.detect_btn.setEnabled(True)
+                        except Exception:
+                            pass
+
+            # Dispatch back to the GUI object's thread explicitly.
+            QTimer.singleShot(0, self, _apply)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _cancel_active_operations(self) -> None:
         count = _active_operation_count()
