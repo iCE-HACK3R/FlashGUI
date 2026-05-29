@@ -1,5 +1,26 @@
 # Release Notes
 
+## v1.1.13
+
+### Highlights (v1.1.13)
+
+- Repository branch hygiene update: non-`main` branches were cleaned up so release flow is centered on `main`.
+- Bumped release metadata and application versions to `v1.1.13`.
+- Updated README release references/examples to match the new tag and artifact set.
+
+### Version (v1.1.13)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.13"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.13"`
+
+### Build Artifact Targets (v1.1.13)
+
+- `release/flashgui-v1.1.13-windows-x64-portable.zip`
+- `release/flashgui-v1.1.13-linux-x64-portable.zip`
+- `release/flashgui-v1.1.13-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.13-macos-x64-portable.zip`
+
 ## v1.1.12
 
 ### Highlights (v1.1.12)

@@ -6,7 +6,7 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 Main Objective: provide a practical, user-friendly GUI for flashrom-based workflows that helps users avoid common pitfalls and supports a wide range of hardware especially on linux.
 
-## Latest release (v1.1.12)
+## Latest release (v1.1.13)
 
 - Added expanded **KDE native-dialog regression coverage** for the v1.1.10 fix to lock in behavior across environment combinations and cancel/success paths.
 - Added **security hardening** for settings storage, font cache/temp locations, font-download validation, and binary-path safety checks.
@@ -45,10 +45,10 @@ Main Objective: provide a practical, user-friendly GUI for flashrom-based workfl
 | Command preview + per-operation output log controls             |  ✅   |  ✅   |
 | Startup settings validation + first-run setup prompt            |  ✅   |  ✅   |
 | Settings page (paths, theme/font, behavior, diagnostics)        |  ✅   |  ✅   |
-| Global log panel with font/verbose controls                     |  ➖   |  ✅   |
-| Dedicated Tools page (Binwalk/hash/convert/diff/fwinfo helpers) |  ➖   |  ✅   |
-| Serial Programmer Console (connect/send/receive terminal)       |  ➖   |  ✅   |
-| Help & About page with update/help shortcuts                    |  ➖   |  ✅   |
+| Global log panel with font/verbose controls                     |  ✅   |  ✅   |
+| Dedicated Tools page (Binwalk/hash/convert/diff/fwinfo helpers) |  ✅   |  ✅   |
+| Serial Programmer Console (connect/send/receive terminal)       |  ✅   |  ✅   |
+| Help & About page with update/help shortcuts                    |  ✅   |  ✅   |
 
 Legend: ✅ = available in this UI, ➖ = not exposed in this UI.
 
@@ -238,17 +238,17 @@ Optional flags:
 
 Release bundle examples generated in this repo:
 
-- `release/flashgui-v1.1.12-windows-x64-portable.zip`
-- `release/flashgui-v1.1.12-linux-x64-portable.zip`
-- `release/flashgui-v1.1.12-macos-arm64-portable.zip`
-- `release/flashgui-v1.1.12-macos-x64-portable.zip`
+- `release/flashgui-v1.1.13-windows-x64-portable.zip`
+- `release/flashgui-v1.1.13-linux-x64-portable.zip`
+- `release/flashgui-v1.1.13-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.13-macos-x64-portable.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.12`)
+- Create an annotated tag (example: `v1.1.13`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.12`
+- Create a GitHub Release from tag `v1.1.13`
 - CI will build on Windows/Linux/macOS and auto-attach generated portable artifacts to that release
 
 ## Mentions & thanks
@@ -257,6 +257,7 @@ Big thanks to the open-source projects and documentation that made this app poss
 
 - [`flashrom/flashrom`](https://github.com/flashrom/flashrom) — core flashing engine and broad hardware support.
 - [`SourceArcade/flashprog`](https://github.com/SourceArcade/flashprog) — actively maintained flashprog ecosystem.
+- [`minipro-minipro/minipro`](https://gitlab.com/DavidGriffith/minipro) — essential for T48/T56 programmer support and a great example of a focused, well-documented CLI tool.
 - [`Jazzzny/iFR`](https://github.com/Jazzzny/iFR) — useful early Python GUI reference.
 - [`KantBStoppd/FlashromGUI`](https://github.com/KantBStoppd/FlashromGUI) — community GUI project with safety/usability focus.
 

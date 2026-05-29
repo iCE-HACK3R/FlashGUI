@@ -25,6 +25,7 @@ import tempfile
 import threading
 import time
 import urllib.request
+from urllib.parse import quote_plus
 import webbrowser
 import tkinter as tk
 from datetime import datetime
@@ -59,7 +60,7 @@ except ImportError:
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.12"
+VERSION = "1.1.13"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -874,6 +875,238 @@ def _extract_chip_id_from_lines(lines: list[str]) -> str:
     if not found_ids:
         return "N/A"
     return ", ".join(found_ids)
+
+
+def _extract_probe_ids_from_lines(lines: list[str]) -> list[tuple[int, int]]:
+    """Extract (manufacturer_id, model_id) pairs from probe output lines."""
+    ids: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    patterns = (
+        r"compare_id:\s*id1\s*0x([0-9a-fA-F]+),\s*id2\s*0x([0-9a-fA-F]+)",
+        r"(?:probe_spi_rdid|spi_rdid)\s*:\s*id1\s*0x([0-9a-fA-F]+),\s*id2\s*0x([0-9a-fA-F]+)",
+        r"\bid1\s*0x([0-9a-fA-F]+),\s*id2\s*0x([0-9a-fA-F]+)",
+    )
+    for line in lines:
+        for pat in patterns:
+            m = re.search(pat, line, re.IGNORECASE)
+            if not m:
+                continue
+            try:
+                pair = (int(m.group(1), 16), int(m.group(2), 16))
+            except ValueError:
+                continue
+            if pair in seen:
+                continue
+            seen.add(pair)
+            ids.append(pair)
+    return ids
+
+
+def _resources_root() -> str:
+    """Resolve resources directory with legacy-compatible fallbacks."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = (
+        os.path.join(script_dir, "resources"),
+        os.path.join(os.path.dirname(script_dir), "resources"),
+        os.path.join(os.path.dirname(script_dir), "flashgui", "resources"),
+    )
+    for p in candidates:
+        if os.path.isdir(p):
+            return p
+    return candidates[0]
+
+
+def _normalize_chip_key(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
+
+
+def _probe_id_key(manuf: int, model: int) -> str:
+    return f"{manuf:x}:{model:x}"
+
+
+def _datasheet_search_targets(chip_name: str) -> list[str]:
+    name = re.sub(r"\s+", " ", (chip_name or "").strip())
+    if not name:
+        return []
+    return [f"https://www.alldatasheet.com/view.jsp?Searchword={quote_plus(name)}"]
+
+
+def _find_local_datasheet_pdf(local_pdf_root: str, *names: str) -> str | None:
+    if not os.path.isdir(local_pdf_root):
+        return None
+
+    try:
+        entries = [n for n in os.listdir(local_pdf_root) if n.lower().endswith(".pdf")]
+    except OSError:
+        return None
+
+    if not entries:
+        return None
+
+    by_lower_name: dict[str, str] = {}
+    by_norm_stem: dict[str, str] = {}
+    norm_entries: list[tuple[str, str]] = []
+
+    for entry in entries:
+        full = os.path.join(local_pdf_root, entry)
+        lower = entry.lower()
+        by_lower_name[lower] = full
+        stem = os.path.splitext(entry)[0]
+        norm = _normalize_chip_key(stem)
+        if norm and norm not in by_norm_stem:
+            by_norm_stem[norm] = full
+        norm_entries.append((norm, full))
+
+    for raw in names:
+        if not raw:
+            continue
+        candidate = os.path.basename((raw or "").strip())
+        if not candidate:
+            continue
+
+        direct = by_lower_name.get(candidate.lower())
+        if direct:
+            return direct
+
+        if not candidate.lower().endswith(".pdf"):
+            direct_pdf = by_lower_name.get((candidate + ".pdf").lower())
+            if direct_pdf:
+                return direct_pdf
+
+        stem = os.path.splitext(candidate)[0]
+        norm = _normalize_chip_key(stem)
+        if not norm:
+            continue
+
+        norm_hit = by_norm_stem.get(norm)
+        if norm_hit:
+            return norm_hit
+
+        for file_norm, full in norm_entries:
+            if not file_norm:
+                continue
+            if norm in file_norm or file_norm in norm:
+                return full
+
+    return None
+
+
+def _load_datasheet_hint_map() -> dict[str, dict[str, str]]:
+    path = os.path.join(_resources_root(), "chips", "datasheet_hint_map.json")
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            raw = json.load(f)
+    except Exception:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+
+    out: dict[str, dict[str, str]] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not isinstance(value, dict):
+            continue
+        rec: dict[str, str] = {}
+        for field in ("vendor", "preferred_name", "datasheet_url", "datasheet_pdf_url", "local_pdf"):
+            v = value.get(field)
+            if isinstance(v, str) and v.strip():
+                rec[field] = v.strip()
+        if rec:
+            out[key.lower()] = rec
+    return out
+
+
+def _datasheet_candidate_names(
+    chip: str,
+    model: str,
+    vendor: str,
+    probe_ids: list[tuple[int, int]] | None = None,
+) -> list[str]:
+    ids = probe_ids or []
+    hint_map = _load_datasheet_hint_map()
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def _add(name: str) -> None:
+        n = (name or "").strip()
+        if not n:
+            return
+        key = _normalize_chip_key(n)
+        if not key or key in seen:
+            return
+        seen.add(key)
+        out.append(n)
+
+    _add(chip)
+    _add(model)
+    if vendor and model:
+        _add(f"{vendor} {model}")
+
+    for manuf, model_id in ids:
+        hint = hint_map.get(_probe_id_key(manuf, model_id), {})
+        if isinstance(hint, dict):
+            _add(str(hint.get("preferred_name", "")))
+
+    return out
+
+
+def _resolve_datasheet_target(
+    chip: str,
+    model: str,
+    vendor: str,
+    probe_ids: list[tuple[int, int]] | None = None,
+) -> tuple[str | None, list[str]]:
+    ids = probe_ids or []
+    hint_map = _load_datasheet_hint_map()
+    local_pdf_root = os.path.join(_resources_root(), "datasheets")
+    candidates = _datasheet_candidate_names(chip, model, vendor, ids)
+
+    for manuf, model_id in ids:
+        hint = hint_map.get(_probe_id_key(manuf, model_id), {})
+        if not isinstance(hint, dict):
+            continue
+
+        local_pdf = str(hint.get("local_pdf", "")).strip()
+        preferred = str(hint.get("preferred_name", "")).strip()
+        local_hit = _find_local_datasheet_pdf(local_pdf_root, local_pdf, preferred, chip, model)
+        if local_hit:
+            return local_hit, candidates
+
+        datasheet_pdf_url = str(hint.get("datasheet_pdf_url", "")).strip()
+        if datasheet_pdf_url.lower().startswith(("http://", "https://")) and ".pdf" in datasheet_pdf_url.lower():
+            return datasheet_pdf_url, candidates
+
+        datasheet_url = str(hint.get("datasheet_url", "")).strip()
+        if datasheet_url.lower().startswith(("http://", "https://")):
+            return datasheet_url, candidates
+
+    local_hit = _find_local_datasheet_pdf(local_pdf_root, *candidates)
+    if local_hit:
+        return local_hit, candidates
+
+    search_name = candidates[0] if candidates else (chip or model)
+    targets = _datasheet_search_targets(search_name)
+    return (targets[0] if targets else None), candidates
+
+
+def _open_datasheet_target(target: str) -> None:
+    if not target:
+        return
+    if os.path.isfile(target):
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", target])
+            return
+        if sys.platform.startswith("linux"):
+            subprocess.Popen(["xdg-open", target])
+            return
+        startfile = getattr(os, "startfile", None)
+        if callable(startfile):
+            startfile(target)
+            return
+        webbrowser.open(f"file:///{target.replace(os.sep, '/')}")
+        return
+    webbrowser.open(target)
 
 
 def _parse_minipro_device_info(lines: list[str], chip_fallback: str) -> tuple[str, str, str]:
@@ -2701,6 +2934,9 @@ class PageInfo(_ChipMixin):
         nb.add(self.frame, text="About ROM")
         self.frame.columnconfigure(0, weight=1)
         self.frame.rowconfigure(0, weight=1)
+        self._last_model = ""
+        self._last_vendor = ""
+        self._last_probe_ids: list[tuple[int, int]] = []
 
         # Paned window: top for controls, bottom for Command Preview
         paned = ttk.PanedWindow(self.frame, orient="vertical")
@@ -2719,8 +2955,16 @@ class PageInfo(_ChipMixin):
         self.chip_combo.grid(row=1, column=0, columnspan=2, sticky="ew", padx=(0, 4))
         ttk.Button(control_frame, text="Auto Detect", width=12, command=self._autodetect).grid(row=1, column=2, sticky="ew")
 
-        ttk.Button(control_frame, text="Read Chip Info", width=12, command=self._read_info).grid(
-            row=2, column=0, columnspan=3, pady=8)
+        action_row = ttk.Frame(control_frame)
+        action_row.grid(row=2, column=0, columnspan=3, sticky="ew", pady=8)
+        action_row.columnconfigure(0, weight=1)
+        action_row.columnconfigure(1, weight=1)
+        ttk.Button(action_row, text="Read Chip Info", width=16, command=self._read_info).grid(
+            row=0, column=0, sticky="ew", padx=(0, 4)
+        )
+        ttk.Button(action_row, text="Open Datasheet", width=16, command=self._open_datasheet).grid(
+            row=0, column=1, sticky="ew", padx=(4, 0)
+        )
 
         self.tree = ttk.Treeview(control_frame, columns=("v",), show="tree headings", height=6)
         self.tree.heading("#0", text="Property")
@@ -2802,6 +3046,7 @@ class PageInfo(_ChipMixin):
             size_str = "N/A"
             chip_id_text = "N/A"
             wp = "N/A"
+            probe_ids: list[tuple[int, int]] = []
 
             try:
                 if _is_minipro_tool(tool, binary):
@@ -2820,6 +3065,7 @@ class PageInfo(_ChipMixin):
 
                     model, vendor, size_str = _parse_minipro_device_info(out_lines, chip)
                     chip_id_text = _extract_chip_id_from_lines(out_lines)
+                    probe_ids = _extract_probe_ids_from_lines(out_lines)
                     wp = "N/A"
                 elif tool != "flashprog":
                     # ── flashrom: single call to --wp-status gives Found line + WP ──
@@ -2833,6 +3079,7 @@ class PageInfo(_ChipMixin):
                         out_lines = []
 
                     vendor, model, size_str = _parse_chip_info(out_lines)
+                    probe_ids = _extract_probe_ids_from_lines(out_lines)
                     chip_id_match = re.search(
                         r"\bid(?:1|2)?\s*=\s*(0x[0-9a-fA-F]+|[0-9a-fA-F]{2,8})",
                         "\n".join(out_lines),
@@ -2862,6 +3109,7 @@ class PageInfo(_ChipMixin):
                         out_lines = []
 
                     vendor, model, size_str = _parse_chip_info(out_lines)
+                    probe_ids = _extract_probe_ids_from_lines(out_lines)
                     chip_id_match = re.search(
                         r"\bid(?:1|2)?\s*=\s*(0x[0-9a-fA-F]+|[0-9a-fA-F]{2,8})",
                         "\n".join(out_lines),
@@ -2873,15 +3121,52 @@ class PageInfo(_ChipMixin):
             except Exception as exc:
                 _safe_after(self.root, 0, lambda e=exc: self.log.append(f"ERROR: Failed to read chip info: {e}"))
 
-            _safe_after(self.root, 0, lambda: self._fill_info(model, vendor, size_str, chip_id_text, wp))
+            _safe_after(self.root, 0, lambda: self._fill_info(model, vendor, size_str, chip_id_text, wp, probe_ids))
 
         threading.Thread(target=_worker, daemon=False).start()
 
-    def _fill_info(self, model: str, vendor: str, size: str, chip_id: str, wp: str) -> None:
+    def _fill_info(
+        self,
+        model: str,
+        vendor: str,
+        size: str,
+        chip_id: str,
+        wp: str,
+        probe_ids: list[tuple[int, int]] | None = None,
+    ) -> None:
         self.progress.stop_reset()
+        self._last_model = model or ""
+        self._last_vendor = vendor or ""
+        self._last_probe_ids = list(probe_ids or [])
         values = [model, vendor, size, chip_id, wp]
         for i, item in enumerate(self.tree.get_children()):
             self.tree.item(item, values=(values[i],))
+
+    def _open_datasheet(self) -> None:
+        chip = (self.chip_var.get() or "").strip()
+        if not chip:
+            self.log.append("ERROR: Select/detect a chip first.")
+            return
+
+        model = (self._last_model or chip).strip()
+        vendor = (self._last_vendor or "").strip()
+        target, candidates = _resolve_datasheet_target(
+            chip,
+            model,
+            vendor,
+            self._last_probe_ids,
+        )
+        if not target:
+            self.log.append("ERROR: Could not resolve a datasheet target.")
+            return
+
+        try:
+            _open_datasheet_target(target)
+            self.log.append(f"Opened datasheet target: {target}")
+            if candidates:
+                self.log.append(f"Datasheet candidates: {', '.join(candidates[:5])}")
+        except Exception as exc:
+            self.log.append(f"ERROR: Failed to open datasheet target: {exc}")
 
 
 class PageHelpAbout:
@@ -2930,7 +3215,7 @@ class PageHelpAbout:
             "Thanks to:\n"
             "- flashrom/flashrom\n"
             "- SourceArcade/flashprog\n"
-            "- DavidGriffith/minipro (https://github.com/DavidGriffith/minipro) — actively maintained minipro ecosystem.\n"
+            "- DavidGriffith/minipro\n"
             "- Jazzzny/iFR\n"
             "- KantBStoppd/FlashromGUI\n\n"
             "This project is an independent frontend and is not affiliated with or endorsed by the "
@@ -4726,6 +5011,7 @@ class AppState:
     def __init__(self) -> None:
         self.settings_path = _settings_path()
         self.settings = _load_settings(self.settings_path)
+        self._loaded_settings_were_empty = not bool(self.settings)
 
         self.tool = str(self.settings.get("tool", "flashrom"))
         if self.tool not in {"flashrom", "flashprog", "minipro"}:
@@ -4771,6 +5057,83 @@ class AppState:
         self.programmer = ""
         self.tmpdir     = tempfile.mkdtemp()
         self._load_sudo_keyring()
+
+        (
+            self.startup_validation_lines,
+            self.startup_missing_binaries,
+            self.startup_requires_first_run,
+            self._settings_autofix_changed,
+        ) = self._validate_startup_settings()
+
+        if self._settings_autofix_changed:
+            self.settings["workspace_dir"] = self.workspace_dir
+            self.settings["log_file_path"] = self.log_file_path
+            self.settings["tool"] = self.tool
+            try:
+                self.save_settings(geometry=self.window_geometry)
+            except Exception:
+                pass
+
+    def _validate_startup_settings(self) -> tuple[list[str], list[str], bool, bool]:
+        """Validate persisted settings and detect first-run setup requirements."""
+        lines: list[str] = []
+        missing_binaries: list[str] = []
+        invalid_configured_paths: list[str] = []
+        changed = False
+
+        default_workspace = os.path.dirname(os.path.abspath(__file__))
+
+        if self.tool not in {"flashrom", "flashprog", "minipro"}:
+            lines.append(f"Settings validation: invalid tool '{self.tool}', reset to 'flashrom'.")
+            self.tool = "flashrom"
+            changed = True
+
+        if not self.workspace_dir:
+            self.workspace_dir = default_workspace
+            lines.append("Settings validation: workspace_dir was empty; restored default workspace path.")
+            changed = True
+        if self.workspace_dir and not os.path.isdir(self.workspace_dir):
+            try:
+                os.makedirs(self.workspace_dir, exist_ok=True)
+                lines.append(f"Settings validation: created workspace_dir: {self.workspace_dir}")
+                changed = True
+            except OSError as exc:
+                lines.append(f"Settings warning: failed to create workspace_dir '{self.workspace_dir}': {exc}")
+
+        if not self.log_file_path:
+            self.log_file_path = os.path.join(self.workspace_dir, "flashgui.log")
+            lines.append("Settings validation: log_file_path was empty; restored default log file path.")
+            changed = True
+
+        binary_checks: list[tuple[str, str, str]] = [
+            ("flashrom", self.flashrom_bin, "flashrom"),
+            ("flashprog", self.flashprog_bin, "flashprog"),
+            ("minipro", self.minipro_bin, "minipro"),
+            ("fwinfo", self.fwinfo_bin, "fwinfo"),
+        ]
+        for tool_name, configured, fallback in binary_checks:
+            cfg = (configured or "").strip()
+            if cfg:
+                ok = bool(os.path.isfile(cfg) or shutil.which(cfg))
+                if not ok:
+                    invalid_configured_paths.append(tool_name)
+                    missing_binaries.append(tool_name)
+                    lines.append(f"Settings warning: {tool_name}_bin points to a missing path: {cfg}")
+            else:
+                if shutil.which(fallback) is None:
+                    missing_binaries.append(tool_name)
+
+        primary_tools = {"flashrom", "flashprog", "minipro"}
+        primary_missing = primary_tools.issubset(set(missing_binaries))
+        needs_first_run = bool(
+            self._loaded_settings_were_empty
+            or invalid_configured_paths
+            or primary_missing
+        )
+        if needs_first_run:
+            lines.append("Startup check: first-run setup required (open Settings and configure tool paths).")
+
+        return lines, missing_binaries, needs_first_run, changed
 
     def _load_sudo_keyring(self) -> None:
         """Restore sudo password from system keyring if the keyring package is available."""
@@ -5255,9 +5618,27 @@ class FlashGUI:
         self.log.append(f"flashgui {VERSION}  —  multi-tool GUI for flashrom + flashprog + minipro")
         for line in _startup_runtime_log_lines(self.state):
             self.log.append(line)
+        self._apply_startup_settings_validation()
         self._refresh_tool()
         if self.state.auto_detect_programmer:
             _safe_after(self.root, 1500, self._on_detect_programmer)
+
+    def _apply_startup_settings_validation(self) -> None:
+        lines = list(getattr(self.state, "startup_validation_lines", []) or [])
+        for line in lines:
+            self.log.append(line)
+        if not getattr(self.state, "startup_requires_first_run", False):
+            return
+
+        self.log.append("Startup check: opening Settings for first-run setup.")
+        self._show_page("settings")
+        missing = list(getattr(self.state, "startup_missing_binaries", []) or [])
+        details = f"\n\nMissing tools: {', '.join(missing)}" if missing else ""
+        messagebox.showwarning(
+            "First-run setup required",
+            "Please review Settings and configure tool paths before running operations." + details,
+            parent=self.root,
+        )
 
     def _rebuild_pages(self, keep_page: str = "info") -> None:
         for tab in self.nb.tabs():
