@@ -78,7 +78,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.13"
+VERSION = "1.1.14"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -6829,11 +6829,18 @@ class AppState:
         return tool
 
     def verbose_arg(self) -> str | None:
+        if _is_minipro_tool(self.tool, self.binary):
+            # minipro mode must not receive global -V/-VV/-VVV flags.
+            self.verbose_level = 0
+            return None
         lvl = max(0, min(3, int(self.verbose_level)))
         return None if lvl == 0 else ("-" + ("V" * lvl))
 
     def with_verbose(self, cmd: list[str]) -> list[str]:
-        """Inject -V/-VV/-VVV right after binary when verbose is enabled."""
+        """Inject -V/-VV/-VVV right after binary when verbose is enabled.
+
+        In minipro mode verbose is forced off.
+        """
         out = list(cmd)
         v = self.verbose_arg()
         if not v:
@@ -13775,6 +13782,13 @@ class FlashGUIQt(QMainWindow):
         tool = self.tool_combo.currentText().strip() or "flashrom"
         self.state.tool = tool
         self.state.binary = self.state.resolve_tool_binary(tool)
+        is_minipro = _is_minipro_tool(self.state.tool, self.state.binary)
+
+        if is_minipro:
+            self._enforce_minipro_verbose_off()
+        elif hasattr(self, "verbose_combo"):
+            self.verbose_combo.setEnabled(True)
+
         self._programmer_manual_override = False
         binary = self.state.binary
         self.log.append_line(f"Tool: {binary} (checking version…)")
@@ -13914,6 +13928,16 @@ class FlashGUIQt(QMainWindow):
                 combo.blockSignals(False)
 
     def _on_verbose_change(self, index: int) -> None:
+        if _is_minipro_tool(self.state.tool, self.state.binary):
+            self._enforce_minipro_verbose_off(log_change=False)
+            if hasattr(self, "log"):
+                self.log.append_line("Verbose Mode remains Off in minipro mode.")
+            try:
+                self.state.save_settings(geometry=self.state.window_geometry)
+            except Exception:
+                pass
+            return
+
         self.state.verbose_level = max(0, min(3, int(index)))
         flag = self.state.verbose_arg() or "Off"
         if hasattr(self, "log"):
@@ -13922,6 +13946,18 @@ class FlashGUIQt(QMainWindow):
             self.state.save_settings(geometry=self.state.window_geometry)
         except Exception:
             pass
+
+    def _enforce_minipro_verbose_off(self, *, log_change: bool = True) -> None:
+        self.state.verbose_level = 0
+        if hasattr(self, "verbose_combo"):
+            self.verbose_combo.blockSignals(True)
+            try:
+                self.verbose_combo.setCurrentIndex(0)
+                self.verbose_combo.setEnabled(False)
+            finally:
+                self.verbose_combo.blockSignals(False)
+        if log_change and hasattr(self, "log"):
+            self.log.append_line("Verbose Mode forced to Off for minipro mode.")
 
     def _set_ft232h_divisor_toolbar_value(self, divisor: object) -> None:
         combo = getattr(self, "ft232h_divisor_combo", None)

@@ -1,5 +1,26 @@
 # Release Notes
 
+## v1.1.14
+
+### Highlights (v1.1.14)
+
+- Minipro mode now enforces `Verbose Mode: Off` and prevents global `-V/-VV/-VVV` injection into minipro commands.
+- Qt toolbar/log verbose control now auto-resets to Off and remains disabled while minipro is selected.
+- Added regression coverage for minipro verbose-off behavior.
+
+### Version (v1.1.14)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.14"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.14"`
+
+### Build Artifact Targets (v1.1.14)
+
+- `release/flashgui-v1.1.14-windows-x64-portable.zip`
+- `release/flashgui-v1.1.14-linux-x64-portable.zip`
+- `release/flashgui-v1.1.14-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.14-macos-x64-portable.zip`
+
 ## v1.1.13
 
 ### Highlights (v1.1.13)

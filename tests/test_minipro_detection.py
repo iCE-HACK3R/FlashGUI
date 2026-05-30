@@ -208,3 +208,16 @@ def test_detect_programmer_usb_windows_merges_usb_and_serial(monkeypatch) -> Non
         ("ch341a_spi", "CH341A  [1a86:5512]"),
         ("serprog:dev=COM7", "USB Serial Device → COM7"),
     ]
+
+
+def test_minipro_mode_forces_global_verbose_off() -> None:
+    state = flashgui.AppState.__new__(flashgui.AppState)
+    state.tool = "minipro"
+    state.binary = "minipro.exe"
+    state.verbose_level = 3
+
+    out = state.with_verbose(["minipro.exe", "-p", "W25Q64", "-r", "dump.bin"])
+
+    assert out == ["minipro.exe", "-p", "W25Q64", "-r", "dump.bin"]
+    assert state.verbose_level == 0
+    assert state.verbose_arg() is None

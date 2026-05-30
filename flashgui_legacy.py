@@ -60,7 +60,7 @@ except ImportError:
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.13"
+VERSION = "1.1.14"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
