@@ -60,7 +60,7 @@ except ImportError:
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.14"
+VERSION = "1.1.15"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -1179,15 +1179,37 @@ _USB_PROGRAMMER_MAP: list[tuple[str, str, str, str]] = [
     ("1a86", "5512", "ch341a_spi",    "CH341A"),
     ("1a86", "55db", "ch347_spi",     "CH347"),
     ("1a86", "55da", "ch347_spi",     "CH347T"),
+    ("1a86", "55de", "ch347_spi",     "CH347 + JTAG"),
     ("0483", "dada", "dediprog",      "Dediprog SF100"),
     ("0483", "deaf", "dediprog",      "Dediprog SF600"),
     ("0403", "6010", "ft2232_spi",    "FTDI FT2232H"),
     ("0403", "6011", "ft2232_spi",    "FTDI FT4232H"),
     ("0403", "6014", _ft232h_programmer_arg(_FT232H_DEFAULT_DIVISOR), "FTDI FT232H"),
+    ("0403", "6041", "ft2232_spi",    "FTDI FT4233H"),
+    ("0403", "8a98", "ft2232_spi",    "TIAO USB Multi-Protocol Adapter"),
+    ("0403", "8a99", "ft2232_spi",    "TIAO USB Multi-Protocol Adapter Lite"),
+    ("0403", "bbe2", "ft2232_spi",    "KT-LINK"),
+    ("0403", "cff8", "ft2232_spi",    "Amontec JTAGkey"),
+    ("096c", "1449", "ft2232_spi",    "GOEPEL PicoTAP"),
+    ("18d1", "5001", "ft2232_spi",    "Google Servo"),
+    ("18d1", "5002", "ft2232_spi",    "Google Servo V2 Legacy"),
+    ("18d1", "5003", "ft2232_spi",    "Google Servo V2"),
+    ("1457", "5118", "ft2232_spi",    "OpenMoko Neo1973 Debug Board"),
+    ("15ba", "0003", "ft2232_spi",    "Olimex ARM-USB-OCD"),
+    ("15ba", "0004", "ft2232_spi",    "Olimex ARM-USB-TINY"),
+    ("15ba", "002b", "ft2232_spi",    "Olimex ARM-USB-OCD-H"),
+    ("15ba", "002a", "ft2232_spi",    "Olimex ARM-USB-TINY-H"),
     ("0403", "601c", "ft4222_spi",    "FTDI FT4222H"),
     ("0403", "6001", "buspirate_spi", "Bus Pirate"),
     ("1209", "c0ca", "dirtyjtag_spi", "DirtyJTAG"),
     ("04b4", "930b", "dirtyjtag_spi", "Cypress FX2 / Tigard"),
+    ("0483", "374e", "stlinkv3_spi",  "STLINK-V3E"),
+    ("0483", "374f", "stlinkv3_spi",  "STLINK-V3S"),
+    ("0483", "3753", "stlinkv3_spi",  "STLINK-V3 dual VCP"),
+    ("0483", "3754", "stlinkv3_spi",  "STLINK-V3 no MSD"),
+    ("10c4", "ea60", "developerbox",  "Developerbox CP2102N"),
+    ("09fb", "6001", "usbblaster_spi", "Altera USB-Blaster"),
+    ("04d8", "0033", "pickit2_spi",   "Microchip PICkit 2"),
     ("1443", "0007", "digilent_spi",  "Digilent HS1"),
     ("1443", "0300", "digilent_spi",  "Digilent HS2"),
     ("1d50", "60a7", "serprog",       "HydraBus"),
@@ -1205,6 +1227,10 @@ _DMESG_PROGRAMMER_MAP: list[tuple[str, str, str]] = [
     ("bus pirate", "buspirate_spi", "Bus Pirate"),
     ("dirtyjtag",  "dirtyjtag_spi", "DirtyJTAG"),
     ("digilent",   "digilent_spi",  "Digilent"),
+    ("stlink-v3",  "stlinkv3_spi",  "STLINK-V3"),
+    ("usb-blaster", "usbblaster_spi", "USB-Blaster"),
+    ("pickit",     "pickit2_spi",   "PICkit 2"),
+    ("cp2102",     "developerbox",  "Developerbox CP2102N"),
     ("hydrabus",   "serprog",       "HydraBus"),
     ("ezp2020-serprog", "serprog",  "EZP2020 serprog"),
     ("ttyacm",     "serprog",       "Serial ACM programmer"),
@@ -1222,13 +1248,28 @@ _UDEV_RULES: dict[str, tuple[str, str]] = {
         "60-ch347.rules",
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55db", MODE="0660", GROUP="plugdev"\n'
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55da", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55de", MODE="0660", GROUP="plugdev"\n'
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55e0", MODE="0660", GROUP="plugdev"',
     ),
     "ft2232_spi": (
         "60-ftdi.rules",
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", MODE="0660", GROUP="plugdev"\n'
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", MODE="0660", GROUP="plugdev"\n'
-        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", MODE="0660", GROUP="plugdev"',
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6041", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8a98", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8a99", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="bbe2", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cff8", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="096c", ATTRS{idProduct}=="1449", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="5001", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="5002", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="5003", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="1457", ATTRS{idProduct}=="5118", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="0003", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="0004", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="002b", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="002a", MODE="0660", GROUP="plugdev"',
     ),
     "ft4222_spi": (
         "60-ftdi.rules",
@@ -1252,6 +1293,31 @@ _UDEV_RULES: dict[str, tuple[str, str]] = {
         "60-digilent.rules",
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1443", ATTRS{idProduct}=="0007", MODE="0660", GROUP="plugdev"\n'
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1443", ATTRS{idProduct}=="0300", MODE="0660", GROUP="plugdev"',
+    ),
+    "stlinkv3_spi": (
+        "60-stlinkv3.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374e", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374f", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="3753", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="3754", MODE="0660", GROUP="plugdev"',
+    ),
+    "developerbox": (
+        "60-developerbox.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0660", GROUP="plugdev"',
+    ),
+    "usbblaster_spi": (
+        "60-usbblaster.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="09fb", ATTRS{idProduct}=="6001", MODE="0660", GROUP="plugdev"',
+    ),
+    "pickit2_spi": (
+        "60-pickit2.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="0033", MODE="0660", GROUP="plugdev"',
+    ),
+    "minipro-usb": (
+        "60-minipro.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="e11c", MODE="0660", GROUP="plugdev", TAG+="uaccess"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="a466", ATTRS{idProduct}=="0a53", MODE="0660", GROUP="plugdev", TAG+="uaccess"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="a466", ATTRS{idProduct}=="1a86", MODE="0660", GROUP="plugdev", TAG+="uaccess"',
     ),
     "hydrabus": (
         "60-hydrabus.rules",
@@ -1950,34 +2016,38 @@ class PageRead(_ChipMixin):
         self.chip_combo.grid(row=3, column=0, columnspan=2, sticky="ew", padx=(0, 4))
         ttk.Button(control_frame, text="Auto Detect", width=12, command=self._autodetect).grid(row=3, column=2, sticky="ew")
 
+        # Advanced Options collapsible section
+        self.adv_frame = _CollapsibleFrame(control_frame, text="🔧 Advanced Options")
+        self.adv_frame.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+
         # Options
         self.opt_reveal = tk.BooleanVar()
         self.opt_nopad = tk.BooleanVar()
-        ttk.Checkbutton(control_frame, text="Reveal file upon completion", variable=self.opt_reveal).grid(
-            row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
-        ttk.Checkbutton(control_frame, text="Remove padding (0xFF) from dump", variable=self.opt_nopad).grid(
-            row=5, column=0, columnspan=3, sticky="w")
+        ttk.Checkbutton(self.adv_frame.container, text="Reveal file upon completion", variable=self.opt_reveal).pack(
+            anchor="w", pady=2)
+        ttk.Checkbutton(self.adv_frame.container, text="Remove padding (0xFF) from dump", variable=self.opt_nopad).pack(
+            anchor="w", pady=2)
 
         self.progress = _ProgressFrame(control_frame, length=300)
-        self.progress.grid(row=6, column=0, columnspan=3, pady=10, sticky="ew")
+        self.progress.grid(row=5, column=0, columnspan=3, pady=10, sticky="ew")
 
-        ttk.Button(control_frame, text="Read ROM", width=12, command=self._run).grid(row=7, column=0, columnspan=3, pady=4)
+        ttk.Button(control_frame, text="Read ROM", width=12, command=self._run).grid(row=6, column=0, columnspan=3, pady=4)
 
         # Result fields shown below the button
-        ttk.Label(control_frame, text="SHA256SUM:").grid(row=8, column=0, sticky="w", pady=(10, 0))
+        ttk.Label(control_frame, text="SHA256SUM:").grid(row=7, column=0, sticky="w", pady=(10, 0))
         self.sha256_var = tk.StringVar(value="—")
         ttk.Entry(control_frame, textvariable=self.sha256_var, state="readonly", width=50).grid(
-            row=8, column=1, columnspan=2, sticky="ew", pady=(10, 0))
+            row=7, column=1, columnspan=2, sticky="ew", pady=(10, 0))
 
-        ttk.Label(control_frame, text="TimeTaken:").grid(row=9, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(control_frame, text="TimeTaken:").grid(row=8, column=0, sticky="w", pady=(4, 0))
         self.elapsed_var = tk.StringVar(value="—")
         ttk.Label(control_frame, textvariable=self.elapsed_var, anchor="w").grid(
-            row=9, column=1, columnspan=2, sticky="w", pady=(4, 0))
+            row=8, column=1, columnspan=2, sticky="w", pady=(4, 0))
 
-        ttk.Label(control_frame, text="Completed:").grid(row=10, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(control_frame, text="Completed:").grid(row=9, column=0, sticky="w", pady=(4, 0))
         self.completed_var = tk.StringVar(value="—")
         ttk.Label(control_frame, textvariable=self.completed_var, anchor="w").grid(
-            row=10, column=1, columnspan=2, sticky="w", pady=(4, 0))
+            row=9, column=1, columnspan=2, sticky="w", pady=(4, 0))
 
         control_frame.columnconfigure(0, weight=0)
         control_frame.columnconfigure(1, weight=1)
@@ -4312,10 +4382,16 @@ class PageSettings:
 
     def _fix_udev(self) -> None:
         """Fix udev rules (alias for _check_udev which already does fixing)."""
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("Udev rules are Linux-only. Skipping on this platform.")
+            return
         self._check_udev()
 
     def _backup_udev(self) -> None:
         """Backup current udev rules."""
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("Udev rules are Linux-only. Skipping on this platform.")
+            return
         log = self.app.log
         log.append("=== Backup udev rules ===")
         
@@ -4702,6 +4778,9 @@ class PageSettings:
         self._run_background("fix binary permissions", _worker, _done)
 
     def _check_udev(self) -> None:
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("Udev rules are Linux-only. Skipping on this platform.")
+            return
         log = self.app.log
         lines: list[str] = []
 
@@ -4772,6 +4851,9 @@ class PageSettings:
         self._run_background("udev check", _worker, _done)
 
     def _reload_udev(self) -> None:
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("Udev rules are Linux-only. Skipping on this platform.")
+            return
         log = self.app.log
         log.append("=== Reload udev rules ===")
         result: dict[str, tuple[bool, str]] = {}
@@ -4790,6 +4872,9 @@ class PageSettings:
         self._run_background("reload udev", _worker, _done)
 
     def _add_plugdev(self) -> None:
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("plugdev group management is Linux-only. Skipping on this platform.")
+            return
         import getpass
         user = getpass.getuser()
         group_name = _configured_udev_group()

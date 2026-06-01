@@ -78,7 +78,7 @@ TTKBOOTSTRAP_AVAILABLE = False
 
 # ────────────────────────── constants ──────────────────────────────────────────
 
-VERSION = "1.1.14"
+VERSION = "1.1.15"
 SETTINGS_FILE = "flashgui_settings.json"
 
 _FONT_PRESETS: tuple[str, ...] = (
@@ -142,9 +142,9 @@ _CUSTOM_DARK_THEMES: set[str] = {
 
 _DEFAULT_TESTED_CHIPS: tuple[str, ...] = (
     "MX25V16066",
-    "GD25Q32(B)",
+    "GD25Q32B",
     "GD25Q128C",
-    "PM25LD040(C)",
+    "PM25LD040C",
     "XM25QH128C",
     "W25X20",
 )
@@ -1862,15 +1862,37 @@ _USB_PROGRAMMER_MAP: list[tuple[str, str, str, str]] = [
     ("1a86", "5512", "ch341a_spi",    "CH341A"),
     ("1a86", "55db", "ch347_spi",     "CH347"),
     ("1a86", "55da", "ch347_spi",     "CH347T"),
+    ("1a86", "55de", "ch347_spi",     "CH347 + JTAG"),
     ("0483", "dada", "dediprog",      "Dediprog SF100"),
     ("0483", "deaf", "dediprog",      "Dediprog SF600"),
     ("0403", "6010", "ft2232_spi",    "FTDI FT2232H"),
     ("0403", "6011", "ft2232_spi",    "FTDI FT4232H"),
     ("0403", "6014", _ft232h_programmer_arg(_FT232H_DEFAULT_DIVISOR), "FTDI FT232H"),
+    ("0403", "6041", "ft2232_spi",    "FTDI FT4233H"),
+    ("0403", "8a98", "ft2232_spi",    "TIAO USB Multi-Protocol Adapter"),
+    ("0403", "8a99", "ft2232_spi",    "TIAO USB Multi-Protocol Adapter Lite"),
+    ("0403", "bbe2", "ft2232_spi",    "KT-LINK"),
+    ("0403", "cff8", "ft2232_spi",    "Amontec JTAGkey"),
+    ("096c", "1449", "ft2232_spi",    "GOEPEL PicoTAP"),
+    ("18d1", "5001", "ft2232_spi",    "Google Servo"),
+    ("18d1", "5002", "ft2232_spi",    "Google Servo V2 Legacy"),
+    ("18d1", "5003", "ft2232_spi",    "Google Servo V2"),
+    ("1457", "5118", "ft2232_spi",    "OpenMoko Neo1973 Debug Board"),
+    ("15ba", "0003", "ft2232_spi",    "Olimex ARM-USB-OCD"),
+    ("15ba", "0004", "ft2232_spi",    "Olimex ARM-USB-TINY"),
+    ("15ba", "002b", "ft2232_spi",    "Olimex ARM-USB-OCD-H"),
+    ("15ba", "002a", "ft2232_spi",    "Olimex ARM-USB-TINY-H"),
     ("0403", "601c", "ft4222_spi",    "FTDI FT4222H"),
     ("0403", "6001", "buspirate_spi", "Bus Pirate"),
     ("1209", "c0ca", "dirtyjtag_spi", "DirtyJTAG"),
     ("04b4", "930b", "dirtyjtag_spi", "Cypress FX2 / Tigard"),
+    ("0483", "374e", "stlinkv3_spi",  "STLINK-V3E"),
+    ("0483", "374f", "stlinkv3_spi",  "STLINK-V3S"),
+    ("0483", "3753", "stlinkv3_spi",  "STLINK-V3 dual VCP"),
+    ("0483", "3754", "stlinkv3_spi",  "STLINK-V3 no MSD"),
+    ("10c4", "ea60", "developerbox",  "Developerbox CP2102N"),
+    ("09fb", "6001", "usbblaster_spi", "Altera USB-Blaster"),
+    ("04d8", "0033", "pickit2_spi",   "Microchip PICkit 2"),
     ("1443", "0007", "digilent_spi",  "Digilent HS1"),
     ("1443", "0300", "digilent_spi",  "Digilent HS2"),
     ("1d50", "60a7", "serprog",       "HydraBus"),
@@ -1887,6 +1909,10 @@ _DMESG_PROGRAMMER_MAP: list[tuple[str, str, str]] = [
     ("bus pirate", "buspirate_spi", "Bus Pirate"),
     ("dirtyjtag",  "dirtyjtag_spi", "DirtyJTAG"),
     ("digilent",   "digilent_spi",  "Digilent"),
+    ("stlink-v3",  "stlinkv3_spi",  "STLINK-V3"),
+    ("usb-blaster", "usbblaster_spi", "USB-Blaster"),
+    ("pickit",     "pickit2_spi",   "PICkit 2"),
+    ("cp2102",     "developerbox",  "Developerbox CP2102N"),
     ("hydrabus",   "serprog",       "HydraBus"),
     ("ezp2020-serprog", "serprog",  "EZP2020 serprog"),
 ]
@@ -1903,13 +1929,28 @@ _UDEV_RULES: dict[str, tuple[str, str]] = {
         "60-ch347.rules",
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55db", MODE="0660", GROUP="plugdev"\n'
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55da", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55de", MODE="0660", GROUP="plugdev"\n'
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55e0", MODE="0660", GROUP="plugdev"',
     ),
     "ft2232_spi": (
         "60-ftdi.rules",
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", MODE="0660", GROUP="plugdev"\n'
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", MODE="0660", GROUP="plugdev"\n'
-        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", MODE="0660", GROUP="plugdev"',
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6041", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8a98", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8a99", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="bbe2", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cff8", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="096c", ATTRS{idProduct}=="1449", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="5001", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="5002", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="5003", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="1457", ATTRS{idProduct}=="5118", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="0003", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="0004", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="002b", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="15ba", ATTRS{idProduct}=="002a", MODE="0660", GROUP="plugdev"',
     ),
     "ft4222_spi": (
         "60-ftdi.rules",
@@ -1922,7 +1963,8 @@ _UDEV_RULES: dict[str, tuple[str, str]] = {
     ),
     "buspirate_spi": (
         "60-buspirate.rules",
-        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", MODE="0660", GROUP="plugdev"',
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", MODE="0660", GROUP="plugdev", TAG+="uaccess"\n'
+        'SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", MODE="0660", GROUP="plugdev", TAG+="uaccess"',
     ),
     "dirtyjtag_spi": (
         "60-dirtyjtag.rules",
@@ -1934,13 +1976,40 @@ _UDEV_RULES: dict[str, tuple[str, str]] = {
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1443", ATTRS{idProduct}=="0007", MODE="0660", GROUP="plugdev"\n'
         'SUBSYSTEM=="usb", ATTRS{idVendor}=="1443", ATTRS{idProduct}=="0300", MODE="0660", GROUP="plugdev"',
     ),
+    "stlinkv3_spi": (
+        "60-stlinkv3.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374e", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374f", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="3753", MODE="0660", GROUP="plugdev"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="3754", MODE="0660", GROUP="plugdev"',
+    ),
+    "developerbox": (
+        "60-developerbox.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0660", GROUP="plugdev"',
+    ),
+    "usbblaster_spi": (
+        "60-usbblaster.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="09fb", ATTRS{idProduct}=="6001", MODE="0660", GROUP="plugdev"',
+    ),
+    "pickit2_spi": (
+        "60-pickit2.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="0033", MODE="0660", GROUP="plugdev"',
+    ),
+    "minipro-usb": (
+        "60-minipro.rules",
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="e11c", MODE="0660", GROUP="plugdev", TAG+="uaccess"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="a466", ATTRS{idProduct}=="0a53", MODE="0660", GROUP="plugdev", TAG+="uaccess"\n'
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="a466", ATTRS{idProduct}=="1a86", MODE="0660", GROUP="plugdev", TAG+="uaccess"',
+    ),
     "hydrabus": (
         "60-hydrabus.rules",
-        'SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="60a7", MODE="0660", GROUP="plugdev"',
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="60a7", MODE="0660", GROUP="plugdev", TAG+="uaccess"\n'
+        'SUBSYSTEM=="tty", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="60a7", MODE="0660", GROUP="plugdev", TAG+="uaccess"',
     ),
     "serprog": (
         "60-serprog.rules",
-        'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5722", MODE="0660", GROUP="plugdev"',
+        'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5722", MODE="0660", GROUP="plugdev", TAG+="uaccess"\n'
+        'SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5722", MODE="0660", GROUP="plugdev", TAG+="uaccess"',
     ),
 }
 
@@ -1959,10 +2028,27 @@ def _preferred_keyring_manager_candidates() -> tuple[str, ...]:
 
 
 def _configured_udev_group() -> str:
-    group = (os.environ.get("FLASHGUI_UDEV_GROUP") or "plugdev").strip()
-    if not re.match(r"^[A-Za-z_][A-Za-z0-9_-]*$", group):
-        return "plugdev"
-    return group
+    raw = (os.environ.get("FLASHGUI_UDEV_GROUP") or "").strip()
+    if raw:
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_-]*$", raw):
+            return "plugdev"
+        return raw
+
+    # Auto-pick a sensible default by probing common serial-access groups.
+    candidates = ("plugdev", "dialout", "uucp", "tty")
+    try:
+        import grp  # type: ignore[import]
+        _getgrnam = getattr(grp, "getgrnam")
+
+        for name in candidates:
+            try:
+                _getgrnam(name)
+                return name
+            except KeyError:
+                continue
+    except Exception:
+        pass
+    return "plugdev"
 
 
 def _apply_udev_group(rule_content: str) -> str:
@@ -1974,7 +2060,7 @@ def _udev_group_hint_text() -> str:
     group = _configured_udev_group()
     raw = (os.environ.get("FLASHGUI_UDEV_GROUP") or "").strip()
     if not raw:
-        return f"Udev target group: {group} (default)"
+        return f"Udev target group: {group} (auto default)"
     if group != raw:
         return f"Udev target group: {group} (invalid FLASHGUI_UDEV_GROUP={raw!r}; using default)"
     return f"Udev target group: {group} (from FLASHGUI_UDEV_GROUP)"
@@ -2019,6 +2105,44 @@ def _find_serial_port(label_hint: str = "") -> str | None:
         return None
 
 
+def _normalize_vid_pid_hex(value: object) -> str:
+    """Normalize VID/PID metadata to lowercase 4-hex string, else empty."""
+    if value is None:
+        return ""
+    try:
+        if isinstance(value, int):
+            if value < 0:
+                return ""
+            return f"{value:04x}"[-4:]
+        raw = str(value).strip()
+        if not raw:
+            return ""
+        if raw.lower().startswith("0x"):
+            raw = raw[2:]
+        if re.fullmatch(r"[0-9a-fA-F]{1,4}", raw):
+            return raw.lower().zfill(4)
+    except Exception:
+        return ""
+    return ""
+
+
+def _serial_port_vid_pid(port: Any) -> tuple[str, str]:
+    """Extract (vid, pid) from a pyserial port object if available."""
+    vid = _normalize_vid_pid_hex(getattr(port, "vid", None))
+    pid = _normalize_vid_pid_hex(getattr(port, "pid", None))
+    return vid, pid
+
+
+def _lookup_usb_programmer_by_vid_pid(vid: str, pid: str) -> tuple[str, str] | None:
+    """Map VID:PID to (programmer_arg_base, human_label)."""
+    if not vid or not pid:
+        return None
+    for (v, p, prog, label) in _USB_PROGRAMMER_MAP:
+        if v == vid and p == pid:
+            return prog, label
+    return None
+
+
 def _detect_programmer_serial_windows() -> list[tuple[str, str]]:
     """Detect likely serial-based programmers on Windows COM ports.
 
@@ -2039,16 +2163,27 @@ def _detect_programmer_serial_windows() -> list[tuple[str, str]]:
         manu = str(getattr(port, "manufacturer", "")).strip()
         hwid = str(getattr(port, "hwid", "")).strip()
         blob = " ".join([device, desc, manu, hwid]).lower()
+        vid, pid = _serial_port_vid_pid(port)
 
         prog = ""
         label = desc or manu or "Serial programmer"
 
+        mapped = _lookup_usb_programmer_by_vid_pid(vid, pid)
+        if mapped is not None:
+            mapped_prog, mapped_label = mapped
+            if mapped_prog in _SERIAL_PROGRAMMER_PARAMS:
+                key = _SERIAL_PROGRAMMER_PARAMS[mapped_prog]
+                prog = f"{mapped_prog}:{key}={device}"
+                label = mapped_label
+                if vid and pid:
+                    label = f"{label}  [{vid}:{pid}]"
+
         # Hydrabus / explicit serprog devices should use the serprog backend.
-        if any(token in blob for token in ("hydrabus", "hydra bus", "serprog")):
+        if not prog and any(token in blob for token in ("hydrabus", "hydra bus", "serprog")):
             prog = f"serprog:dev={device}"
             label = desc or manu or "HydraBus / serprog"
         # Bus Pirate is typically exposed as a serial device too.
-        elif any(token in blob for token in ("bus pirate", "buspirate")):
+        elif not prog and any(token in blob for token in ("bus pirate", "buspirate")):
             prog = f"buspirate_spi:dev={device}"
             label = desc or manu or "Bus Pirate"
 
@@ -2206,14 +2341,25 @@ def _detect_programmer_serial_posix() -> list[tuple[str, str]]:
         manu = str(getattr(port, "manufacturer", "")).strip()
         hwid = str(getattr(port, "hwid", "")).strip()
         blob = " ".join([device, desc, manu, hwid]).lower()
+        vid, pid = _serial_port_vid_pid(port)
 
         prog = ""
         label = desc or manu or "Serial programmer"
 
-        if any(token in blob for token in ("hydrabus", "hydra bus", "serprog")):
+        mapped = _lookup_usb_programmer_by_vid_pid(vid, pid)
+        if mapped is not None:
+            mapped_prog, mapped_label = mapped
+            if mapped_prog in _SERIAL_PROGRAMMER_PARAMS:
+                key = _SERIAL_PROGRAMMER_PARAMS[mapped_prog]
+                prog = f"{mapped_prog}:{key}={device}"
+                label = mapped_label
+                if vid and pid:
+                    label = f"{label}  [{vid}:{pid}]"
+
+        if not prog and any(token in blob for token in ("hydrabus", "hydra bus", "serprog")):
             prog = f"serprog:dev={device}"
             label = desc or manu or "HydraBus / serprog"
-        elif any(token in blob for token in ("bus pirate", "buspirate")):
+        elif not prog and any(token in blob for token in ("bus pirate", "buspirate")):
             prog = f"buspirate_spi:dev={device}"
             label = desc or manu or "Bus Pirate"
 
@@ -3013,6 +3159,34 @@ def _detect_programmer_usb() -> list[tuple[str, str]]:
     return results
 
 
+def _linux_programmer_detection_debug_lines(hits: list[tuple[str, str]]) -> list[str]:
+    """Return Linux-only debug lines: detected VID:PID + udev rule + target group."""
+    if not sys.platform.startswith("linux"):
+        return []
+
+    group_name = _configured_udev_group()
+    lines: list[str] = [f"Linux udev debug: target group={group_name}"]
+
+    if not hits:
+        lines.append("  udev debug: detected VID:PID=none; rule=n/a")
+        return lines
+
+    for prog, label in hits:
+        base = (prog or "").split(":", 1)[0].strip().lower()
+        rule_file = f"/etc/udev/rules.d/{_UDEV_RULES[base][0]}" if base in _UDEV_RULES else "n/a"
+
+        vid_pid = "unknown"
+        m = re.search(r"\[([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\]", label or "")
+        if m:
+            vid_pid = f"{m.group(1).lower()}:{m.group(2).lower()}"
+
+        lines.append(
+            f"  udev debug: programmer={base or 'n/a'} VID:PID={vid_pid} rule={rule_file} group={group_name}"
+        )
+
+    return lines
+
+
 def _detect_chips(
     binary: str,
     programmer: str,
@@ -3249,20 +3423,75 @@ def _run_command_progress(
     """
     _pct_re = re.compile(r"(\d{1,3})\s*%")
     _done_re = re.compile(
-        r"(erase/write done|erase done|write done|verified|verification.*(?:ok|success)|read:\s*100%)",
+        r"(erase/write done|erase done|write done|verified|verification.*(?:ok|success)|completed\s*:\s*(?:ok|success))",
         re.IGNORECASE,
     )
     _ansi_re = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
     _minipro_prog_re = re.compile(r"^(Reading|Writing|Erasing|Verifying)\b.*?(\d{1,3})%$", re.IGNORECASE)
+    _phase_header_re = re.compile(
+        r"(reading\s+old\s+flash\s+chip\s+contents"
+        r"|updating\s+flash\s+chip\s+contents"
+        r"|erasing\s+and\s+writing\s+flash\s+chip"
+        r"|verifying\s+flash"
+        r"|erasing\s+flash\s+chip)",
+        re.IGNORECASE,
+    )
 
     is_minipro_cmd = bool(cmd) and os.path.basename(str(cmd[0]).strip()).lower() in {"minipro", "minipro.exe"}
 
-    pct_state = {"last": -1}
+    # Detect multi-phase flashrom/flashprog write so [READ: 100%] from the
+    # read-old-contents phase doesn't peg the progress bar before write/verify.
+    cmd_flags = {str(a).strip() for a in (cmd or []) if isinstance(a, str)}
+    is_write_cmd = (not is_minipro_cmd) and bool(cmd_flags & {"-w", "--write"})
+    is_minipro_write_cmd = is_minipro_cmd and bool(cmd_flags & {"-w", "--write"})
+
+    if is_write_cmd:
+        phase_ranges = [
+            ("read_old", 0, 33),
+            ("write", 33, 66),
+            ("verify", 66, 100),
+        ]
+    else:
+        phase_ranges = []
+
+    pct_state = {"last": -1, "phase_idx": 0}
     pct_lock = threading.Lock()
     minipro_state = {
         "last_pct": -1,
         "last_line": "",
     }
+
+    def _map_minipro_write_phase_pct(verb: str, pct: int) -> int:
+        """Map minipro -w stage percentages onto a monotonic overall timeline.
+
+        minipro write operations run in stages (erase, write, read/verify), where
+        per-stage progress can reset from 99% back to 0%. Without mapping, the UI
+        appears stuck near 99% during the verification read stage.
+        """
+        p = max(0, min(100, int(pct)))
+        v = (verb or "").strip().lower()
+        if v in {"reading", "verifying"}:
+            lo, hi = 67, 100
+        elif v == "writing":
+            lo, hi = 0, 67
+        elif v == "erasing":
+            lo, hi = 0, 15
+        else:
+            return p
+        return lo + (p * (hi - lo)) // 100
+
+    def _phase_from_header(text: str) -> int | None:
+        if not phase_ranges:
+            return None
+        low = text.lower()
+        if "reading old flash chip contents" in low:
+            return 0
+        if ("updating flash chip contents" in low
+                or "erasing and writing flash chip" in low):
+            return 1
+        if "verifying flash" in low:
+            return 2
+        return None
 
     def _clean_line(raw: str) -> str:
         s = _ansi_re.sub("", str(raw or ""))
@@ -3272,27 +3501,49 @@ def _run_command_progress(
     def _emit_pct(value: int) -> None:
         if pct_callback is None:
             return
-        pct = max(0, min(100, int(value)))
+        sub = max(0, min(100, int(value)))
         with pct_lock:
+            if phase_ranges:
+                lo, hi = phase_ranges[pct_state["phase_idx"]][1:]
+                pct = lo + (sub * (hi - lo)) // 100
+            else:
+                pct = sub
             if pct <= pct_state["last"]:
                 return
             pct_state["last"] = pct
         pct_callback(pct)
+
+    def _advance_phase(idx: int) -> None:
+        if not phase_ranges or idx is None:
+            return
+        with pct_lock:
+            if idx < pct_state["phase_idx"]:
+                return
+            pct_state["phase_idx"] = idx
+            floor = phase_ranges[idx][1]
+            if floor > pct_state["last"]:
+                pct_state["last"] = floor - 1
+        if pct_callback is not None:
+            pct_callback(phase_ranges[idx][1])
 
     def _emit_line(line: str) -> None:
         cleaned = _clean_line(line)
         if not cleaned:
             return
 
+        handled_pct = False
+
         if is_minipro_cmd:
             m_prog = _minipro_prog_re.match(cleaned)
             if m_prog:
                 pct = max(0, min(100, int(m_prog.group(2))))
-                _emit_pct(pct)
+                verb = m_prog.group(1).capitalize()
+                pct_for_bar = _map_minipro_write_phase_pct(verb, pct) if is_minipro_write_cmd else pct
+                _emit_pct(pct_for_bar)
+                handled_pct = True
                 if pct == minipro_state["last_pct"]:
                     return
                 minipro_state["last_pct"] = pct
-                verb = m_prog.group(1).capitalize()
                 cleaned = f"{verb}... {pct}%"
 
             if cleaned == minipro_state["last_line"]:
@@ -3301,11 +3552,23 @@ def _run_command_progress(
 
         out_queue.put(cleaned)
 
+        if phase_ranges:
+            m_phase = _phase_header_re.search(cleaned)
+            if m_phase:
+                idx = _phase_from_header(cleaned)
+                if idx is not None:
+                    _advance_phase(idx)
+
+        if _done_re.search(cleaned):
+            _emit_pct(100)
+            return
+
+        if handled_pct:
+            return
+
         m = _pct_re.search(cleaned)
         if m:
             _emit_pct(int(m.group(1)))
-        elif _done_re.search(cleaned):
-            _emit_pct(100)
     run_cmd, stdin_text = _with_optional_sudo_for_internal(
         cmd, use_sudo=use_sudo, sudo_password=sudo_password
     )
@@ -3338,7 +3601,7 @@ def _run_command_progress(
 
         def _read_log(stream: object) -> None:
             for raw in stream:  # type: ignore[union-attr]
-                _emit_line(str(raw).rstrip("\n"))
+                _emit_line(str(raw).rstrip("\r\n"))
 
         def _read_progress(stream: object) -> None:
             buf = ""
@@ -3349,14 +3612,18 @@ def _run_command_progress(
                 if ch == "\b":
                     if buf:
                         buf = buf[:-1]
+                elif ch == "\r":
+                    _emit_line(buf)
+                    buf = ""
                 elif ch == "\n":
                     _emit_line(buf)
                     buf = ""
                 else:
                     buf += ch
-                    m = _pct_re.search(buf)
-                    if m:
-                        _emit_pct(int(m.group(1)))
+                    if not is_minipro_cmd:
+                        m = _pct_re.search(buf)
+                        if m:
+                            _emit_pct(int(m.group(1)))
                 if len(buf) > 500:
                     buf = buf[-100:]
 
@@ -3378,7 +3645,10 @@ def _run_command_progress(
                 if proc.poll() is None:
                     proc.terminate()
                 break
-        return proc.wait()
+        rc = proc.wait()
+        if is_minipro_cmd and rc == 0:
+            _emit_pct(100)
+        return rc
     except (FileNotFoundError, OSError, ValueError) as exc:
         out_queue.put(f"ERROR: {exc}")
         return 1
@@ -3412,6 +3682,120 @@ def _remove_padding(path: str) -> int:
         with open(path, "wb") as f:
             f.write(stripped)
     return removed
+
+
+# Patterns matching transient noise emitted by libusb / Windows USB stack and
+# flashrom's "untested chip" boilerplate. Centralized so Tk and Qt About-ROM
+# pipelines share one source of truth.
+_TOOL_NOISE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^libusb:\s*(?:info|warning|error)\b", re.IGNORECASE),
+    re.compile(r"^Cannot detach the existing USB driver", re.IGNORECASE),
+    re.compile(r"^LIBUSB_ERROR_[A-Z_]+\s*$", re.IGNORECASE),
+    re.compile(r"Claiming the interface may fail", re.IGNORECASE),
+)
+
+_TOOL_UNSUPPORTED_BOILERPLATE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^You can also try to follow the instructions here", re.IGNORECASE),
+    re.compile(r"how_to_mark_chip_tested", re.IGNORECASE),
+    re.compile(r"^Thanks for your help!?\s*$", re.IGNORECASE),
+)
+
+
+def _filter_tool_noise(
+    lines: list[str], *, drop_unsupported_boilerplate: bool = False
+) -> list[str]:
+    """Drop libusb / USB-driver chatter (and optionally flashrom's untested-chip
+    boilerplate) from a list of output lines."""
+    patterns = list(_TOOL_NOISE_PATTERNS)
+    if drop_unsupported_boilerplate:
+        patterns.extend(_TOOL_UNSUPPORTED_BOILERPLATE_PATTERNS)
+    out: list[str] = []
+    for raw in lines:
+        s = raw if isinstance(raw, str) else str(raw)
+        stripped = s.strip()
+        if any(p.search(stripped) for p in patterns):
+            continue
+        out.append(s)
+    return out
+
+
+def _libusb_quiet_env() -> dict[str, str] | None:
+    """Return a subprocess env dict that silences libusb info/warning chatter
+    on Windows. Returns None on other platforms so callers can pass through."""
+    if not sys.platform.startswith("win"):
+        return None
+    env = dict(os.environ)
+    env["LIBUSB_DEBUG"] = "0"
+    return env
+
+
+def _parse_wp_status_lines(lines: list[str]) -> str:
+    """Extract concise write-protection details from flashrom/flashprog output.
+
+    Prefers the chip-status-register breakdown when flashrom emits it (even if
+    a trailing "WP operations are not implemented" line is also present, which
+    happens for chips with SR decode but no `wp_*` driver). Falls back to a
+    friendly "not supported" message only when no SR data is available.
+    """
+    cleaned = _filter_tool_noise(lines, drop_unsupported_boilerplate=True)
+    unsupported = any(
+        ("wp operations are not implemented" in (raw or "").lower())
+        or ("failed to get wp status" in (raw or "").lower())
+        for raw in cleaned
+    )
+    selected: list[str] = []
+    fallback: list[str] = []
+    for raw in cleaned:
+        s = (raw or "").strip()
+        if not s:
+            continue
+        lo = s.lower()
+        if (
+            lo.startswith("flashrom v")
+            or lo.startswith("flashprog p")
+            or "free software" in lo
+            or lo.startswith("using clock_gettime")
+            or lo.startswith("command line")
+            or lo.startswith("initializing ")
+            or lo.startswith("serprog:")
+            or lo.startswith("the following protocols are supported")
+            or lo.startswith("probing for ")
+            or lo.startswith("added layout entry")
+            or s == "."
+        ):
+            continue
+        if (
+            "wp operations are not implemented" in lo
+            or "failed to get wp status" in lo
+        ):
+            continue
+        if (
+            lo.startswith("chip status register:")
+            or lo.startswith("chip status register is")
+            or lo.startswith("protection range:")
+            or lo.startswith("protection mode:")
+            or "write protect" in lo
+            or "write protection" in lo
+            or "wip/busy" in lo
+            or "wel" in lo
+            or "srwd" in lo
+            or "bp0" in lo
+            or "bp1" in lo
+            or "bp2" in lo
+            or "bp3" in lo
+            or "bp4" in lo
+        ):
+            selected.append(s)
+        else:
+            fallback.append(s)
+
+    if selected:
+        return "\n".join(selected)
+    if unsupported:
+        return "Write protection: not supported by this chip"
+    if fallback:
+        return "\n".join(fallback[-8:])
+    return "N/A"
 
 
 def _extract_chip_id_from_lines(lines: list[str]) -> str:
@@ -3675,6 +4059,7 @@ class _ProgressFrame(_TtkFrameBase):  # type: ignore[misc]
         self._eta_var = tk.StringVar(value="")
         self._started_at: datetime | None = None
         self._last_eta_pct: int = 0
+        self._last_pct: int = 0
         self._bar = ttk.Progressbar(self, length=length, maximum=100)
         self._bar.pack(side="left", fill="x", expand=True)
         ttk.Label(self, textvariable=self._pct_var, width=5, anchor="e").pack(side="left", padx=(4, 0))
@@ -3683,6 +4068,7 @@ class _ProgressFrame(_TtkFrameBase):  # type: ignore[misc]
     def begin(self) -> None:
         self._started_at = datetime.now()
         self._last_eta_pct = 0
+        self._last_pct = 0
         self._eta_var.set("ETA --")
 
     def pulse_start(self) -> None:
@@ -3698,10 +4084,15 @@ class _ProgressFrame(_TtkFrameBase):  # type: ignore[misc]
         self._eta_var.set("")
         self._started_at = None
         self._last_eta_pct = 0
+        self._last_pct = 0
 
     def set_percent(self, pct: int) -> None:
+        pct = max(0, min(100, int(pct)))
+        if pct < self._last_pct:
+            return
         self._bar.config(mode="determinate", value=pct)
         self._pct_var.set(f"{pct}%")
+        self._last_pct = pct
         # Recalculate ETA only every 10% to reduce overhead
         should_update_eta = (pct - self._last_eta_pct >= 10) or (pct < 10 and self._last_eta_pct > 0) or pct >= 100
         if self._started_at is not None and 0 < pct < 100 and should_update_eta:
@@ -5260,53 +5651,7 @@ class PageInfo(_ChipMixin):
             return vendor, model, size_str
 
         def _parse_wp_status(lines: list[str]) -> str:
-            selected: list[str] = []
-            fallback: list[str] = []
-            for raw in lines:
-                s = (raw or "").strip()
-                if not s:
-                    continue
-                lo = s.lower()
-                if (
-                    lo.startswith("flashrom v")
-                    or lo.startswith("flashprog p")
-                    or "free software" in lo
-                    or lo.startswith("using clock_gettime")
-                    or lo.startswith("command line")
-                    or lo.startswith("initializing ")
-                    or lo.startswith("serprog:")
-                    or lo.startswith("the following protocols are supported")
-                    or lo.startswith("probing for ")
-                    or lo.startswith("added layout entry")
-                    or s == "."
-                ):
-                    continue
-
-                if (
-                    lo.startswith("chip status register:")
-                    or lo.startswith("chip status register is")
-                    or lo.startswith("protection range:")
-                    or lo.startswith("protection mode:")
-                    or "write protect" in lo
-                    or "write protection" in lo
-                    or "wip/busy" in lo
-                    or "wel" in lo
-                    or "srwd" in lo
-                    or "bp0" in lo
-                    or "bp1" in lo
-                    or "bp2" in lo
-                    or "bp3" in lo
-                    or "bp4" in lo
-                ):
-                    selected.append(s)
-                else:
-                    fallback.append(s)
-
-            if selected:
-                return "\n".join(selected)
-            if fallback:
-                return "\n".join(fallback[-8:])
-            return "N/A"
+            return _parse_wp_status_lines(lines)
 
         def _worker() -> None:
             binary = self.state.binary
@@ -5327,6 +5672,7 @@ class PageInfo(_ChipMixin):
                         text=True,
                         errors="replace",
                         timeout=45,
+                        env=_libusb_quiet_env(),
                     )
                     info_cmd = [binary, "-d", chip]
                     proc_info = subprocess.run(
@@ -5336,9 +5682,12 @@ class PageInfo(_ChipMixin):
                         text=True,
                         errors="replace",
                         timeout=45,
+                        env=_libusb_quiet_env(),
                     )
                     out_id_lines = ((proc_id.stdout or "") + (proc_id.stderr or "")).splitlines()
                     out_info_lines = ((proc_info.stdout or "") + (proc_info.stderr or "")).splitlines()
+                    out_id_lines = _filter_tool_noise(out_id_lines)
+                    out_info_lines = _filter_tool_noise(out_info_lines)
                     out_lines = out_id_lines + [""] + out_info_lines
                     model, vendor, size_str = _parse_minipro_device_info(out_info_lines + out_id_lines, chip)
                     chip_id_text = _extract_chip_id_from_lines(out_id_lines + out_info_lines)
@@ -5349,7 +5698,10 @@ class PageInfo(_ChipMixin):
                     # ── flashrom: single call to --wp-status gives Found line + WP ──
                     try:
                         probe_cmd, probe_stdin = _with_optional_sudo_for_internal(
-                            [binary, "-p", programmer, "-c", chip, "--wp-status"],
+                            self.state.with_verbose(
+                                [binary, "-p", programmer, "-c", chip, "--wp-status"],
+                                min_level=1,
+                            ),
                             use_sudo=self.state.use_sudo,
                             sudo_password=self.state.sudo_password,
                         )
@@ -5361,8 +5713,12 @@ class PageInfo(_ChipMixin):
                             text=True,
                             errors="replace",
                             timeout=60,
+                            env=_libusb_quiet_env(),
                         )
                         out_lines = ((proc.stdout or "") + (proc.stderr or "")).splitlines()
+                        out_lines = _filter_tool_noise(
+                            out_lines, drop_unsupported_boilerplate=True
+                        )
                     except subprocess.TimeoutExpired:
                         out_lines = []
 
@@ -5373,7 +5729,10 @@ class PageInfo(_ChipMixin):
                     # ── flashprog: --flash-name output may include chip status/WP details ─
                     try:
                         probe_cmd, probe_stdin = _with_optional_sudo_for_internal(
-                            [binary, "-p", programmer, "-c", chip, "--flash-name"],
+                            self.state.with_verbose(
+                                [binary, "-p", programmer, "-c", chip, "--flash-name"],
+                                min_level=1,
+                            ),
                             use_sudo=self.state.use_sudo,
                             sudo_password=self.state.sudo_password,
                         )
@@ -5385,8 +5744,12 @@ class PageInfo(_ChipMixin):
                             text=True,
                             errors="replace",
                             timeout=30,
+                            env=_libusb_quiet_env(),
                         )
                         out_lines = ((proc.stdout or "") + (proc.stderr or "")).splitlines()
+                        out_lines = _filter_tool_noise(
+                            out_lines, drop_unsupported_boilerplate=True
+                        )
                     except subprocess.TimeoutExpired:
                         out_lines = []
 
@@ -6008,10 +6371,16 @@ class PageSettings:
 
     def _fix_udev(self) -> None:
         """Fix udev rules (alias for _check_udev which already does fixing)."""
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("Udev rules are Linux-only. Skipping on this platform.")
+            return
         self._check_udev()
 
     def _backup_udev(self) -> None:
         """Backup current udev rules."""
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("Udev rules are Linux-only. Skipping on this platform.")
+            return
         log = self.app.log
         log.append("=== Backup udev rules ===")
         
@@ -6116,7 +6485,7 @@ class PageSettings:
         if not cmd:
             return False, "empty command"
 
-        allowed = {"chmod", "tee", "udevadm", "usermod"}
+        allowed = {"chmod", "tee", "udevadm", "usermod", "modprobe"}
         if cmd[0] not in allowed:
             return False, f"blocked command: {cmd[0]}"
 
@@ -6222,6 +6591,9 @@ class PageSettings:
         self._run_background("binary permission check", _worker, _done)
 
     def _check_udev(self) -> None:
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("Udev rules are Linux-only. Skipping on this platform.")
+            return
         log = self.app.log
         lines: list[str] = []
 
@@ -6271,6 +6643,60 @@ class PageSettings:
                     if ok:
                         lines.append("  \u2192 Click 'Reload udev' to activate.")
 
+            helper_steps: list[tuple[str, list[str], str]] = []
+            replug_hint = ""
+            if prog_key == "buspirate_spi":
+                lines.append("  Programmer helper: Bus Pirate serial bootstrap (FTDI FT232R)…")
+                helper_steps = [
+                    ("modprobe usbserial", ["modprobe", "usbserial"], ""),
+                    ("modprobe ftdi_sio", ["modprobe", "ftdi_sio"], ""),
+                    (
+                        "register ftdi_sio new_id 0403 6001",
+                        ["tee", "/sys/bus/usb-serial/drivers/ftdi_sio/new_id"],
+                        "0403 6001\n",
+                    ),
+                ]
+                replug_hint = "Bus Pirate"
+            elif prog_key == "hydrabus":
+                lines.append("  Programmer helper: HydraBus serial bootstrap (CDC ACM)…")
+                helper_steps = [
+                    ("modprobe cdc_acm", ["modprobe", "cdc_acm"], ""),
+                ]
+                replug_hint = "HydraBus"
+            elif prog_key == "serprog":
+                lines.append("  Programmer helper: serprog serial bootstrap (CH34x)…")
+                helper_steps = [
+                    ("modprobe usbserial", ["modprobe", "usbserial"], ""),
+                    ("modprobe ch341", ["modprobe", "ch341"], ""),
+                    (
+                        "register ch341 new_id 1a86 5722",
+                        ["tee", "/sys/bus/usb-serial/drivers/ch341/new_id"],
+                        "1a86 5722\n",
+                    ),
+                ]
+                replug_hint = "serial programmer"
+            else:
+                lines.append("  Programmer helper: this backend is USB/libusb-based; no extra serial driver bootstrap required.")
+
+            if helper_steps:
+                helper_failed = False
+                for label, cmd, stdin_data in helper_steps:
+                    ok, msg = self._sudo_run(cmd, stdin_data=stdin_data)
+                    soft_ok = (
+                        (not ok)
+                        and "new_id" in " ".join(cmd)
+                        and any(tok in (msg or "").lower() for tok in ("exists", "file exists", "busy", "invalid argument"))
+                    )
+                    if ok or soft_ok:
+                        lines.append(f"    ✓ {label}")
+                    else:
+                        helper_failed = True
+                        lines.append(f"    ✗ {label}: {msg}")
+                if helper_failed:
+                    lines.append(f"  Hint: unplug/replug {replug_hint}, then click Detect again.")
+                else:
+                    lines.append(f"  If /dev/ttyUSB* or /dev/ttyACM* is still missing, unplug/replug {replug_hint} and click Detect.")
+
             import getpass
             user = getpass.getuser()
             try:
@@ -6280,7 +6706,7 @@ class PageSettings:
                 if user in members:
                     lines.append(f"  \u2713 {user} is in the {group_name} group.")
                 else:
-                    lines.append(f"  \u2717 {user} is NOT in {group_name} — click 'Add to plugdev'.")
+                    lines.append(f"  \u2717 {user} is NOT in {group_name} — click 'Add to {group_name}'.")
             except (KeyError, ImportError):
                 pass
 
@@ -6292,6 +6718,9 @@ class PageSettings:
         self._run_background("udev check", _worker, _done)
 
     def _reload_udev(self) -> None:
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("Udev rules are Linux-only. Skipping on this platform.")
+            return
         log = self.app.log
         log.append("=== Reload udev rules ===")
         result: dict[str, tuple[bool, str]] = {}
@@ -6310,6 +6739,9 @@ class PageSettings:
         self._run_background("reload udev", _worker, _done)
 
     def _add_plugdev(self) -> None:
+        if not sys.platform.startswith("linux"):
+            self.app.log.append("plugdev group management is Linux-only. Skipping on this platform.")
+            return
         import getpass
         user = getpass.getuser()
         group_name = _configured_udev_group()
@@ -6828,21 +7260,24 @@ class AppState:
             return self.minipro_bin or _resolve_binary("minipro", "FLASHGUI_MINIPRO_BIN")
         return tool
 
-    def verbose_arg(self) -> str | None:
+    def verbose_arg(self, min_level: int = 0) -> str | None:
         if _is_minipro_tool(self.tool, self.binary):
             # minipro mode must not receive global -V/-VV/-VVV flags.
             self.verbose_level = 0
             return None
         lvl = max(0, min(3, int(self.verbose_level)))
+        lvl = max(lvl, max(0, min(3, int(min_level))))
         return None if lvl == 0 else ("-" + ("V" * lvl))
 
-    def with_verbose(self, cmd: list[str]) -> list[str]:
+    def with_verbose(self, cmd: list[str], min_level: int = 0) -> list[str]:
         """Inject -V/-VV/-VVV right after binary when verbose is enabled.
 
-        In minipro mode verbose is forced off.
+        ``min_level`` lets a caller (e.g. the implicit About-ROM probe) ensure
+        at least one ``-V`` is present without mutating user-visible verbose
+        state. In minipro mode verbose is forced off regardless.
         """
         out = list(cmd)
-        v = self.verbose_arg()
+        v = self.verbose_arg(min_level=min_level)
         if not v:
             return out
         if any(re.fullmatch(r"-V{1,3}", str(x)) for x in out):
@@ -7357,6 +7792,8 @@ class FlashGUI:
         self.log.append("Cancellation signal sent to active operation(s).")
 
     def _apply_detected_programmers(self, hits: list[tuple[str, str]]) -> None:
+        for ln in _linux_programmer_detection_debug_lines(hits):
+            self.log.append(ln)
         if not hits:
             if sys.platform.startswith("win"):
                 self.log.append("No known programmer detected via Windows USB/serial scan.")
@@ -7520,7 +7957,7 @@ faulthandler.enable(all_threads=True)
 from PySide6.QtCore import QByteArray, QObject, QRunnable, Qt, QSize, QThreadPool, QTimer, Signal, QEvent
 from PySide6.QtGui import QAction, QColor, QIcon, QPixmap, QPainter, QLinearGradient, QPainterPath, QImage, QTextCharFormat, QTextCursor, QFontDatabase
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -8044,10 +8481,12 @@ class ProgressWidget(QObject):
         self._pulse_val = (self._pulse_val + 1) % 101
 
     def set_percent(self, pct: int) -> None:
+        pct = max(0, min(100, int(pct)))
+        if pct < self._last_pct:
+            return
         if self.bar.maximum() == 0:
             self.bar.setRange(0, 100)
         self.bar.setFormat("%p%")
-        pct = max(0, min(100, int(pct)))
         self._last_pct = pct
         self.bar.setValue(pct)
         self.percent_label.setText(f"{pct}%")
@@ -8067,6 +8506,7 @@ class ProgressWidget(QObject):
         self.bar.setFormat("%p%")
         self.percent_label.setText("")
         self.eta_label.setText("")
+        self._last_pct = 0
         self.bar.setToolTip("")
 
 
@@ -8571,6 +9011,20 @@ class ChipMixin:
                     other.blockSignals(False)
 
         chip_combo.currentTextChanged.connect(_on_chip_text_changed)
+
+        def _on_chip_activated(text: str) -> None:
+            t = (text or "").strip()
+            if not t or app is None:
+                return
+            log = getattr(app, "log", None)
+            if log is None:
+                return
+            try:
+                log.append_line(f"Chip selected: {t}")
+            except Exception:
+                pass
+
+        chip_combo.activated.connect(lambda _idx=0: _on_chip_activated(chip_combo.currentText()))
         return chip_combo, detect_btn
 
     def autodetect(
@@ -8761,10 +9215,19 @@ class ReadPage(OpPageBase, ChipMixin):
         self.form_lay.addRow("Save ROM to:", row)
 
         self.chip_combo, b_detect = self.setup_chip_controls(self.form_lay, self)
+
+        # Advanced Options in collapsible group
+        adv_group = CollapsibleQGroupBox("🔧 Advanced Options")
+        adv_lay = QVBoxLayout()
+        adv_lay.setContentsMargins(0, 0, 0, 0)
+        adv_lay.setSpacing(6)
         self.opt_reveal = QCheckBox("Reveal file upon completion")
         self.opt_nopad = QCheckBox("Remove padding (0xFF) from dump")
-        self.form_lay.addRow(self.opt_reveal)
-        self.form_lay.addRow(self.opt_nopad)
+        adv_lay.addWidget(self.opt_reveal)
+        adv_lay.addWidget(self.opt_nopad)
+        adv_group.add_layout(adv_lay)
+        adv_group.toggle_collapse()
+        self.form_lay.addRow(adv_group)
 
         self.run_btn = QPushButton("Read ROM")
         self.run_btn.setProperty("kind", "read")
@@ -9520,6 +9983,7 @@ class InfoPage(OpPageBase, ChipMixin):
                     text=True,
                     errors="replace",
                     timeout=45,
+                    env=_libusb_quiet_env(),
                 )
                 proc_info = subprocess.run(
                     info_cmd,
@@ -9528,9 +9992,18 @@ class InfoPage(OpPageBase, ChipMixin):
                     text=True,
                     errors="replace",
                     timeout=45,
+                    env=_libusb_quiet_env(),
                 )
-                out_id = ((proc_id.stdout or "") + "\n" + (proc_id.stderr or "")).strip()
-                out_info = ((proc_info.stdout or "") + "\n" + (proc_info.stderr or "")).strip()
+                out_id = "\n".join(
+                    _filter_tool_noise(
+                        ((proc_id.stdout or "") + "\n" + (proc_id.stderr or "")).splitlines()
+                    )
+                ).strip()
+                out_info = "\n".join(
+                    _filter_tool_noise(
+                        ((proc_info.stdout or "") + "\n" + (proc_info.stderr or "")).splitlines()
+                    )
+                ).strip()
                 signals.done.emit(
                     {
                         "rc": proc_info.returncode,
@@ -9612,55 +10085,7 @@ class InfoPage(OpPageBase, ChipMixin):
 
         def parse_wp_status(lines: list[str]) -> str:
             """Extract concise write-protection details from --wp-status output."""
-            selected: list[str] = []
-            fallback: list[str] = []
-            for raw in lines:
-                s = (raw or "").strip()
-                if not s:
-                    continue
-                lo = s.lower()
-                # Skip common banner/noise lines in verbose mode.
-                if (
-                    lo.startswith("flashrom v")
-                    or lo.startswith("flashprog p")
-                    or "free software" in lo
-                    or lo.startswith("using clock_gettime")
-                    or lo.startswith("command line")
-                    or lo.startswith("initializing ")
-                    or lo.startswith("serprog:")
-                    or lo.startswith("the following protocols are supported")
-                    or lo.startswith("probing for ")
-                    or lo.startswith("added layout entry")
-                    or s == "."
-                ):
-                    continue
-
-                # Keep all lines that explicitly describe protection state.
-                if (
-                    lo.startswith("chip status register:")
-                    or lo.startswith("chip status register is")
-                    or lo.startswith("protection range:")
-                    or lo.startswith("protection mode:")
-                    or "write protect" in lo
-                    or "write protection" in lo
-                    or "wip/busy" in lo
-                    or "wel" in lo
-                    or "srwd" in lo
-                    or "bp0" in lo
-                    or "bp1" in lo
-                    or "bp2" in lo
-                    or "bp3" in lo
-                    or "bp4" in lo
-                ):
-                    selected.append(s)
-                else:
-                    fallback.append(s)
-
-            if selected:
-                return "\n".join(selected)
-            if fallback:
-                return "\n".join(fallback[-8:])
-            return "N/A"
+            return _parse_wp_status_lines(lines)
 
         def worker(signals: WorkerSignals) -> None:
             binary = self.state.binary
@@ -9670,7 +10095,10 @@ class InfoPage(OpPageBase, ChipMixin):
 
             if tool != "flashprog":
                 probe_cmd, probe_stdin = _with_optional_sudo_for_internal(
-                    self.state.with_verbose([binary, "-p", programmer, "-c", chip, "--wp-status"]),
+                    self.state.with_verbose(
+                        [binary, "-p", programmer, "-c", chip, "--wp-status"],
+                        min_level=1,
+                    ),
                     use_sudo=self.state.use_sudo,
                     sudo_password=self.state.sudo_password,
                 )
@@ -9682,11 +10110,15 @@ class InfoPage(OpPageBase, ChipMixin):
                     text=True,
                     errors="replace",
                     timeout=60,
+                    env=_libusb_quiet_env(),
                 )
                 out_lines = ((proc.stdout or "") + (proc.stderr or "")).splitlines()
             else:
                 probe_cmd, probe_stdin = _with_optional_sudo_for_internal(
-                    self.state.with_verbose([binary, "-p", programmer, "-c", chip, "--flash-name"]),
+                    self.state.with_verbose(
+                        [binary, "-p", programmer, "-c", chip, "--flash-name"],
+                        min_level=1,
+                    ),
                     use_sudo=self.state.use_sudo,
                     sudo_password=self.state.sudo_password,
                 )
@@ -9698,8 +10130,11 @@ class InfoPage(OpPageBase, ChipMixin):
                     text=True,
                     errors="replace",
                     timeout=30,
+                    env=_libusb_quiet_env(),
                 )
                 out_lines = ((proc.stdout or "") + (proc.stderr or "")).splitlines()
+
+            out_lines = _filter_tool_noise(out_lines, drop_unsupported_boilerplate=True)
 
             vendor, model, size = parse_chip_info(out_lines)
             probe_ids: list[tuple[int, int]] = []
@@ -9764,7 +10199,7 @@ class InfoPage(OpPageBase, ChipMixin):
 
                 chip_id_text = ", ".join(_compact_chip_id(a, b) for a, b in unique_ids)
             else:
-                chip_id_text = "Run with -V to populate Chip ID"
+                chip_id_text = "N/A"
 
             self.info_text.setPlainText(
                 f"Model: {payload.get('model', 'N/A')}\n"
@@ -10669,7 +11104,7 @@ class SettingsPage(PageBase):
     def _sudo_run(self, cmd: list[str], stdin_data: str = "") -> tuple[bool, str]:
         if not cmd:
             return False, "empty command"
-        allowed = {"chmod", "tee", "udevadm", "usermod"}
+        allowed = {"chmod", "tee", "udevadm", "usermod", "modprobe"}
         if cmd[0] not in allowed:
             return False, f"blocked command: {cmd[0]}"
 
@@ -11008,6 +11443,60 @@ class SettingsPage(PageBase):
                     lines.append(f"  Write: {'OK' if ok else 'FAILED'}  {msg}")
                     if ok:
                         lines.append("  → Click 'Reload udev' to activate.")
+
+            helper_steps: list[tuple[str, list[str], str]] = []
+            replug_hint = ""
+            if prog_key == "buspirate_spi":
+                lines.append("  Programmer helper: Bus Pirate serial bootstrap (FTDI FT232R)…")
+                helper_steps = [
+                    ("modprobe usbserial", ["modprobe", "usbserial"], ""),
+                    ("modprobe ftdi_sio", ["modprobe", "ftdi_sio"], ""),
+                    (
+                        "register ftdi_sio new_id 0403 6001",
+                        ["tee", "/sys/bus/usb-serial/drivers/ftdi_sio/new_id"],
+                        "0403 6001\n",
+                    ),
+                ]
+                replug_hint = "Bus Pirate"
+            elif prog_key == "hydrabus":
+                lines.append("  Programmer helper: HydraBus serial bootstrap (CDC ACM)…")
+                helper_steps = [
+                    ("modprobe cdc_acm", ["modprobe", "cdc_acm"], ""),
+                ]
+                replug_hint = "HydraBus"
+            elif prog_key == "serprog":
+                lines.append("  Programmer helper: serprog serial bootstrap (CH34x)…")
+                helper_steps = [
+                    ("modprobe usbserial", ["modprobe", "usbserial"], ""),
+                    ("modprobe ch341", ["modprobe", "ch341"], ""),
+                    (
+                        "register ch341 new_id 1a86 5722",
+                        ["tee", "/sys/bus/usb-serial/drivers/ch341/new_id"],
+                        "1a86 5722\n",
+                    ),
+                ]
+                replug_hint = "serial programmer"
+            else:
+                lines.append("  Programmer helper: this backend is USB/libusb-based; no extra serial driver bootstrap required.")
+
+            if helper_steps:
+                helper_failed = False
+                for label, cmd, stdin_data in helper_steps:
+                    ok, msg = self._sudo_run(cmd, stdin_data=stdin_data)
+                    soft_ok = (
+                        (not ok)
+                        and "new_id" in " ".join(cmd)
+                        and any(tok in (msg or "").lower() for tok in ("exists", "file exists", "busy", "invalid argument"))
+                    )
+                    if ok or soft_ok:
+                        lines.append(f"    ✓ {label}")
+                    else:
+                        helper_failed = True
+                        lines.append(f"    ✗ {label}: {msg}")
+                if helper_failed:
+                    lines.append(f"  Hint: unplug/replug {replug_hint}, then click Detect again.")
+                else:
+                    lines.append(f"  If /dev/ttyUSB* or /dev/ttyACM* is still missing, unplug/replug {replug_hint} and click Detect.")
 
         def _done() -> None:
             for line in lines:
@@ -12127,7 +12616,7 @@ class HelpAboutPage(PageBase):
             ("Help minipro", lambda: self._run_tool_help("minipro", ["--help"], "Help minipro")),
             ("Supported Chips flashrom", lambda: self._run_tool_help("flashrom", ["-L"], "Supported Chips flashrom")),
             ("Supported Chips flashprog", lambda: self._run_tool_help("flashprog", ["-L"], "Supported Chips flashprog")),
-            ("Supported Chips minipro", lambda: self._run_tool_help("minipro", ["-l"], "Supported Chips minipro")),
+            ("Supported Chips minipro", self._supported_chips_minipro),
             ("Search Chips flashrom", lambda: self._search_tool_chips("flashrom", "Search Chips flashrom")),
             ("Search Chips flashprog", lambda: self._search_tool_chips("flashprog", "Search Chips flashprog")),
             ("Search Chips minipro", lambda: self._search_tool_chips("minipro", "Search Chips minipro")),
@@ -12456,6 +12945,50 @@ class HelpAboutPage(PageBase):
             return
         self._run_capture_to_dialog(title, [binary] + args, timeout=120)
 
+    def _supported_chips_minipro(self) -> None:
+        binary = self._resolve_tool_binary("minipro")
+        if not binary:
+            return
+
+        tool_combo = getattr(self.app, "tool_combo", None)
+        if tool_combo is not None and tool_combo.currentText().strip().lower() != "minipro":
+            self.log("Switching Tool Selection to minipro for Supported Chips lookup.")
+            tool_combo.setCurrentText("minipro")
+
+        self.log("Probing minipro programmer (minipro -V)…")
+        detected, label, _lines = _detect_minipro_hardware(binary)
+        if detected:
+            self.state.programmer = _MINIPRO_PROGRAMMER_ARG
+            prog_combo = getattr(self.app, "programmer_combo", None)
+            if prog_combo is not None:
+                prog_combo.blockSignals(True)
+                try:
+                    if prog_combo.findText(_MINIPRO_PROGRAMMER_ARG) < 0:
+                        prog_combo.addItem(_MINIPRO_PROGRAMMER_ARG)
+                    prog_combo.setCurrentText(_MINIPRO_PROGRAMMER_ARG)
+                finally:
+                    prog_combo.blockSignals(False)
+            status_programmer = getattr(self.app, "status_programmer", None)
+            if status_programmer is not None:
+                status_programmer.setText(_format_programmer_status(_MINIPRO_PROGRAMMER_ARG))
+            self.log(f"minipro programmer detected: {label}")
+        else:
+            ans = QMessageBox.question(
+                self,
+                "Supported Chips minipro",
+                "minipro programmer was not detected.\n\n"
+                "Connect the programmer for accurate hardware status, or show the "
+                "supported chip list anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if ans != QMessageBox.StandardButton.Yes:
+                self.log("Supported Chips minipro cancelled — programmer not detected.")
+                return
+            self.log("Proceeding with Supported Chips minipro without a detected programmer.")
+
+        self._run_tool_help("minipro", ["-l"], "Supported Chips minipro")
+
     def _ask_chip_search_pattern(self) -> str | None:
         pattern, ok = QInputDialog.getText(
             self,
@@ -12478,11 +13011,32 @@ class HelpAboutPage(PageBase):
         return p
 
     def _search_tool_chips(self, tool_name: str, title: str) -> None:
-        pattern = (self.state.selected_chip or "").strip()
-        if not pattern:
-            pattern = self._ask_chip_search_pattern()
-            if not pattern:
+        selected = (self.state.selected_chip or "").strip()
+        pattern: str | None = None
+        if selected:
+            box = QMessageBox(self)
+            box.setWindowTitle("Search Chips")
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setText(f"Search for the currently selected chip ({selected}),\n"
+                        "or enter a different name / regex?")
+            use_selected_btn = box.addButton(f"Selected: {selected}",
+                                             QMessageBox.ButtonRole.AcceptRole)
+            enter_name_btn = box.addButton("Enter name…",
+                                           QMessageBox.ButtonRole.ActionRole)
+            cancel_btn = box.addButton(QMessageBox.StandardButton.Cancel)
+            box.setDefaultButton(use_selected_btn)
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked is cancel_btn or clicked is None:
                 return
+            if clicked is use_selected_btn:
+                pattern = re.escape(selected)
+            else:
+                pattern = self._ask_chip_search_pattern()
+        else:
+            pattern = self._ask_chip_search_pattern()
+        if not pattern:
+            return
         binary = self._resolve_tool_binary(tool_name)
         if not binary:
             return
@@ -12493,7 +13047,7 @@ class HelpAboutPage(PageBase):
             title,
             [binary] + args,
             timeout=120,
-            display_cmd=f"{tool_name} {' '.join(args)} | grep -iE {pattern}",
+            display_cmd=f"{tool_name} {' '.join(args)} | grep -iE {shlex.quote(pattern)}",
             filter_pattern=pattern,
         )
 
@@ -12506,11 +13060,68 @@ class HelpAboutPage(PageBase):
             self._run_capture_to_dialog(title, [man_bin, tool_name], timeout=120, env=man_env)
             return
 
+        bundled = os.path.join(_resources_root(), "manuals", f"{tool_name}.txt")
+        if os.path.isfile(bundled):
+            try:
+                with open(bundled, "r", encoding="utf-8", errors="replace") as fh:
+                    text = fh.read()
+            except OSError as exc:
+                self.warn("Manual not available", f"Failed to read bundled manual: {exc}")
+                self._run_tool_help(tool_name, ["--help"], f"{title} (fallback)")
+                return
+            self._show_captured_text_dialog(title, f"man {tool_name}", text)
+            return
+
         self.warn(
             "Manual not available",
-            "'man' is not available on this system. Showing command help output instead.",
+            "'man' is not available on this system and no bundled manual was found. "
+            "Showing command help output instead.",
         )
         self._run_tool_help(tool_name, ["--help"], f"{title} (fallback)")
+
+    def _show_captured_text_dialog(self, title: str, header: str, text: str) -> None:
+        self.log(f"$ {header}")
+        dlg = QDialog(self)
+        dlg.setWindowTitle(title)
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(10, 10, 10, 10)
+        lay.setSpacing(8)
+        view = QPlainTextEdit()
+        view.setReadOnly(True)
+        view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        f = QFont("Consolas")
+        if f.family() == "":
+            f = QFont("Courier New")
+        f.setPointSize(10)
+        view.setFont(f)
+        body = f"$ {header}\n\n{text}"
+        view.setPlainText(body)
+        lay.addWidget(view, 1)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        row.addWidget(close_btn)
+        lay.addLayout(row)
+
+        fm = QFontMetrics(f)
+        lines = body.splitlines() or [""]
+        max_line_px = max((fm.horizontalAdvance(ln) for ln in lines), default=600)
+        line_h = fm.lineSpacing()
+        scrollbar_pad = 40
+        chrome_pad = 60
+        target_w = max_line_px + scrollbar_pad + chrome_pad
+        target_h = line_h * min(len(lines), 40) + 120
+        screen = dlg.screen() or QApplication.primaryScreen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            target_w = min(target_w, int(avail.width() * 0.95))
+            target_h = min(target_h, int(avail.height() * 0.9))
+        target_w = max(target_w, 800)
+        target_h = max(target_h, 500)
+        dlg.resize(target_w, target_h)
+
+        dlg.exec()
 
 
 class _ProgrammerSelectDialog(QDialog):
@@ -14141,6 +14752,8 @@ class FlashGUIQt(QMainWindow):
                         return
 
                     if not hits:
+                        for ln in _linux_programmer_detection_debug_lines(hits):
+                            self.log.append_line(ln)
                         if sys.platform.startswith("win"):
                             self.log.append_line("No known programmer detected via Windows USB/serial scan.")
                         elif sys.platform == "darwin":
@@ -14156,6 +14769,8 @@ class FlashGUIQt(QMainWindow):
                     ]
                     self._programmer_updating = True
                     self.programmer_combo.blockSignals(True)
+                    for ln in _linux_programmer_detection_debug_lines(hits):
+                        self.log.append_line(ln)
                     for prog, label in hits:
                         self.log.append_line(f"  Found: {label}  \u2192  programmer: {prog}")
                         if prog not in existing:

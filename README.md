@@ -6,11 +6,12 @@ This repository currently ships as a Python desktop app (`flashgui.py`) with a Q
 
 Main Objective: provide a practical, user-friendly GUI for flashrom-based workflows that helps users avoid common pitfalls and supports a wide range of hardware especially on linux.
 
-## Latest release (v1.1.14)
+## Latest release (v1.1.15)
 
-- Minipro mode now **forces Verbose Mode to Off**, and blocks global `-V/-VV/-VVV` injection for minipro commands.
-- Added regression coverage to prevent minipro verbose flags from returning in future releases.
-- Updated release/docs metadata to `v1.1.14`.
+- In **Read ROM**, both options are now grouped under **🔧 Advanced Options** in both Qt and legacy UI.
+- Read ROM advanced options now default to **collapsed** to reduce clutter.
+- Added regression and optional runtime smoke coverage for this behavior.
+- Updated release/docs metadata to `v1.1.15`.
 
 ## Platform status
 
@@ -238,17 +239,17 @@ Optional flags:
 
 Release bundle examples generated in this repo:
 
-- `release/flashgui-v1.1.14-windows-x64-portable.zip`
-- `release/flashgui-v1.1.14-linux-x64-portable.zip`
-- `release/flashgui-v1.1.14-macos-arm64-portable.zip`
-- `release/flashgui-v1.1.14-macos-x64-portable.zip`
+- `release/flashgui-v1.1.15-windows-x64-portable.zip`
+- `release/flashgui-v1.1.15-linux-x64-portable.zip`
+- `release/flashgui-v1.1.15-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.15-macos-x64-portable.zip`
 
 GitHub publish flow (tag-based):
 
 - Commit release changes (version bump, docs, screenshots)
-- Create an annotated tag (example: `v1.1.14`)
+- Create an annotated tag (example: `v1.1.15`)
 - Push branch and tag to `origin`
-- Create a GitHub Release from tag `v1.1.14`
+- Create a GitHub Release from tag `v1.1.15`
 - CI will build on Windows/Linux/macOS and auto-attach generated portable artifacts to that release
 
 ## Mentions & thanks

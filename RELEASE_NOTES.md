@@ -1,5 +1,27 @@
 # Release Notes
 
+## v1.1.15
+
+### Highlights (v1.1.15)
+
+- Read ROM options are now placed under a collapsible **🔧 Advanced Options** section in both Qt (`ReadPage`) and legacy Tk (`PageRead`) UIs.
+- Read ROM advanced options default to collapsed for cleaner operation pages.
+- Added regression coverage in `tests/test_read_rom_advanced_options_regression.py`.
+- Added optional legacy runtime smoke coverage in `tests/test_legacy_runtime_smoke_optional.py` (skips gracefully when tkinter/display is unavailable).
+
+### Version (v1.1.15)
+
+- Bumped application versions:
+  - `flashgui.py`: `VERSION = "1.1.15"`
+  - `flashgui_legacy.py`: `VERSION = "1.1.15"`
+
+### Build Artifact Targets (v1.1.15)
+
+- `release/flashgui-v1.1.15-windows-x64-portable.zip`
+- `release/flashgui-v1.1.15-linux-x64-portable.zip`
+- `release/flashgui-v1.1.15-macos-arm64-portable.zip`
+- `release/flashgui-v1.1.15-macos-x64-portable.zip`
+
 ## v1.1.14
 
 ### Highlights (v1.1.14)
@@ -7,6 +29,8 @@
 - Minipro mode now enforces `Verbose Mode: Off` and prevents global `-V/-VV/-VVV` injection into minipro commands.
 - Qt toolbar/log verbose control now auto-resets to Off and remains disabled while minipro is selected.
 - Added regression coverage for minipro verbose-off behavior.
+- Expanded USB programmer VID:PID detection coverage in both `flashgui.py` and `flashgui_legacy.py` for flashrom/flashprog families, including FT2232 variants (Servo/Olimex/TIAO/KT-LINK/JTAGkey), CH347 (`55de`), STLINK-V3, developerbox (`10c4:ea60`), USB-Blaster, and PICkit2.
+- Updated Linux udev rule hints and detection regressions to match the expanded USB mapping set.
 
 ### Version (v1.1.14)
 

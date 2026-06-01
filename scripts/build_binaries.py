@@ -97,8 +97,10 @@ def _run_pyinstaller(root: Path, name: str, icon: Path) -> Path:
     return out_bin
 
 
-def _copy_if_exists(src: Path, dst: Path) -> None:
+def _copy_if_exists(src: Path, dst: Path, *, required: bool = False) -> None:
     if not src.exists():
+        if required:
+            raise RuntimeError(f"Required path is missing and cannot be packaged: {src}")
         return
     if src.is_dir():
         shutil.copytree(src, dst / src.name, dirs_exist_ok=True)
@@ -115,6 +117,15 @@ def _zip_dir(src_dir: Path, zip_path: Path) -> Path:
                 continue
             zf.write(p, arcname=p.relative_to(src_dir))
     return zip_path
+
+
+def _assert_zip_contains_prefix(zip_path: Path, required_prefix: str) -> None:
+    with ZipFile(zip_path, "r") as zf:
+        has_prefix = any(name.startswith(required_prefix) for name in zf.namelist())
+    if not has_prefix:
+        raise RuntimeError(
+            f"Portable archive is missing required packaged content: {required_prefix} in {zip_path}"
+        )
 
 
 def _package_release_artifacts(
@@ -141,7 +152,7 @@ def _package_release_artifacts(
     portable_app = portable_stage / app_folder_name
     portable_app.mkdir(parents=True, exist_ok=True)
     shutil.copy2(binary_path, portable_app / binary_path.name)
-    _copy_if_exists(root / "resources", portable_app)
+    _copy_if_exists(root / "resources", portable_app, required=True)
     if include_screenshots:
         _copy_if_exists(root / "screenshots", portable_app)
     for rel in (
@@ -156,6 +167,7 @@ def _package_release_artifacts(
 
     portable_zip = release_dir / f"{portable_name}.zip"
     _zip_dir(portable_stage, portable_zip)
+    _assert_zip_contains_prefix(portable_zip, f"{app_folder_name}/resources/")
     return portable_zip
 
 
